@@ -1,0 +1,41 @@
+{
+  "name": "merlin",
+  "version": "0.1.0",
+  "description": "CLI tool for Infrastructure as Code deployment and management",
+  "type": "module",
+  "bin": {
+    "merlin": "./dist/merlin.js"
+  },
+  "files": [
+    "dist",
+    "infra"
+  ],
+  "scripts": {
+    "lint": "eslint",
+    "lint:fix": "eslint --fix",
+    "build": "tsup && chmod +x dist/merlin.js",
+    "postinstall": "[ -f dist/merlin.js ] && chmod +x dist/merlin.js || true",
+    "link:global": "pnpm build && pnpm link --global",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dev": "tsx src/merlin.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.28.1",
+  "dependencies": {
+    "commander": "^14.0.2",
+    "execa": "^9.6.1",
+    "yaml": "^2.8.2",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "eslint": "^9.18.0",
+    "tsup": "^8.3.5",
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
