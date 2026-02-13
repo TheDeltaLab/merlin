@@ -1,0 +1,54 @@
+name: chuangabs
+type: AzureBlobStorage
+
+ring:
+  - staging
+  - test
+region:
+  - eastasia
+  - koreacentral
+
+authProvider: 
+  name: azureManagedIdentity
+  role: blob-contributor
+  scope: resource
+defaultConfig:
+  # Storage account configuration
+  accessTier: Hot
+  sku: Standard_RAGRS
+  kind: StorageV2
+
+  # Security and access
+  httpsOnly: true
+  minTlsVersion: TLS1_2
+  allowBlobPublicAccess: false
+  allowSharedKeyAccess: true
+  allowCrossTenantReplication: false
+  publicNetworkAccess: Enabled
+  defaultAction: Allow
+
+  # Network configuration
+  bypass:
+    - AzureServices
+
+  # Encryption
+  encryptionKeySource: Microsoft.Storage
+  encryptionServices:
+    - blob
+    - file
+  requireInfrastructureEncryption: false
+
+  # DNS endpoint type
+  dnsEndpointType: Standard
+  tags:
+    merlin: true
+
+specificConfig:
+  - ring: staging
+    tags:
+      env: staging
+  - ring: test
+    tags:
+      env: test
+
+

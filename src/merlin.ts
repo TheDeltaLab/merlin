@@ -10,12 +10,15 @@ program
 program
     .command('deploy')
     .description('Deploy infrastructure resources')
-    .option('-d, --dry-run', 'Show what would be deployed without actually deploying')
+    .option('-e, --execute', 'Actually execute the deployment (default is dry-run)')
     .option('-r, --ring <ring>', 'Target ring (test, staging, production)')
     .option('--region <region>', 'Target region (eastus, westus, krc)')
     .action((options) => {
         console.log('Deploy command - Not yet implemented');
         console.log('Options:', options);
+        if (!options.execute) {
+            console.log('Running in dry-run mode (use --execute to actually deploy)');
+        }
     });
 
 program
