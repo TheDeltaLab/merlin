@@ -131,6 +131,13 @@ export interface Command<T = string> {
     resultParser?(output: string): T;
 }
 
+export function commandToString(cmd: Command): string {
+    if (!cmd.args || cmd.args.length === 0) {
+        return cmd.command;
+    }
+    return `${cmd.command} ${cmd.args.join(' ')}`;
+}
+
 export interface Render {
     render(resource: Resource): Promise<Command[]>;
 }

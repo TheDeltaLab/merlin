@@ -163,8 +163,16 @@ export interface AzureBlobStorageResource extends AzureResource<AzureBlobStorage
 }
 
 export class AzureBlobStorageRender extends AzureResourceRender {
+    supportConnectorInResourceName: boolean = false;
     render(resource: Resource): Promise<Command[]> {
-        throw new Error('Method not implemented.');
+        return new Promise<Command[]>((resolve, reject) => {
+            try {
+                const commands = this.renderCreate(resource as AzureBlobStorageResource);
+                resolve(commands);
+            } catch (error) {
+                reject(error);
+            }
+        });
     }
 
     /**

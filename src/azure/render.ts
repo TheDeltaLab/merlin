@@ -59,7 +59,7 @@ export abstract class AzureResourceRender implements Render {
         const regionPart = resource.region ? `-${REGION_SHORT_NAME_MAP[resource.region] || resource.region}` : '';
         const typePart = resource.type ? `-${resource.type.toLowerCase()}` : '';
         const result = `${projectPart}${resource.name}${ringPart}${regionPart}${typePart}`;
-        if (this.supportConnectorInResourceName) {
+        if (!this.supportConnectorInResourceName) {
             return result.replace(/-/g, '');
         }
         return result; 
