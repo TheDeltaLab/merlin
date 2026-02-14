@@ -23,7 +23,8 @@ export {
     getRender,
     registerAuthProvider,
     registerProprietyGetter,
-    registerRender
+    registerRender,
+    commandToString,
 } from './common/resource.js';
 
 export {
