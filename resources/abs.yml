@@ -8,8 +8,8 @@ region:
   - eastasia
   - koreacentral
 
-authProvider: 
-  name: azureManagedIdentity
+authProvider:
+  name: AzureManagedIdentity
   role: blob-contributor
   scope: resource
 defaultConfig:

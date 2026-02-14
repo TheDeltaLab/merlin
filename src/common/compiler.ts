@@ -2,7 +2,7 @@
  * Main compiler orchestrator
  */
 
-import { readdir, mkdir, writeFile, stat } from 'fs/promises';
+import { readdir, mkdir, writeFile, stat, access } from 'fs/promises';
 import * as path from 'path';
 import { parseFile } from '../compiler/parser.js';
 import { validate } from '../compiler/validator.js';
@@ -18,6 +18,10 @@ import {
     ExpandedResource,
     GeneratedFile
 } from '../compiler/types.js';
+import { initializeOutputDirectory, checkPnpmAvailable } from '../compiler/initializer.js';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+import { execaCommand } from 'execa';
 
 /**
  * Main compiler class
@@ -55,6 +59,32 @@ export class Compiler {
                 return { success: true, errors, warnings, generatedFiles };
             }
 
+            // 3.5. Initialize output directory (if needed)
+            const pnpmAvailable = await checkPnpmAvailable();
+            if (!pnpmAvailable) {
+                warnings.push({
+                    severity: ErrorSeverity.WARNING,
+                    message: 'pnpm not found - skipping project initialization',
+                    source: options.outputPath,
+                    hint: 'Install pnpm globally: npm install -g pnpm'
+                });
+            } else {
+                const merlinPath = this.getMerlinPath();
+                const initResult = await initializeOutputDirectory({
+                    outputPath: options.outputPath,
+                    merlinPath
+                });
+
+                if (initResult.error) {
+                    warnings.push({
+                        severity: ErrorSeverity.WARNING,
+                        message: `Failed to initialize: ${initResult.error}`,
+                        source: options.outputPath,
+                        hint: 'You may need to manually set up package.json'
+                    });
+                }
+            }
+
             // 4. Transform resources (expand ring/region)
             const expandedResources = this.transformResources(validatedResources);
 
@@ -63,6 +93,19 @@ export class Compiler {
 
             // 6. Write all files to disk
             await this.writeGeneratedFiles(generated, options.outputPath, generatedFiles);
+
+            // 7. Build generated code (if pnpm available)
+            if (pnpmAvailable) {
+                const buildResult = await this.buildGeneratedCode(options.outputPath);
+                if (!buildResult.success) {
+                    warnings.push({
+                        severity: ErrorSeverity.WARNING,
+                        message: `Build failed: ${buildResult.error}`,
+                        source: options.outputPath,
+                        hint: 'Check generated code for errors'
+                    });
+                }
+            }
 
             return { success: true, errors, warnings, generatedFiles };
 
@@ -269,5 +312,48 @@ export class Compiler {
      */
     private isYAMLFile(name: string): boolean {
         return name.endsWith('.yml') || name.endsWith('.yaml');
+    }
+
+    /**
+     * Gets the absolute path to the merlin package root
+     */
+    private getMerlinPath(): string {
+        const currentFileUrl = import.meta.url;
+        const currentFilePath = fileURLToPath(currentFileUrl);
+        const currentDir = dirname(currentFilePath);
+        // Navigate up from dist/ to project root
+        // In built code: dist/merlin.js (or dist/chunk-*.js) -> ../ -> project root
+        return path.resolve(currentDir, '..');
+    }
+
+    /**
+     * Builds the generated TypeScript code using tsup
+     */
+    private async buildGeneratedCode(outputPath: string): Promise<{ success: boolean; error?: string }> {
+        try {
+            // Verify package.json exists
+            const packageJsonPath = path.join(outputPath, 'package.json');
+            const exists = await access(packageJsonPath)
+                .then(() => true)
+                .catch(() => false);
+
+            if (!exists) {
+                return {
+                    success: false,
+                    error: 'package.json not found - run initialization first'
+                };
+            }
+
+            // Run pnpm build
+            await execaCommand('pnpm build', {
+                cwd: outputPath,
+                stdio: 'pipe' // Suppress output unless error
+            });
+
+            return { success: true };
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            return { success: false, error: message };
+        }
     }
 }

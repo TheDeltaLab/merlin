@@ -1,5 +1,7 @@
 import { Command } from 'commander';
 import { Compiler } from './common/compiler.js';
+import { execaCommand } from 'execa';
+import * as path from 'path';
 
 const program = new Command();
 
@@ -29,6 +31,12 @@ program
             if (result.success) {
                 console.log(`✅ Compiled ${result.generatedFiles.length} files`);
                 result.generatedFiles.forEach(f => console.log(`   - ${f}`));
+
+                // Check if build succeeded
+                const buildWarning = result.warnings.find(w => w.message.includes('Build failed'));
+                if (!buildWarning) {
+                    console.log(`📦 Built output to ${options.output}/dist`);
+                }
 
                 if (result.warnings.length > 0) {
                     console.warn('\n⚠️  Warnings:');
@@ -66,14 +74,80 @@ program
 program
     .command('deploy')
     .description('Deploy infrastructure resources')
+    .argument('[path]', 'Path to resource configuration file or directory', './resources')
     .option('-e, --execute', 'Actually execute the deployment (default is dry-run)')
     .option('-r, --ring <ring>', 'Target ring (test, staging, production)')
     .option('--region <region>', 'Target region (eastus, westus, krc)')
-    .action((options) => {
-        console.log('Deploy command - Not yet implemented');
-        console.log('Options:', options);
-        if (!options.execute) {
-            console.log('Running in dry-run mode (use --execute to actually deploy)');
+    .option('--dir <path>', 'Compiled output directory', '.merlin')
+    .option('-o, --output-file <file>', 'Write generated commands to file')
+    .action(async (resourcePath, options) => {
+        const outputPath = options.dir;
+
+        try {
+            // Auto-compile before deployment
+            console.log('🔨 Compiling resources...');
+            const compiler = new Compiler();
+
+            const compileResult = await compiler.compile({
+                inputPath: resourcePath,
+                outputPath: outputPath
+            });
+
+            if (!compileResult.success) {
+                console.error('❌ Compilation failed:');
+                compileResult.errors.forEach(err => {
+                    console.error(`   ${err.source}${err.path ? ':' + err.path : ''} - ${err.message}`);
+                    if (err.hint) {
+                        console.error(`      💡 ${err.hint}`);
+                    }
+                });
+                process.exit(1);
+            }
+
+            console.log(`✅ Compiled ${compileResult.generatedFiles.length} files\n`);
+
+            // Build the deploy command arguments
+            const args: string[] = [];
+
+            if (options.ring) {
+                args.push('--ring', options.ring);
+            }
+
+            if (options.region) {
+                args.push('--region', options.region);
+            }
+
+            if (options.outputFile) {
+                // Convert relative path to absolute path
+                const absoluteOutputFile = path.isAbsolute(options.outputFile)
+                    ? options.outputFile
+                    : path.resolve(process.cwd(), options.outputFile);
+                args.push('--output', absoluteOutputFile);
+            }
+
+            if (options.execute) {
+                // Use pnpm execute (which runs with --execute flag)
+                console.log('🚀 Executing deployment...\n');
+                await execaCommand('pnpm run execute ' + args.join(' '), {
+                    cwd: outputPath,
+                    stdio: 'inherit'
+                });
+            } else {
+                // Use pnpm deploy (dry-run mode)
+                console.log('📋 Generating deployment commands (dry-run mode)...\n');
+                await execaCommand('pnpm run deploy ' + args.join(' '), {
+                    cwd: outputPath,
+                    stdio: 'inherit'
+                });
+            }
+        } catch (error) {
+            if (error instanceof Error && 'exitCode' in error) {
+                // Command failed, but output was already shown
+                process.exit((error as any).exitCode || 1);
+            } else {
+                console.error('❌ Deploy command failed:', error);
+                process.exit(1);
+            }
         }
     });
 

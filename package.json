@@ -6,6 +6,11 @@
   "bin": {
     "merlin": "./dist/merlin.js"
   },
+  "exports": {
+    ".": "./dist/merlin.js",
+    "./runtime.js": "./dist/runtime.js",
+    "./init.js": "./dist/init.js"
+  },
   "files": [
     "dist",
     "infra"

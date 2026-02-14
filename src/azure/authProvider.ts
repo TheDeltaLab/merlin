@@ -1,4 +1,4 @@
-import { AuthProvider, Command, Dependency, Resource, registerAuthProvider } from "../common/resource.js";
+import { AuthProvider, Command, Dependency, Resource } from "../common/resource.js";
 
 export class AzureManagedIdentityAuthProvider implements AuthProvider {
     name: string = 'AzureManagedIdentity';
@@ -9,6 +9,3 @@ export class AzureManagedIdentityAuthProvider implements AuthProvider {
         throw new Error(`not implemented yet`);
     }
 }
-
-// Register auth provider
-registerAuthProvider(new AzureManagedIdentityAuthProvider());
