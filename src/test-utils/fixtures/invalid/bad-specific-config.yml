@@ -1,0 +1,12 @@
+name: test
+type: TestType
+ring:
+  - test
+  - staging
+authProvider: auth
+defaultConfig: {}
+dependencies: []
+specificConfig:
+  - ring: production
+    value: test
+exports: {}

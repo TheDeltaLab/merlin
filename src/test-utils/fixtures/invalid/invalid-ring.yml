@@ -1,0 +1,8 @@
+name: test
+type: TestType
+ring: invalid-ring-value
+authProvider: auth
+defaultConfig: {}
+dependencies: []
+specificConfig: []
+exports: {}

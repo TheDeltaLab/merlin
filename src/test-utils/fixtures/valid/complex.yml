@@ -1,0 +1,40 @@
+name: complex-resource
+type: ComplexType
+project: my-project
+parent: parent-resource
+ring:
+  - staging
+  - production
+region:
+  - eastus
+  - westus
+authProvider:
+  name: azureAuth
+  tenantId: abc123
+  clientId: def456
+dependencies:
+  - resource: dependency1
+    isHardDependency: true
+  - resource: dependency2
+    isHardDependency: false
+    authProvider:
+      name: customAuth
+      scope: resource
+defaultConfig:
+  tier: basic
+  replicas: 1
+  database:
+    host: localhost
+    port: 5432
+specificConfig:
+  - ring: production
+    tier: premium
+    replicas: 3
+  - region: eastus
+    database:
+      host: eastus-db
+exports:
+  connectionString: getConnectionString
+  endpoint:
+    name: getEndpoint
+    protocol: https

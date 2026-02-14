@@ -1,0 +1,26 @@
+name: with-specific-config
+type: TestType
+ring:
+  - test
+  - staging
+region:
+  - eastus
+  - westus
+authProvider: testAuth
+defaultConfig:
+  tier: basic
+  replicas: 1
+  tags:
+    environment: default
+dependencies: []
+specificConfig:
+  - ring: staging
+    tier: premium
+    tags:
+      environment: staging
+  - ring: staging
+    region: eastus
+    replicas: 3
+    tags:
+      datacenter: eastus
+exports: {}

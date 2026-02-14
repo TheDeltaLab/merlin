@@ -1,0 +1,9 @@
+name: test
+type: TestType
+ring: test
+region: invalid-region-value
+authProvider: auth
+defaultConfig: {}
+dependencies: []
+specificConfig: []
+exports: {}
