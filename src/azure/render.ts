@@ -10,8 +10,13 @@ const REGION_SHORT_NAME_MAP: Record<Region, string> = {
 };
 
 export abstract class AzureResourceRender implements Render {
+    /**
+     * whether support connector in resource name. If true, the render will remove all connector in the rendered resource name
+     */
+    abstract supportConnectorInResourceName: boolean;
 
     abstract render(resource: Resource): Promise<Command[]>;
+
 
     renderLogin(): Command[] {
         return [
@@ -26,7 +31,7 @@ export abstract class AzureResourceRender implements Render {
         if (!resource.region) {
             throw new Error(`Region is required for creating resource group for resource ${resource.name}`);
         }
-        const resourceGroupName = this.renderResourceGroupName(resource);
+        const resourceGroupName = this.getResourceGroupName(resource);
         return [
             {
                 command: 'az',
@@ -39,7 +44,7 @@ export abstract class AzureResourceRender implements Render {
         ];
     }
 
-    renderResourceGroupName(resource: Resource): string {
+    getResourceGroupName(resource: Resource): string {
         // [${project}-|shared]-rg-${ring}[-${region}]
         const projectPart = resource.project ? `${resource.project}-` : 'shared-';
         const ringPart = `-rg-${resource.ring}`;
@@ -47,14 +52,14 @@ export abstract class AzureResourceRender implements Render {
         return `${projectPart}${ringPart}${regionPart}`;
     }
 
-    renderResourceName(resource: Resource, supportConnecter: boolean = true): string {
+    getResourceName(resource: Resource): string {
         // [${project}-|shared]-${name}-${ring}[-${region}][-${type}]
         const projectPart = resource.project ? `${resource.project}-` : 'shared-';
         const ringPart = `-${resource.ring}`;
         const regionPart = resource.region ? `-${REGION_SHORT_NAME_MAP[resource.region] || resource.region}` : '';
         const typePart = resource.type ? `-${resource.type.toLowerCase()}` : '';
         const result = `${projectPart}${resource.name}${ringPart}${regionPart}${typePart}`;
-        if (supportConnecter) {
+        if (this.supportConnectorInResourceName) {
             return result.replace(/-/g, '');
         }
         return result; 

@@ -1,0 +1,16 @@
+name: multi-ring
+type: TestType
+ring:
+  - test
+  - staging
+  - production
+authProvider: testAuth
+defaultConfig:
+  commonValue: shared
+dependencies: []
+specificConfig:
+  - ring: staging
+    environment: staging
+  - ring: production
+    environment: production
+exports: {}

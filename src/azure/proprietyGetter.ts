@@ -1,11 +1,55 @@
-import { Dependency, ProprietyGetter, Resource } from "../common/resource.js";
+import { Command, Dependency, ProprietyGetter, Resource, getRender, registerProprietyGetter } from "../common/resource.js";
+import { AzureResourceRender } from "./render.js";
 
+/**
+ * ProprietyGetter for Azure Resource Managed Identity,
+ * more specifically, it returns the ObjectId of the managed identity.
+ */
 export class AzureResourceManagedIdentityGetter implements ProprietyGetter {
     name: string = 'AzureResourceManagedIdentity';
 
     dependencies: Dependency[] = [];
 
     async get(resource: Resource, args: Record<string, string>): Promise<Command[]> {
-        throw new Error(`not implemented yet, because we haven't had the scenario to use it. The implementation should be straight forward, we can implement it when we have the real need.`);
-    }   
+        const render = getRender(resource.type) as AzureResourceRender;
+        const identityName = render.getResourceName(resource);
+
+        return [{
+            command: 'az',
+            args: [
+                'ad', 'sp', 'list',
+                '--filter', `displayName eq '${identityName}' and servicePrincipalType eq 'ManagedIdentity'`,
+                '-o', 'json'
+            ],
+            resultParser: (output: string): string => {
+                const result = JSON.parse(output);
+                if (!Array.isArray(result)) {
+                    throw new Error('Expected result to be an array');
+                }
+                if (result.length !== 1) {
+                    throw new Error(`Expected 1 result, got ${result.length} items`);
+                }
+                return result[0].id as string;
+            }
+        }];
+    }
 }
+
+export class AzureResourceNameGetter implements ProprietyGetter {
+    name: string = 'AzureResourceName';
+
+    dependencies: Dependency[] = [];
+
+    async get(resource: Resource, _args: Record<string, string>): Promise<Command[]> {
+        const render = getRender(resource.type) as AzureResourceRender;
+        const fullname = render.getResourceName(resource);
+        return [{
+            command: 'echo',
+            args: [fullname]
+        }];
+    }
+}
+
+// Register propriety getters
+registerProprietyGetter(new AzureResourceManagedIdentityGetter());
+registerProprietyGetter(new AzureResourceNameGetter());

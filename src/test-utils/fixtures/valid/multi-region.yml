@@ -1,0 +1,17 @@
+name: multi-region
+type: TestType
+ring:
+  - staging
+  - production
+region:
+  - eastus
+  - westus
+authProvider: testAuth
+defaultConfig:
+  tier: basic
+dependencies: []
+specificConfig:
+  - ring: production
+    region: eastus
+    tier: premium
+exports: {}

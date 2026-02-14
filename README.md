@@ -81,7 +81,7 @@ defaultConfig:
     - name: DATABASE_URL
       value: ${ postgresql.connectionString }
 
-specificConfigs:
+specificConfig:
   - ring: production
     region: eastus
     cpu: 4

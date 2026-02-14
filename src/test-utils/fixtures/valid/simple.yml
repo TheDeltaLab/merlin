@@ -1,0 +1,9 @@
+name: simple-resource
+type: SimpleType
+ring: test
+authProvider: simpleAuth
+defaultConfig:
+  value: basic
+dependencies: []
+specificConfig: []
+exports: {}

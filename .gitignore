@@ -6,6 +6,9 @@ pnpm-lock.yaml
 dist/
 *.tsbuildinfo
 
+# Generated compiler output
+.merlin/
+
 # Environment variables
 .env
 .env.local
