@@ -307,13 +307,13 @@ export class AzureBlobStorageRender extends AzureResourceRender {
 
     renderCreate(resource: AzureBlobStorageResource): Command[] {
         const args: string[] = [];
-        const config = resource.defaultConfig;
+        const config = resource.config;
 
         // Base command
         args.push('storage', 'account', 'create');
 
         // Required parameters
-        args.push('--name', this.renderResourceName(resource));
+        args.push('--name', this.getResourceName(resource));
         args.push('--resource-group', resource.resourceGroup);
 
         // Add all optional parameters using helper methods

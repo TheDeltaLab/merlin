@@ -1,4 +1,3 @@
-import { Command } from "./render";
 
 export type Ring = 
     | 'test' 
@@ -82,20 +81,25 @@ export interface Resource<Schema extends ResourceSchema = ResourceSchema> {
 
     /**
      * How to be added as dependency of another resource
-     * 
+     *
      */
-    authProvider: AuthProvider;
+    authProvider: {
+        provider: AuthProvider;
+        args: Record<string, string>;
+    };
 
     dependencies: Dependency[];
 
-    defaultConfig: Schema;
-    specificConfigs: ({ ring: Ring; region?: Region } & Partial<Schema>)[];
+    config: Schema;
 
     /**
      * Key is the export name
-     * Value is the function to get the export value
+     * Value is the getter function and its arguments
      */
-    exports: Record<string, ProprietyGetter>;
+    exports: Record<string, {
+        getter: ProprietyGetter;
+        args: Record<string, string>;
+    }>;
 }
 
 
@@ -121,11 +125,60 @@ export interface ProprietyGetter {
     dependencies: Dependency[];
 }
 
-export interface Command {
+export interface Command<T = string> {
     command: string;
     args: string[];
+    resultParser?(output: string): T;
 }
 
 export interface Render {
     render(resource: Resource): Promise<Command[]>;
+}
+
+
+const RESOURCE_TYPE_RENDER_MAP: Map<string, Render> = new Map();
+
+export function registerRender(resourceType: string, render: Render) {
+    RESOURCE_TYPE_RENDER_MAP.set(resourceType, render);
+}
+
+
+export function getRender(resourceType: string): Render {
+    const render = RESOURCE_TYPE_RENDER_MAP.get(resourceType);
+    if (!render) {
+        throw new Error(`Render not found for resource type: ${resourceType}`);
+    }
+    return render;
+}
+
+
+const PROPRIETY_GETTER_MAP: Map<string, ProprietyGetter> = new Map();
+
+export function registerProprietyGetter(getter: ProprietyGetter) {
+    PROPRIETY_GETTER_MAP.set(getter.name, getter);
+}
+
+
+export function getProprietyGetter(name: string): ProprietyGetter {
+    const getter = PROPRIETY_GETTER_MAP.get(name);
+    if (!getter) {
+        throw new Error(`ProprietyGetter not found for name: ${name}`);
+    }
+    return getter;
+}
+
+
+const AUTH_PROVIDER_MAP: Map<string, AuthProvider> = new Map();
+
+export function registerAuthProvider(provider: AuthProvider) {
+    AUTH_PROVIDER_MAP.set(provider.name, provider);
+}
+
+
+export function getAuthProvider(name: string): AuthProvider {
+    const provider = AUTH_PROVIDER_MAP.get(name);
+    if (!provider) {
+        throw new Error(`AuthProvider not found for name: ${name}`);
+    }
+    return provider;
 }
