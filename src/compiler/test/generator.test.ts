@@ -16,7 +16,7 @@ describe('Generator', () => {
 
                 expect(result.fileName).toBe('source.ts');
                 expect(result.content).toContain('import { Resource');
-                expect(result.content).toContain('import { registerResource');
+                expect(result.content).toContain('registerResource');
                 expect(result.content).toContain('export const');
                 expect(result.content).toContain('registerResource(');
             });
@@ -25,8 +25,7 @@ describe('Generator', () => {
                 const resources = [createExpandedResource()];
                 const result = generate('/test/source.yml', resources);
 
-                expect(result.content).toContain('import { Resource, getAuthProvider, getProprietyGetter }');
-                expect(result.content).toContain('import { registerResource }');
+                expect(result.content).toContain('import { Resource, getAuthProvider, getProprietyGetter, registerResource }');
             });
 
             test('should generate resource variable names', () => {

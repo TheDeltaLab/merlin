@@ -9,7 +9,8 @@
   "exports": {
     ".": "./dist/merlin.js",
     "./runtime.js": "./dist/runtime.js",
-    "./init.js": "./dist/init.js"
+    "./init.js": "./dist/init.js",
+    "./deployer.js": "./dist/deployer.js"
   },
   "files": [
     "dist",

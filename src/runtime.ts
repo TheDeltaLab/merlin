@@ -32,3 +32,13 @@ export {
     getAllResources,
     clearRegistry
 } from './common/registry.js';
+
+// Export deployer for deployment orchestration
+export {
+    deployer,
+    Deployer
+} from './deployer.js';
+
+export type {
+    DeployOptions
+} from './deployer.js';
