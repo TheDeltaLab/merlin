@@ -1,6 +1,6 @@
 name: chuangabs
 type: AzureBlobStorage
-
+project: merlintest
 ring:
   - staging
   - test
