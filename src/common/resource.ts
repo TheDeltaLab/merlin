@@ -4,6 +4,12 @@ export type Ring =
     | 'staging' 
     | 'production';
     
+export const RING_SHORT_NAME_MAP: Record<Ring, string> = {
+    'test': 'tst',
+    'staging': 'stg',
+    'production': 'prd'
+};
+
 export type Region = 
     | 'eastus' 
     | 'westus' 
@@ -11,6 +17,14 @@ export type Region =
     | 'koreacentral'
     | 'koreasouth'
     ;
+
+export const REGION_SHORT_NAME_MAP: Record<Region, string> = {
+    'eastus': 'eus',
+    'westus': 'wus',
+    'eastasia': 'eas',
+    'koreacentral': 'krc',
+    'koreasouth': 'krs',
+};
 
 /**
  * Base interface for resource-specific configuration schemas

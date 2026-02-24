@@ -172,15 +172,23 @@ export class AzureBlobStorageRender extends AzureResourceRender {
             throw new Error(`Resource ${resource.name} is not an Azure Blob Storage resource`);
         }
 
-        // Get deployed properties to check if resource exists
+        const ret: Command[] = [];
+
+        // Ensure resource group exists first
+        const rgCommands = await this.ensureResourceGroupCommands(resource);
+        ret.push(...rgCommands);
+
+        // Get deployed properties to check if storage account exists
         const deployedProps = await this.getDeployedProps(resource);
 
         // If resource doesn't exist, create it; otherwise, update it
         if (!deployedProps) {
-            return this.renderCreate(resource as AzureBlobStorageResource);
+            ret.push(...this.renderCreate(resource as AzureBlobStorageResource));
         } else {
-            return this.renderUpdate(resource as AzureBlobStorageResource);
+            ret.push(...this.renderUpdate(resource as AzureBlobStorageResource));
         }
+
+        return ret;
     }
 
     private static isAzureBlobStorageResource(resource: Resource): resource is AzureBlobStorageResource {
@@ -194,7 +202,7 @@ export class AzureBlobStorageRender extends AzureResourceRender {
         try {
             // Execute az storage account show command
             const result = execSync(
-                `az storage account show -g ${resourceGroup} -n ${resourceName}`,
+                `az storage account show -g ${resourceGroup} -n ${resourceName} 2>/dev/null`,
                 { encoding: 'utf-8' }
             );
 
@@ -290,16 +298,27 @@ export class AzureBlobStorageRender extends AzureResourceRender {
                 Object.entries(config).filter(([_, v]) => v !== undefined)
             ) as AzureBlobStorageConfig;
 
-        } catch (error) {
-            // If the resource or resource group doesn't exist, return undefined
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            if (errorMessage.includes('ResourceNotFound') ||
-                errorMessage.includes('ResourceGroupNotFound') ||
-                errorMessage.includes('was not found') ||
-                errorMessage.includes('could not be found')) {
+        } catch (error: any) {
+            // If the command failed, it likely means the resource doesn't exist
+            // The 2>/dev/null suppresses stderr, so we check the error status
+            // Azure CLI returns exit code 3 when resource is not found
+            if (error.status === 3 || error.status === 1) {
                 return undefined;
             }
-            // For other errors, throw them
+
+            // For other errors, check if it's a "not found" error
+            const errorMessage = error.message || String(error);
+            const stderr = error.stderr?.toString() || '';
+            const combinedError = errorMessage + ' ' + stderr;
+
+            if (combinedError.includes('ResourceNotFound') ||
+                combinedError.includes('ResourceGroupNotFound') ||
+                combinedError.includes('was not found') ||
+                combinedError.includes('could not be found')) {
+                return undefined;
+            }
+
+            // For genuine errors, throw them
             throw new Error(
                 `Failed to get deployed properties for storage account ${resourceName} in resource group ${resourceGroup}: ${error}`
             );
@@ -381,68 +400,14 @@ export class AzureBlobStorageRender extends AzureResourceRender {
     };
 
     /**
-     * Add simple key-value parameters to args array
+     * Configuration mapping for array parameters
+     * Maps config property names to their corresponding CLI flags
      */
-    private addSimpleParams(args: string[], config: AzureBlobStorageConfig): void {
-        for (const [configKey, cliFlag] of Object.entries(AzureBlobStorageRender.SIMPLE_PARAM_MAP)) {
-            const value = (config as any)[configKey];
-            if (value !== undefined && value !== null) {
-                args.push(cliFlag);
-                args.push(String(value));
-            }
-        }
-    }
-
-    /**
-     * Add boolean flags to args array
-     */
-    private addBooleanFlags(args: string[], config: AzureBlobStorageConfig): void {
-        for (const [configKey, cliFlag] of Object.entries(AzureBlobStorageRender.BOOLEAN_FLAG_MAP)) {
-            const value = (config as any)[configKey];
-            if (value === true) {
-                args.push(cliFlag);
-                args.push('true');
-            } else if (value === false) {
-                args.push(cliFlag);
-                args.push('false');
-            }
-        }
-    }
-
-    /**
-     * Add array-type parameters to args array
-     */
-    private addArrayParams(args: string[], config: AzureBlobStorageConfig): void {
-        // Handle bypass
-        if (config.bypass && config.bypass.length > 0) {
-            args.push('--bypass');
-            args.push(config.bypass.join(' '));
-        }
-
-        // Handle encryption services
-        if (config.encryptionServices && config.encryptionServices.length > 0) {
-            args.push('--encryption-services');
-            args.push(config.encryptionServices.join(' '));
-        }
-
-        // Handle zones
-        if (config.zones && config.zones.length > 0) {
-            args.push('--zones');
-            args.push(config.zones.join(' '));
-        }
-    }
-
-    /**
-     * Add tags to args array
-     */
-    private addTags(args: string[], config: AzureBlobStorageConfig): void {
-        if (config.tags && Object.keys(config.tags).length > 0) {
-            args.push('--tags');
-            for (const [key, value] of Object.entries(config.tags)) {
-                args.push(`${key}=${value}`);
-            }
-        }
-    }
+    private static readonly ARRAY_PARAM_MAP: Record<string, string> = {
+        'bypass': '--bypass',
+        'encryptionServices': '--encryption-services',
+        'zones': '--zones',
+    };
 
     renderCreate(resource: AzureBlobStorageResource): Command[] {
         const args: string[] = [];
@@ -456,10 +421,10 @@ export class AzureBlobStorageRender extends AzureResourceRender {
         args.push('--resource-group', this.getResourceGroupName(resource));
 
         // Add all optional parameters using helper methods
-        this.addSimpleParams(args, config);
-        this.addBooleanFlags(args, config);
-        this.addArrayParams(args, config);
-        this.addTags(args, config);
+        this.addSimpleParams(args, config, AzureBlobStorageRender.SIMPLE_PARAM_MAP);
+        this.addBooleanFlags(args, config, AzureBlobStorageRender.BOOLEAN_FLAG_MAP);
+        this.addArrayParams(args, config, AzureBlobStorageRender.ARRAY_PARAM_MAP);
+        this.addTags(args, config.tags);
 
         return [{
             command: 'az',
@@ -479,14 +444,18 @@ export class AzureBlobStorageRender extends AzureResourceRender {
         args.push('--resource-group', this.getResourceGroupName(resource));
 
         // Add all optional parameters using helper methods
-        this.addSimpleParams(args, config);
-        this.addBooleanFlags(args, config);
-        this.addArrayParams(args, config);
-        this.addTags(args, config);
+        this.addSimpleParams(args, config, AzureBlobStorageRender.SIMPLE_PARAM_MAP);
+        this.addBooleanFlags(args, config, AzureBlobStorageRender.BOOLEAN_FLAG_MAP);
+        this.addArrayParams(args, config, AzureBlobStorageRender.ARRAY_PARAM_MAP);
+        this.addTags(args, config.tags);
 
         return [{
             command: 'az',
             args: args
         }];
+    }
+
+    override getShortResourceTypeName(): string {
+        return 'abs';
     }
 }

@@ -9,12 +9,17 @@ import {
     AZURE_BLOB_STORAGE_RESOURCE_TYPE,
     AzureBlobStorageRender
 } from './azure/azureBlobStorage.js';
+import {
+    AZURE_RESOURCE_GROUP,
+    AzureResourceGroupRender
+} from './azure/resourceGroup.js';
 
 // Register all auth providers
 registerAuthProvider(new AzureManagedIdentityAuthProvider());
 
 // Register all renders
 registerRender(AZURE_BLOB_STORAGE_RESOURCE_TYPE, new AzureBlobStorageRender());
+registerRender(AZURE_RESOURCE_GROUP, new AzureResourceGroupRender());
 
 // TODO: Register propriety getters when they're implemented
 
