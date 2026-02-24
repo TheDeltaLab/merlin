@@ -32,7 +32,7 @@ export default defineConfig([
     },
     // Library build (runtime exports for generated code)
     {
-        entry: ['src/runtime.ts', 'src/init.ts'],
+        entry: ['src/runtime.ts', 'src/init.ts', 'src/deployer.ts'],
         format: ['esm'],
         target: 'node20',
         outDir: 'dist',
