@@ -1,6 +1,7 @@
 import { AzureResource } from './resource.js';
 import { Resource, ResourceSchema, Command, Render } from '../common/resource.js';
 import { AzureResourceRender } from './render.js';
+import { execSync } from 'child_process';
 
 export const AZURE_BLOB_STORAGE_RESOURCE_TYPE = 'AzureBlobStorage';
 
@@ -163,8 +164,146 @@ export interface AzureBlobStorageResource extends AzureResource<AzureBlobStorage
 }
 
 export class AzureBlobStorageRender extends AzureResourceRender {
-    render(resource: Resource): Promise<Command[]> {
-        throw new Error('Method not implemented.');
+    
+    supportConnectorInResourceName: boolean = false;
+
+    async render(resource: Resource): Promise<Command[]> {
+        if (!AzureBlobStorageRender.isAzureBlobStorageResource(resource)) {
+            throw new Error(`Resource ${resource.name} is not an Azure Blob Storage resource`);
+        }
+
+        // Get deployed properties to check if resource exists
+        const deployedProps = await this.getDeployedProps(resource);
+
+        // If resource doesn't exist, create it; otherwise, update it
+        if (!deployedProps) {
+            return this.renderCreate(resource as AzureBlobStorageResource);
+        } else {
+            return this.renderUpdate(resource as AzureBlobStorageResource);
+        }
+    }
+
+    private static isAzureBlobStorageResource(resource: Resource): resource is AzureBlobStorageResource {
+        return resource.type === AZURE_BLOB_STORAGE_RESOURCE_TYPE;
+    }
+
+    private async getDeployedProps(resource: Resource): Promise<AzureBlobStorageConfig | undefined> {
+        const resourceName = this.getResourceName(resource);
+        const resourceGroup = this.getResourceGroupName(resource);
+
+        try {
+            // Execute az storage account show command
+            const result = execSync(
+                `az storage account show -g ${resourceGroup} -n ${resourceName}`,
+                { encoding: 'utf-8' }
+            );
+
+            const deployedProps = JSON.parse(result);
+
+            // Map Azure CLI response to AzureBlobStorageConfig
+            const config: AzureBlobStorageConfig = {
+                // Storage account configuration
+                accessTier: deployedProps.accessTier as AccessTier,
+                sku: deployedProps.sku?.name as StorageSku,
+                kind: deployedProps.kind as StorageAccountKind,
+                location: deployedProps.location,
+
+                // Security and access
+                httpsOnly: deployedProps.enableHttpsTrafficOnly,
+                minTlsVersion: deployedProps.minimumTlsVersion as TlsVersion,
+                allowBlobPublicAccess: deployedProps.allowBlobPublicAccess,
+                allowSharedKeyAccess: deployedProps.allowSharedKeyAccess,
+                allowCrossTenantReplication: deployedProps.allowCrossTenantReplication,
+                publicNetworkAccess: deployedProps.publicNetworkAccess as PublicNetworkAccess,
+                defaultAction: deployedProps.networkRuleSet?.defaultAction as NetworkDefaultAction,
+
+                // Network configuration
+                bypass: deployedProps.networkRuleSet?.bypass ?
+                    deployedProps.networkRuleSet.bypass.split(',').map((s: string) => s.trim()) as NetworkBypass[] :
+                    undefined,
+
+                // Encryption
+                encryptionKeySource: deployedProps.encryption?.keySource as EncryptionKeySource,
+                requireInfrastructureEncryption: deployedProps.encryption?.requireInfrastructureEncryption,
+
+                // Advanced features
+                enableHierarchicalNamespace: deployedProps.isHnsEnabled,
+                enableNfsV3: deployedProps.enableNfsV3,
+                enableSftp: deployedProps.isSftpEnabled,
+                enableLargeFileShare: deployedProps.largeFileSharesState === 'Enabled',
+                enableLocalUser: deployedProps.isLocalUserEnabled,
+
+                // Identity
+                identityType: deployedProps.identity?.type as IdentityType,
+
+                // Tags
+                tags: deployedProps.tags,
+
+                // Zones
+                zones: deployedProps.zones,
+
+                // DNS endpoint type
+                dnsEndpointType: deployedProps.dnsEndpointType as DnsEndpointType,
+
+                // Custom domain
+                customDomain: deployedProps.customDomain?.name,
+
+                // Routing preference
+                routingChoice: deployedProps.routingPreference?.routingChoice as RoutingChoice,
+                publishInternetEndpoints: deployedProps.routingPreference?.publishInternetEndpoints,
+                publishMicrosoftEndpoints: deployedProps.routingPreference?.publishMicrosoftEndpoints,
+
+                // Dual stack endpoint preference
+                publishIpv6Endpoint: deployedProps.dualStackEndpointPreference?.publishIpv6Endpoint,
+
+                // SAS policy
+                sasExpirationPeriod: deployedProps.sasPolicy?.sasExpirationPeriod,
+                sasExpirationAction: deployedProps.sasPolicy?.sasExpirationAction as SasExpirationAction,
+
+                // Key policy
+                keyExpirationPeriodInDays: deployedProps.keyPolicy?.keyExpirationPeriodInDays,
+
+                // Immutable storage
+                immutabilityPeriodInDays: deployedProps.immutableStorageWithVersioning?.immutabilityPolicy?.immutabilityPeriodSinceCreationInDays,
+                immutabilityState: deployedProps.immutableStorageWithVersioning?.immutabilityPolicy?.state as ImmutabilityState,
+                allowProtectedAppendWrites: deployedProps.immutableStorageWithVersioning?.immutabilityPolicy?.allowProtectedAppendWrites,
+
+                // Azure Files identity-based authentication
+                enableFilesAadds: deployedProps.azureFilesIdentityBasedAuthentication?.directoryServiceOptions === 'AADDS',
+                enableFilesAadKerb: deployedProps.azureFilesIdentityBasedAuthentication?.directoryServiceOptions === 'AADKERB',
+                enableFilesAdds: deployedProps.azureFilesIdentityBasedAuthentication?.directoryServiceOptions === 'AD',
+                defaultSharePermission: deployedProps.azureFilesIdentityBasedAuthentication?.defaultSharePermission as DefaultSharePermission,
+
+                // Active Directory configuration
+                domainName: deployedProps.azureFilesIdentityBasedAuthentication?.activeDirectoryProperties?.domainName,
+                domainGuid: deployedProps.azureFilesIdentityBasedAuthentication?.activeDirectoryProperties?.domainGuid,
+                domainSid: deployedProps.azureFilesIdentityBasedAuthentication?.activeDirectoryProperties?.domainSid,
+                azureStorageSid: deployedProps.azureFilesIdentityBasedAuthentication?.activeDirectoryProperties?.azureStorageSid,
+                forestName: deployedProps.azureFilesIdentityBasedAuthentication?.activeDirectoryProperties?.forestName,
+                netBiosDomainName: deployedProps.azureFilesIdentityBasedAuthentication?.activeDirectoryProperties?.netBiosDomainName,
+                samAccountName: deployedProps.azureFilesIdentityBasedAuthentication?.activeDirectoryProperties?.samAccountName,
+                accountType: deployedProps.azureFilesIdentityBasedAuthentication?.activeDirectoryProperties?.accountType,
+            };
+
+            // Remove undefined values to keep the config clean
+            return Object.fromEntries(
+                Object.entries(config).filter(([_, v]) => v !== undefined)
+            ) as AzureBlobStorageConfig;
+
+        } catch (error) {
+            // If the resource or resource group doesn't exist, return undefined
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            if (errorMessage.includes('ResourceNotFound') ||
+                errorMessage.includes('ResourceGroupNotFound') ||
+                errorMessage.includes('was not found') ||
+                errorMessage.includes('could not be found')) {
+                return undefined;
+            }
+            // For other errors, throw them
+            throw new Error(
+                `Failed to get deployed properties for storage account ${resourceName} in resource group ${resourceGroup}: ${error}`
+            );
+        }
     }
 
     /**
@@ -314,7 +453,30 @@ export class AzureBlobStorageRender extends AzureResourceRender {
 
         // Required parameters
         args.push('--name', this.getResourceName(resource));
-        args.push('--resource-group', resource.resourceGroup);
+        args.push('--resource-group', this.getResourceGroupName(resource));
+
+        // Add all optional parameters using helper methods
+        this.addSimpleParams(args, config);
+        this.addBooleanFlags(args, config);
+        this.addArrayParams(args, config);
+        this.addTags(args, config);
+
+        return [{
+            command: 'az',
+            args: args
+        }];
+    }
+
+    renderUpdate(resource: AzureBlobStorageResource): Command[] {
+        const args: string[] = [];
+        const config = resource.config;
+
+        // Base command
+        args.push('storage', 'account', 'update');
+
+        // Required parameters
+        args.push('--name', this.getResourceName(resource));
+        args.push('--resource-group', this.getResourceGroupName(resource));
 
         // Add all optional parameters using helper methods
         this.addSimpleParams(args, config);
