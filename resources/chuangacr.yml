@@ -38,4 +38,4 @@ specificConfig:
       env: test
 
 exports:
-  - server: getAzureContainerRegistryServer
+  - server: AzureContainerRegistryServer

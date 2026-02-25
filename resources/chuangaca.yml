@@ -19,13 +19,13 @@ dependencies:
 
 defaultConfig:
   # ── Container / Image ─────────────────────────────────────────────
-  image: chuangacr.azurecr.io/myapp:latest
+  image: ${ chuangacr.server }/myapp:latest
   containerName: myapp
   cpu: 0.5
   memory: 1Gi
   envVars:
-    - APP_ENV=staging
-    - STORAGE_ACCOUNT=secretref:storage-account-key
+    - APP_ENV=${ this.ring }
+    - STORAGE_ACCOUNT=${ chuangabs.name }
 
   # ── Ingress (CREATE ONLY) ──────────────────────────────────────────
   ingress: external
@@ -41,7 +41,7 @@ defaultConfig:
   revisionsMode: single
 
   # ── Registry ──────────────────────────────────────────────────────
-  registryServer: chuangacr.azurecr.io
+  registryServer: ${ chuangacr.server }
   registryIdentity: system
 
   # ── Managed Identity (CREATE ONLY) ────────────────────────────────

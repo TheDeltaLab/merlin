@@ -50,6 +50,40 @@ export class AzureResourceNameGetter implements ProprietyGetter {
     }
 }
 
+/**
+ * ProprietyGetter for Azure Container Registry login server URL.
+ * Returns the loginServer field (e.g. "myregistry.azurecr.io") of the ACR.
+ */
+export class AzureContainerRegistryServerGetter implements ProprietyGetter {
+    name: string = 'AzureContainerRegistryServer';
+
+    dependencies: Dependency[] = [];
+
+    async get(resource: Resource, _args: Record<string, string>): Promise<Command[]> {
+        const render = getRender(resource.type) as AzureResourceRender;
+        const resourceGroup = render.getResourceGroupName(resource);
+        const resourceName = render.getResourceName(resource);
+
+        return [{
+            command: 'az',
+            args: [
+                'acr', 'show',
+                '-g', resourceGroup,
+                '-n', resourceName,
+                '-o', 'json'
+            ],
+            resultParser: (output: string): string => {
+                const result = JSON.parse(output);
+                if (!result.loginServer) {
+                    throw new Error('Expected loginServer in az acr show output');
+                }
+                return result.loginServer as string;
+            }
+        }];
+    }
+}
+
 // Register propriety getters
 registerProprietyGetter(new AzureResourceManagedIdentityGetter());
 registerProprietyGetter(new AzureResourceNameGetter());
+registerProprietyGetter(new AzureContainerRegistryServerGetter());
