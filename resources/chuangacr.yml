@@ -1,1 +1,41 @@
-# test for acr
+name: chuangacr
+type: AzureContainerRegistry
+project: merlintest
+ring:
+  - staging
+  - test
+region:
+  - eastasia
+  - koreacentral
+
+authProvider:
+  name: AzureManagedIdentity
+  role: acrpull
+  scope: resource
+
+defaultConfig:
+  # SKU tier: Basic | Standard | Premium
+  sku: Standard
+
+  # Access control
+  adminEnabled: false
+  publicNetworkEnabled: true
+
+  # Security
+  allowTrustedServices: true
+  allowExports: true
+
+  tags:
+    merlin: true
+
+specificConfig:
+  - ring: staging
+    tags:
+      env: staging
+  - ring: test
+    sku: Basic
+    tags:
+      env: test
+
+exports:
+  - server: getAzureContainerRegistryServer

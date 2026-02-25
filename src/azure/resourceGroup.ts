@@ -11,6 +11,9 @@ export interface ResourceGroupProperty {
 }
 
 export class AzureResourceGroupRender extends AzureResourceRender {
+    getShortResourceTypeName(): string {
+        return 'rg';
+    }
     supportConnectorInResourceName: boolean = true;
 
     async render(resource: Resource): Promise<Command[]> {
