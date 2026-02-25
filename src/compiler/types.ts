@@ -113,6 +113,44 @@ export interface GeneratedFile {
     resources: string[];      // Exported resource names
 }
 
+// ── Parameter interpolation types ───────────────────────────────────────────
+
+/**
+ * A single segment of a parameterized string value.
+ *
+ * A string like "${ chuangacr.server }/myapp:latest" is parsed into:
+ *   [ { type: 'dep', resource: 'chuangacr', export: 'server' },
+ *     { type: 'literal', value: '/myapp:latest' } ]
+ */
+export type ParamSegment =
+    | { type: 'literal'; value: string }
+    | { type: 'dep'; resource: string; export: string }   // ${ resourceName.exportKey }
+    | { type: 'self'; field: 'ring' | 'region' };          // ${ this.ring } | ${ this.region }
+
+/**
+ * A parameterized string value: an ordered list of segments that concatenate to the final string.
+ * Only used for STRING config values that contain at least one ${ } expression.
+ * Non-string config values (numbers, booleans, objects, arrays) are never wrapped.
+ */
+export interface ParamValue {
+    /** Brand sentinel — survives JSON serialization so the runtime resolver can identify this. */
+    __merlin_param__: true;
+    segments: ParamSegment[];
+}
+
+/**
+ * Type guard for ParamValue
+ */
+export function isParamValue(v: unknown): v is ParamValue {
+    return (
+        typeof v === 'object' &&
+        v !== null &&
+        (v as Record<string, unknown>).__merlin_param__ === true
+    );
+}
+
+// ── Compiler options ─────────────────────────────────────────────────────────
+
 /**
  * Compiler options
  */

@@ -551,3 +551,117 @@ describe('Transformer', () => {
         });
     });
 });
+
+// ── Additional tests for parameter interpolation ───────────────────────────
+
+import { isParamValue } from '../../compiler/types.js';
+
+describe('Transformer - Parameter Interpolation', () => {
+    describe('Config parsing after deepMerge', () => {
+        test('wraps parameterized string in defaultConfig as ParamValue', () => {
+            const resource = createResourceYAML({
+                defaultConfig: {
+                    image: '${ acr.server }/myapp:latest'
+                },
+                dependencies: [{ resource: 'acr', isHardDependency: true }],
+                specificConfig: []
+            });
+
+            const expanded = expand(resource);
+            expect(isParamValue(expanded[0].config.image)).toBe(true);
+        });
+
+        test('leaves plain string in config as-is', () => {
+            const resource = createResourceYAML({
+                defaultConfig: {
+                    containerName: 'myapp',
+                    cpu: 0.5
+                },
+                specificConfig: []
+            });
+
+            const expanded = expand(resource);
+            expect(expanded[0].config.containerName).toBe('myapp');
+            expect(expanded[0].config.cpu).toBe(0.5);
+        });
+
+        test('parses ${ this.ring } expression in config', () => {
+            const resource = createResourceYAML({
+                ring: 'staging',
+                defaultConfig: {
+                    envVar: '${ this.ring }'
+                },
+                specificConfig: []
+            });
+
+            const expanded = expand(resource);
+            const config = expanded.find(r => r.ring === 'staging')!.config;
+            expect(isParamValue(config.envVar)).toBe(true);
+
+            const param = config.envVar as any;
+            expect(param.segments).toHaveLength(1);
+            expect(param.segments[0]).toEqual({ type: 'self', field: 'ring' });
+        });
+
+        test('parses parameters in array config values', () => {
+            const resource = createResourceYAML({
+                defaultConfig: {
+                    envVars: [
+                        'APP_ENV=${ this.ring }',
+                        'PLAIN=value'
+                    ]
+                },
+                specificConfig: []
+            });
+
+            const expanded = expand(resource);
+            const envVars = expanded[0].config.envVars as unknown[];
+            expect(isParamValue(envVars[0])).toBe(true);
+            expect(envVars[1]).toBe('PLAIN=value');
+        });
+
+        test('parses parameters in nested config objects', () => {
+            const resource = createResourceYAML({
+                defaultConfig: {
+                    tags: {
+                        merlin: 'true',
+                        env: '${ this.ring }'
+                    }
+                },
+                specificConfig: []
+            });
+
+            const expanded = expand(resource);
+            const tags = expanded[0].config.tags as Record<string, unknown>;
+            expect(tags.merlin).toBe('true');
+            expect(isParamValue(tags.env)).toBe(true);
+        });
+
+        test('parses params applied AFTER deepMerge (specificConfig merge first)', () => {
+            // specificConfig overrides the parameterized image — result should still be a ParamValue
+            const resource = createResourceYAML({
+                ring: ['staging', 'test'],
+                defaultConfig: {
+                    image: '${ acr.server }/myapp:latest',
+                    cpu: 0.5
+                },
+                dependencies: [{ resource: 'acr', isHardDependency: true }],
+                specificConfig: [
+                    { ring: 'staging', cpu: 1 }
+                ]
+            });
+
+            const expanded = expand(resource);
+            const staging = expanded.find(r => r.ring === 'staging')!;
+            const test_ = expanded.find(r => r.ring === 'test')!;
+
+            // image is a ParamValue for both rings
+            expect(isParamValue(staging.config.image)).toBe(true);
+            expect(isParamValue(test_.config.image)).toBe(true);
+
+            // cpu is overridden for staging
+            expect(staging.config.cpu).toBe(1);
+            expect(test_.config.cpu).toBe(0.5);
+        });
+    });
+});

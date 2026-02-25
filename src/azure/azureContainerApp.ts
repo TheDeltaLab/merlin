@@ -101,7 +101,7 @@ export class AzureContainerAppRender extends AzureResourceRender {
         return 'aca';
     }
 
-    async render(resource: Resource): Promise<Command[]> {
+    async renderImpl(resource: Resource): Promise<Command[]> {
         if (!AzureContainerAppRender.isAzureContainerAppResource(resource)) {
             throw new Error(`Resource ${resource.name} is not an Azure Container App resource`);
         }

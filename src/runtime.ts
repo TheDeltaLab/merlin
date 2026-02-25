@@ -43,3 +43,6 @@ export {
 export type {
     DeployOptions
 } from './deployer.js';
+
+// Export param resolver for custom Render implementations
+export { resolveConfig } from './common/paramResolver.js';

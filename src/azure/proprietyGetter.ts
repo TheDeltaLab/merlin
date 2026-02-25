@@ -83,7 +83,38 @@ export class AzureContainerRegistryServerGetter implements ProprietyGetter {
     }
 }
 
+export class AzureContainerAppFqdnGetter implements ProprietyGetter {
+    name: string = 'AzureContainerAppFqdn';
+
+    dependencies: Dependency[] = [];
+
+    async get(resource: Resource, _args: Record<string, string>): Promise<Command[]> {
+        const render = getRender(resource.type) as AzureResourceRender;
+        const resourceGroup = render.getResourceGroupName(resource);
+        const resourceName = render.getResourceName(resource);
+
+        return [{
+            command: 'az',
+            args: [
+                'containerapp', 'show',
+                '-g', resourceGroup,
+                '-n', resourceName,
+                '-o', 'json'
+            ],
+            resultParser: (output: string): string => {
+                const result = JSON.parse(output);
+                const fqdn = result?.properties?.configuration?.ingress?.fqdn;
+                if (!fqdn) {
+                    throw new Error('Expected fqdn in az containerapp show output');
+                }
+                return fqdn as string;
+            }
+        }];
+    }
+}
+
 // Register propriety getters
 registerProprietyGetter(new AzureResourceManagedIdentityGetter());
 registerProprietyGetter(new AzureResourceNameGetter());
 registerProprietyGetter(new AzureContainerRegistryServerGetter());
+registerProprietyGetter(new AzureContainerAppFqdnGetter());

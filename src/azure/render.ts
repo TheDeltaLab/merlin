@@ -1,5 +1,6 @@
 
 import { Command, Render, Region, Resource, REGION_SHORT_NAME_MAP, RING_SHORT_NAME_MAP } from "../common/resource";
+import { resolveConfig } from "../common/paramResolver.js";
 
 
 export abstract class AzureResourceRender implements Render {
@@ -8,7 +9,21 @@ export abstract class AzureResourceRender implements Render {
      */
     abstract supportConnectorInResourceName: boolean;
 
-    abstract render(resource: Resource): Promise<Command[]>;
+    /**
+     * Outer render method (Template Method pattern).
+     * Resolves all ${ } parameter expressions in resource.config,
+     * then delegates to renderImpl() with the fully-resolved resource.
+     */
+    async render(resource: Resource): Promise<Command[]> {
+        const resolved = await resolveConfig(resource);
+        return this.renderImpl(resolved);
+    }
+
+    /**
+     * Subclasses implement their render logic here.
+     * The resource passed in has all parameter expressions already resolved to plain values.
+     */
+    protected abstract renderImpl(resource: Resource): Promise<Command[]>;
 
     abstract getShortResourceTypeName(): string;
 

@@ -55,7 +55,7 @@ export class AzureContainerRegistryRender extends AzureResourceRender {
 
     supportConnectorInResourceName: boolean = false;
 
-    async render(resource: Resource): Promise<Command[]> {
+    async renderImpl(resource: Resource): Promise<Command[]> {
         if (!AzureContainerRegistryRender.isAzureContainerRegistryResource(resource)) {
             throw new Error(`Resource ${resource.name} is not an Azure Container Registry resource`);
         }

@@ -62,7 +62,7 @@ export class AzureContainerAppEnvironmentRender extends AzureResourceRender {
         return 'acenv';
     }
 
-    async render(resource: Resource): Promise<Command[]> {
+    async renderImpl(resource: Resource): Promise<Command[]> {
         if (!AzureContainerAppEnvironmentRender.isAzureContainerAppEnvironmentResource(resource)) {
             throw new Error(`Resource ${resource.name} is not an Azure Container App Environment resource`);
         }

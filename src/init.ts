@@ -4,7 +4,7 @@
  */
 
 import { registerAuthProvider, registerProprietyGetter, registerRender } from './common/resource.js';
-import { AzureManagedIdentityAuthProvider } from './azure/authProvider.js';
+import { AzureEntraIDAuthProvider, AzureManagedIdentityAuthProvider } from './azure/authProvider.js';
 import {
     AZURE_BLOB_STORAGE_RESOURCE_TYPE,
     AzureBlobStorageRender
@@ -24,6 +24,7 @@ import {
 
 // Register all auth providers
 registerAuthProvider(new AzureManagedIdentityAuthProvider());
+registerAuthProvider(new AzureEntraIDAuthProvider());
 
 // Register all renders
 registerRender(AZURE_BLOB_STORAGE_RESOURCE_TYPE, new AzureBlobStorageRender());

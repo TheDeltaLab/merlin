@@ -69,7 +69,16 @@ specificConfig:
     tags:
       env: test
 
+# exports example:
+# simple format:
+# identity: getResourceIdentity
+
+# object format:
+# identity:
+#   name: getResourceIdentity
+#   someArg: someValue
+#   anotherArg: anotherValue
 exports:
-  - identity: getResourceIdentity
-  - apiScope: getResourceApiScope
-  - url: getResourceUrl
+  identity: AzureResourceManagedIdentity
+  apiScope: getResourceApiScope
+  url: AzureContainerAppFqdn
