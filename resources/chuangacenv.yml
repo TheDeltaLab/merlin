@@ -1,0 +1,19 @@
+name: chuangacenv
+type: AzureContainerAppEnvironment
+project: merlintest
+ring:
+  - staging
+  - test
+region:
+  - eastasia
+  - koreacentral
+
+authProvider:
+  name: AzureManagedIdentity
+
+dependencies: []
+
+defaultConfig:
+  tags:
+    merlin: "true"
+    env: ${ this.ring }
