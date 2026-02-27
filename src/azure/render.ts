@@ -11,12 +11,19 @@ export abstract class AzureResourceRender implements Render {
 
     /**
      * Outer render method (Template Method pattern).
-     * Resolves all ${ } parameter expressions in resource.config,
-     * then delegates to renderImpl() with the fully-resolved resource.
+     * Resolves all ${ } parameter expressions in resource.config into shell
+     * variable references, collects the capture commands (envCapture set),
+     * then delegates to renderImpl() with the resolved resource.
+     *
+     * The returned Command[] starts with any capture commands (e.g.
+     * `MERLIN_CHUANGACR_SERVER=$(az acr show ...)`) followed by the resource's
+     * own deployment commands.  This ensures variables are set before they are
+     * referenced in subsequent args.
      */
     async render(resource: Resource): Promise<Command[]> {
-        const resolved = await resolveConfig(resource);
-        return this.renderImpl(resolved);
+        const { resource: resolved, captureCommands } = await resolveConfig(resource);
+        const renderCommands = await this.renderImpl(resolved);
+        return [...captureCommands, ...renderCommands];
     }
 
     /**

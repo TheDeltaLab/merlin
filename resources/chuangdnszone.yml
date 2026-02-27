@@ -1,0 +1,26 @@
+name: chuangdns
+type: AzureDnsZone
+project: merlintest
+ring:
+  - staging
+  - test
+
+authProvider:
+  name: AzureManagedIdentity
+
+dependencies: []
+
+defaultConfig:
+  resourceGroupRegion: eastasia
+  tags:
+    environment: ${ this.ring }
+
+specificConfig:
+  - ring: staging
+    dnsName: chuang.staging
+    parentName: thebrainly.dev
+  - ring: test
+    dnsName: chuang.test
+    parentName: thebrainly.dev
+
+exports: {}

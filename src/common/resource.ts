@@ -142,6 +142,14 @@ export interface ProprietyGetter {
 export interface Command<T = string> {
     command: string;
     args: string[];
+    /**
+     * If set, this command's stdout is captured into a shell environment variable
+     * with this name (e.g. 'MERLIN_CHUANGACR_SERVER').
+     * - In print/file-output mode: emitted as `VARNAME=$(command args)`
+     * - In execute mode: stdout is stored in-memory and substituted into
+     *   subsequent commands' args where `$VARNAME` appears.
+     */
+    envCapture?: string;
     resultParser?(output: string): T;
 }
 
