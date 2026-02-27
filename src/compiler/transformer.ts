@@ -60,7 +60,11 @@ export function expand(resource: ResourceYAML): ExpandedResource[] {
 /**
  * Converts authProvider from YAML format to AuthProviderRef
  */
-function toAuthProviderRef(authProvider: string | AuthProviderYAML): AuthProviderRef {
+function toAuthProviderRef(authProvider: string | AuthProviderYAML | undefined): AuthProviderRef | undefined {
+    if (authProvider === undefined || authProvider === null) {
+        return undefined;
+    }
+
     if (typeof authProvider === 'string') {
         return {
             name: authProvider,

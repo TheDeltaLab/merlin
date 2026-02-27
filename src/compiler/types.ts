@@ -82,7 +82,7 @@ export interface ExpandedResource {
     type: string;
     project?: string;
     parent?: string;
-    authProvider: AuthProviderRef;
+    authProvider?: AuthProviderRef;
     dependencies: DependencyYAML[];  // Use YAML format, not runtime Dependency
     config: Record<string, unknown>;  // Merged defaultConfig + specificConfig
     exports: Record<string, ExportRef>;
@@ -159,6 +159,7 @@ export interface CompilerOptions {
     outputPath: string;       // Output directory (default: .merlin)
     watch?: boolean;          // Enable watch mode
     validate?: boolean;       // Validation-only mode (don't generate)
+    skipCache?: boolean;      // Skip cache check and write (--no-cache flag)
 }
 
 /**
@@ -169,4 +170,5 @@ export interface CompilationResult {
     errors: CompilationError[];
     warnings: CompilationError[];
     generatedFiles: string[];
+    cacheHit?: boolean;       // true when compilation was skipped due to cache hit
 }

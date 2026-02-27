@@ -97,7 +97,7 @@ export interface Resource<Schema extends ResourceSchema = ResourceSchema> {
      * How to be added as dependency of another resource
      *
      */
-    authProvider: {
+    authProvider?: {
         provider: AuthProvider;
         args: Record<string, string>;
     };

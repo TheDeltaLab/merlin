@@ -28,6 +28,13 @@ defaultConfig:
   tags:
     merlin: true
 
+  images:
+    - name: chuangdemo
+      tags: 
+        - latest
+        - v0.0.1
+      source: mcr.microsoft.com/mcr/hello-world
+
 specificConfig:
   - ring: staging
     tags:

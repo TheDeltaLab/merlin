@@ -19,6 +19,7 @@ import {
     GeneratedFile
 } from '../compiler/types.js';
 import { initializeOutputDirectory, checkPnpmAvailable } from '../compiler/initializer.js';
+import { computeYAMLHash, checkCache, writeCacheFile, invalidateCache } from '../compiler/cache.js';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { execaCommand } from 'execa';
@@ -40,6 +41,16 @@ export class Compiler {
             const yamlFiles = await this.discoverYAMLFiles(options.inputPath);
             if (yamlFiles.length === 0) {
                 return this.createNoFilesError(options.inputPath);
+            }
+
+            // 1.5. Cache check: skip expensive compilation if no YAML files changed
+            if (!options.validate && !options.skipCache) {
+                const cacheResult = await checkCache(yamlFiles, options.outputPath);
+                if (cacheResult.hit) {
+                    return { success: true, errors: [], warnings: [], generatedFiles: [], cacheHit: true };
+                }
+                // Cache miss: clean stale generated artifacts before recompiling
+                await invalidateCache(options.outputPath);
             }
 
             // 2. Parse all files
@@ -105,6 +116,12 @@ export class Compiler {
                         hint: 'Check generated code for errors'
                     });
                 }
+            }
+
+            // 8. Write cache file after full successful compilation
+            if (!options.skipCache) {
+                const hash = await computeYAMLHash(yamlFiles);
+                await writeCacheFile(options.outputPath, hash, yamlFiles.length);
             }
 
             return { success: true, errors, warnings, generatedFiles };
