@@ -299,7 +299,12 @@ export class AzureContainerRegistryRender extends AzureResourceRender {
                     });
                     commands.push({
                         command: 'docker',
-                        args: ['push', targetImage]
+                        args: ['push', targetImage],
+                        skipIfAcrImageExists: {
+                            registryName,
+                            repository: image.name,
+                            tag
+                        }
                     });
                 }
             } else if (image.generateScript) {
@@ -318,7 +323,12 @@ export class AzureContainerRegistryRender extends AzureResourceRender {
                     });
                     commands.push({
                         command: 'docker',
-                        args: ['push', targetImage]
+                        args: ['push', targetImage],
+                        skipIfAcrImageExists: {
+                            registryName,
+                            repository: image.name,
+                            tag
+                        }
                     });
                 }
             }

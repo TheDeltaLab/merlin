@@ -150,6 +150,14 @@ export interface Command {
      *   subsequent commands' args where `$VARNAME` appears.
      */
     envCapture?: string;
+    /**
+     * If set, this command is skipped when the target image tag already exists in ACR.
+     */
+    skipIfAcrImageExists?: {
+        registryName: string;
+        repository: string;
+        tag: string;
+    };
 }
 
 export function commandToString(cmd: Command): string {

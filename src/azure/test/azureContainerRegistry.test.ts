@@ -148,6 +148,16 @@ describe('AzureContainerRegistryRender', () => {
             expect(pushCmds).toHaveLength(2);
             expect(pushCmds[0].args[1]).toBe('myprojectmyacrstgeusacr.azurecr.io/nginx:latest');
             expect(pushCmds[1].args[1]).toBe('myprojectmyacrstgeusacr.azurecr.io/nginx:v1.0');
+            expect(pushCmds[0].skipIfAcrImageExists).toEqual({
+                registryName: 'myprojectmyacrstgeusacr',
+                repository: 'nginx',
+                tag: 'latest',
+            });
+            expect(pushCmds[1].skipIfAcrImageExists).toEqual({
+                registryName: 'myprojectmyacrstgeusacr',
+                repository: 'nginx',
+                tag: 'v1.0',
+            });
         });
 
         it('generates pull/tag/push for multiple source images with a single acr login', async () => {
@@ -214,6 +224,11 @@ describe('AzureContainerRegistryRender', () => {
 
             expect(pushCmds).toHaveLength(1);
             expect(pushCmds[0].args[1]).toBe('myprojectmyacrstgeusacr.azurecr.io/customapp:latest');
+            expect(pushCmds[0].skipIfAcrImageExists).toEqual({
+                registryName: 'myprojectmyacrstgeusacr',
+                repository: 'customapp',
+                tag: 'latest',
+            });
         });
 
         it('generates one bash command and docker tag + push per tag for multiple tags', async () => {
