@@ -197,7 +197,8 @@ describe('AzureDnsZoneRender', () => {
             const resource = makeResource({ tags: { env: 'staging' } });
             const [cmd] = render.renderCreate(resource);
             expect(cmd.args).toContain('--tags');
-            expect(cmd.args).toContain('env=staging');
+            const tagsIdx = cmd.args.indexOf('--tags');
+            expect(cmd.args[tagsIdx + 1]).toBe('env=staging');
         });
 
         it('omits --tags when not set', () => {
@@ -238,7 +239,8 @@ describe('AzureDnsZoneRender', () => {
             const resource = makeResource({ tags: { env: 'production' } });
             const [cmd] = render.renderUpdate(resource);
             expect(cmd.args).toContain('--tags');
-            expect(cmd.args).toContain('env=production');
+            const tagsIdx = cmd.args.indexOf('--tags');
+            expect(cmd.args[tagsIdx + 1]).toBe('env=production');
         });
 
         it('does NOT include --parent-name', () => {

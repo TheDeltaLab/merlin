@@ -151,7 +151,79 @@ describe('AzureContainerAppRender', () => {
         });
     });
 
-    // ── 4. renderCreate ──────────────────────────────────────────────────────
+    // ── 4. CPU / memory validation ───────────────────────────────────────────
+
+    describe('cpu + memory validation in renderImpl()', () => {
+        it('accepts valid cpu/memory combinations', async () => {
+            const validCombinations: Array<[number, string]> = [
+                [0.25, '0.5Gi'],
+                [0.5,  '1.0Gi'],
+                [1.0,  '2.0Gi'],
+                [2.0,  '4.0Gi'],
+                [4.0,  '8.0Gi'],
+            ];
+            for (const [cpu, memory] of validCombinations) {
+                mockNotFound();
+                const resource = makeResource({ cpu, memory });
+                await expect(render.render(resource as unknown as Resource)).resolves.toBeDefined();
+            }
+        });
+
+        it('also accepts memory without trailing .0 (e.g. "1Gi" for cpu 0.5)', async () => {
+            mockNotFound();
+            const resource = makeResource({ cpu: 0.5, memory: '1Gi' });
+            await expect(render.render(resource as unknown as Resource)).resolves.toBeDefined();
+        });
+
+        it('throws when cpu is given without memory', async () => {
+            mockNotFound();
+            const resource = makeResource({ cpu: 1.0 });
+            await expect(render.render(resource as unknown as Resource)).rejects.toThrow(
+                'cpu and memory must both be specified together'
+            );
+        });
+
+        it('throws when memory is given without cpu', async () => {
+            mockNotFound();
+            const resource = makeResource({ memory: '2.0Gi' });
+            await expect(render.render(resource as unknown as Resource)).rejects.toThrow(
+                'cpu and memory must both be specified together'
+            );
+        });
+
+        it('throws when cpu value is not in the valid set', async () => {
+            mockNotFound();
+            const resource = makeResource({ cpu: 0.1, memory: '0.2Gi' });
+            await expect(render.render(resource as unknown as Resource)).rejects.toThrow(
+                'invalid cpu value 0.1'
+            );
+        });
+
+        it('throws when memory does not match the expected value for the given cpu', async () => {
+            mockNotFound();
+            // cpu 1.0 requires memory 2.0Gi, not 1.0Gi
+            const resource = makeResource({ cpu: 1.0, memory: '1Gi' });
+            await expect(render.render(resource as unknown as Resource)).rejects.toThrow(
+                'invalid cpu/memory combination'
+            );
+        });
+
+        it('error message for invalid combination names the required memory', async () => {
+            mockNotFound();
+            const resource = makeResource({ cpu: 0.5, memory: '2.0Gi' });
+            await expect(render.render(resource as unknown as Resource)).rejects.toThrow(
+                'memory must be 1.0Gi'
+            );
+        });
+
+        it('does not validate when neither cpu nor memory is set', async () => {
+            mockNotFound();
+            const resource = makeResource({ cpu: undefined, memory: undefined });
+            await expect(render.render(resource as unknown as Resource)).resolves.toBeDefined();
+        });
+    });
+
+    // ── 5. renderCreate ──────────────────────────────────────────────────────
 
     describe('renderCreate()', () => {
         it('produces az containerapp create as the base command', () => {
@@ -217,10 +289,14 @@ describe('AzureContainerAppRender', () => {
             expect(hasParam(args, '--allow-insecure', 'false')).toBe(true);
         });
 
-        it('includes --system-assigned true (create-only)', () => {
+        it('includes --system-assigned (presence-only, create-only)', () => {
             const resource = makeResource({ systemAssigned: true });
             const args = render.renderCreate(resource)[0].args;
-            expect(hasParam(args, '--system-assigned', 'true')).toBe(true);
+            const idx = args.indexOf('--system-assigned');
+            expect(idx).not.toBe(-1);
+            // Presence-only flag — must NOT be followed by 'true' or 'false'
+            expect(args[idx + 1]).not.toBe('true');
+            expect(args[idx + 1]).not.toBe('false');
         });
 
         it('includes --user-assigned (create-only, array)', () => {
@@ -345,8 +421,9 @@ describe('AzureContainerAppRender', () => {
             const args = render.renderCreate(resource)[0].args;
             const tagsIdx = args.indexOf('--tags');
             expect(tagsIdx).not.toBe(-1);
-            expect(args.slice(tagsIdx + 1)).toContain('env=staging');
-            expect(args.slice(tagsIdx + 1)).toContain('owner=team');
+            // Tags are merged into a single space-separated string so Azure CLI
+            // does not treat the second tag as an unrecognized positional argument.
+            expect(args[tagsIdx + 1]).toBe('env=staging owner=team');
         });
 
         it('includes registry credentials', () => {
@@ -395,7 +472,7 @@ describe('AzureContainerAppRender', () => {
         });
     });
 
-    // ── 5. renderUpdate ──────────────────────────────────────────────────────
+    // ── 6. renderUpdate ──────────────────────────────────────────────────────
 
     describe('renderUpdate()', () => {
         it('produces az containerapp update as the base command', () => {
@@ -497,7 +574,7 @@ describe('AzureContainerAppRender', () => {
         });
     });
 
-    // ── 6. getDeployedProps (via render with mocked execSync) ───────────────
+    // ── 7. getDeployedProps (via render with mocked execSync) ───────────────
 
     describe('getDeployedProps (via render())', () => {
 

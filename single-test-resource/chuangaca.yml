@@ -22,7 +22,7 @@ defaultConfig:
   image: ${ chuangacr.server }/chuangdemo:latest
   containerName: chuangdemo
   cpu: 0.5
-  memory: 1Gi
+  memory: 1.0Gi
   envVars:
     - APP_ENV=${ this.ring }
 
@@ -57,6 +57,7 @@ defaultConfig:
 specificConfig:
   - ring: staging
     cpu: 1
+    memory: 2.0Gi
     maxReplicas: 5
     tags:
       env: staging

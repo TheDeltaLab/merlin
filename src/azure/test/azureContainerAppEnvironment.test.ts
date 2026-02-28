@@ -321,8 +321,9 @@ describe('AzureContainerAppEnvironmentRender', () => {
             const resource = makeResource({ tags: { env: 'staging', owner: 'team' } });
             const args = render.renderCreate(resource)[0].args;
             expect(args.includes('--tags')).toBe(true);
-            expect(args.includes('env=staging')).toBe(true);
-            expect(args.includes('owner=team')).toBe(true);
+            // Tags are merged into a single space-separated string
+            const tagsIdx = args.indexOf('--tags');
+            expect(args[tagsIdx + 1]).toBe('env=staging owner=team');
         });
 
         it('does not include tags when not set', () => {
@@ -448,7 +449,8 @@ describe('AzureContainerAppEnvironmentRender', () => {
             const resource = makeResource({ tags: { env: 'staging' } });
             const args = render.renderUpdate(resource)[0].args;
             expect(args.includes('--tags')).toBe(true);
-            expect(args.includes('env=staging')).toBe(true);
+            const tagsIdx = args.indexOf('--tags');
+            expect(args[tagsIdx + 1]).toBe('env=staging');
         });
     });
 
