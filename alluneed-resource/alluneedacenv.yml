@@ -1,4 +1,4 @@
-name: chuangacenv
+name: alluneed
 type: AzureContainerAppEnvironment
 project: merlintest
 ring:
@@ -9,12 +9,12 @@ region:
   - koreacentral
 
 dependencies:
-  - resource: AzureLogAnalyticsWorkspace.chuanglaw
+  - resource: AzureLogAnalyticsWorkspace.alluneed
     isHardDependency: true
 
 defaultConfig:
-  logsWorkspaceId: ${ AzureLogAnalyticsWorkspace.chuanglaw.customerId }
-  logsWorkspaceKey: ${ AzureLogAnalyticsWorkspace.chuanglaw.sharedKey }
+  logsWorkspaceId: ${ AzureLogAnalyticsWorkspace.alluneed.customerId }
+  logsWorkspaceKey: ${ AzureLogAnalyticsWorkspace.alluneed.sharedKey }
   tags:
     merlin: "true"
     env: ${ this.ring }

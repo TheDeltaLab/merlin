@@ -1,5 +1,5 @@
 import { AzureResource } from './resource.js';
-import { Resource, ResourceSchema, Command } from '../common/resource.js';
+import { Resource, ResourceSchema, Command, RenderContext } from '../common/resource.js';
 import { AzureResourceRender } from './render.js';
 import { execSync } from 'child_process';
 
@@ -88,6 +88,28 @@ export interface AzureContainerAppConfig extends ResourceSchema {
      */
     noWait?: boolean;
     tags?: Record<string, string>;     // --tags
+
+    // ── DNS Zone 绑定 ──────────────────────────────────────────────────────────
+    /**
+     * 配置后将在容器应用部署完成后绑定自定义 DNS 主机名。
+     * 不会传入 az containerapp create/update 命令。
+     *
+     * 触发以下部署步骤（通过 envCapture 机制在执行时动态获取参数）：
+     * 0a. 查询 DNS Zone 所在 Resource Group
+     * 0b. 查询 Container Environment 的 ARM resource ID
+     * 0c. 从 ARM ID 提取 Environment 名称（最后一段）
+     *  1. 获取容器应用默认域名（FQDN）
+     *  2. 在 DNS Zone 中创建 CNAME 记录
+     *  3. 获取自定义域名验证 ID
+     *  4. 在 DNS Zone 中创建 TXT 验证记录（asuid.<subDomain>）
+     *  5. 将自定义域名绑定到容器应用
+     */
+    bindDnsZone?: {
+        /** Azure DNS Zone 名称（例如 "example.com"） */
+        dnsZone: string;
+        /** 子域名前缀（例如 "myapp" 对应 "myapp.example.com"） */
+        subDomain: string;
+    };
 }
 
 export interface AzureContainerAppResource extends AzureResource<AzureContainerAppConfig> {}
@@ -122,7 +144,7 @@ export class AzureContainerAppRender extends AzureResourceRender {
         return 'aca';
     }
 
-    async renderImpl(resource: Resource): Promise<Command[]> {
+    async renderImpl(resource: Resource, context?: RenderContext): Promise<Command[]> {
         if (!AzureContainerAppRender.isAzureContainerAppResource(resource)) {
             throw new Error(`Resource ${resource.name} is not an Azure Container App resource`);
         }
@@ -154,7 +176,7 @@ export class AzureContainerAppRender extends AzureResourceRender {
         const ret: Command[] = [];
 
         // Ensure resource group exists first
-        const rgCommands = await this.ensureResourceGroupCommands(resource);
+        const rgCommands = await this.ensureResourceGroupCommands(resource, context);
         ret.push(...rgCommands);
 
         // Check if container app already exists
@@ -165,6 +187,9 @@ export class AzureContainerAppRender extends AzureResourceRender {
         } else {
             ret.push(...this.renderUpdate(resource as AzureContainerAppResource));
         }
+
+        // Post-deployment: bind custom DNS zone if configured
+        ret.push(...this.renderBindDnsZone(resource as AzureContainerAppResource));
 
         return ret;
     }
@@ -395,6 +420,135 @@ export class AzureContainerAppRender extends AzureResourceRender {
         this.addTags(args, config.tags);
 
         return [{ command: 'az', args }];
+    }
+
+    /**
+     * 生成 DNS Zone 绑定所需的命令序列。
+     * 若未配置 bindDnsZone 则返回空数组。
+     *
+     * 所有动态参数（DNS Zone RG、Environment 名称、FQDN、验证 ID）均通过
+     * envCapture 机制在部署执行时捕获，render 阶段不执行任何 execSync 查询。
+     *
+     * 注意：DNS 记录命令不是完全幂等的——
+     *   cname set-record 会覆盖已有 CNAME 值；
+     *   txt add-record 重复执行可能产生重复 TXT 记录。
+     */
+    private renderBindDnsZone(resource: AzureContainerAppResource): Command[] {
+        const { bindDnsZone } = resource.config;
+        if (!bindDnsZone) return [];
+
+        const { dnsZone, subDomain } = bindDnsZone;
+        const resourceName  = this.getResourceName(resource);
+        const resourceGroup = this.getResourceGroupName(resource);
+
+        // Slug: uppercase, non-alphanumeric → underscore (mirrors paramResolver.ts toVarName)
+        const slug = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '_');
+        const appSlug         = slug(resourceName);
+        const dnsZoneRgVar    = `MERLIN_${appSlug}_DNS_ZONE_RG`;
+        const envArmIdVar     = `MERLIN_${appSlug}_ENV_ARM_ID`;
+        const envNameVar      = `MERLIN_${appSlug}_ENV_NAME`;
+        const fqdnVar         = `MERLIN_${appSlug}_FQDN`;
+        const verificationVar = `MERLIN_${appSlug}_VERIFICATION_ID`;
+
+        const commands: Command[] = [];
+
+        // ── 步骤 0a：查询 DNS Zone 所在 Resource Group ──────────────────────
+        commands.push({
+            command: 'az',
+            args: [
+                'network', 'dns', 'zone', 'list',
+                '--query', `[?name=='${dnsZone}'].resourceGroup`,
+                '--output', 'tsv',
+            ],
+            envCapture: dnsZoneRgVar,
+        });
+
+        // ── 步骤 0b：查询 Container Environment 的完整 ARM resource ID ──────
+        commands.push({
+            command: 'az',
+            args: [
+                'containerapp', 'show',
+                '--name',           resourceName,
+                '--resource-group', resourceGroup,
+                '--query',          'properties.managedEnvironmentId',
+                '--output',         'tsv',
+            ],
+            envCapture: envArmIdVar,
+        });
+
+        // ── 步骤 0c：从 ARM ID 提取 Environment 名称（最后一段）─────────────
+        // ARM ID 格式：.../providers/Microsoft.App/managedEnvironments/<env-name>
+        // Merlin 只支持简单 $VARNAME 替换，不支持 bash 参数展开，故用独立 bash 命令处理
+        commands.push({
+            command: 'bash',
+            args: ['-c', `echo $${envArmIdVar} | sed 's|.*/||'`],
+            envCapture: envNameVar,
+        });
+
+        // ── 步骤 1：获取容器应用默认域名（FQDN）────────────────────────────
+        commands.push({
+            command: 'az',
+            args: [
+                'containerapp', 'show',
+                '--name',           resourceName,
+                '--resource-group', resourceGroup,
+                '--query',          'properties.configuration.ingress.fqdn',
+                '--output',         'tsv',
+            ],
+            envCapture: fqdnVar,
+        });
+
+        // ── 步骤 2：在 DNS Zone 中创建 CNAME 记录 ───────────────────────────
+        commands.push({
+            command: 'az',
+            args: [
+                'network', 'dns', 'record-set', 'cname', 'set-record',
+                '--resource-group',  `$${dnsZoneRgVar}`,
+                '--zone-name',       dnsZone,
+                '--record-set-name', subDomain,
+                '--cname',           `$${fqdnVar}`,
+            ],
+        });
+
+        // ── 步骤 3：获取自定义域名验证 ID ───────────────────────────────────
+        commands.push({
+            command: 'az',
+            args: [
+                'containerapp', 'show',
+                '--name',           resourceName,
+                '--resource-group', resourceGroup,
+                '--query',          'properties.customDomainVerificationId',
+                '--output',         'tsv',
+            ],
+            envCapture: verificationVar,
+        });
+
+        // ── 步骤 4：创建 TXT 验证记录（asuid.<subDomain>）───────────────────
+        commands.push({
+            command: 'az',
+            args: [
+                'network', 'dns', 'record-set', 'txt', 'add-record',
+                '--resource-group',  `$${dnsZoneRgVar}`,
+                '--zone-name',       dnsZone,
+                '--record-set-name', `asuid.${subDomain}`,
+                '--value',           `$${verificationVar}`,
+            ],
+        });
+
+        // ── 步骤 5：将自定义域名绑定到容器应用 ──────────────────────────────
+        commands.push({
+            command: 'az',
+            args: [
+                'containerapp', 'hostname', 'bind',
+                '--hostname',          `${subDomain}.${dnsZone}`,
+                '--resource-group',    resourceGroup,
+                '--name',              resourceName,
+                '--environment',       `$${envNameVar}`,
+                '--validation-method', 'CNAME',
+            ],
+        });
+
+        return commands;
     }
 
     renderUpdate(resource: AzureContainerAppResource): Command[] {

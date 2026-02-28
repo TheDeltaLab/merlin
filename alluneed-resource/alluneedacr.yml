@@ -1,0 +1,39 @@
+name: alluneed
+type: AzureContainerRegistry
+project: merlintest
+ring:
+  - staging
+  - test
+region:
+  - eastasia
+  - koreacentral
+
+authProvider:
+  name: AzureManagedIdentity
+  role: acrpull
+  scope: resource
+
+defaultConfig:
+  # SKU tier: Basic | Standard | Premium
+  sku: Standard
+
+  # Access control
+  adminEnabled: false
+  publicNetworkEnabled: true
+
+  tags:
+    merlin: true
+    env: ${ this.ring }
+
+  images:
+    - name: alluneed
+      tags: 
+        - latest
+      source: brainlytest-c4cscpe6b9b5f8fq.azurecr.io/alluneed:latest
+    - name: alluneed-basic
+      tags: 
+        - latest
+      source: brainlytest-c4cscpe6b9b5f8fq.azurecr.io/alluneed-basic:latest
+
+exports:
+  server: AzureContainerRegistryServer

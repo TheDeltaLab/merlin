@@ -4,8 +4,8 @@
 
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { resolveConfig } from '../paramResolver.js';
-import { clearRegistry, registerResource } from '../registry.js';
-import { Resource, registerProprietyGetter, ProprietyGetter, Dependency, Command } from '../resource.js';
+import { clearRegistry, registerResource, getResource } from '../registry.js';
+import { Resource, registerProprietyGetter, ProprietyGetter, Dependency, Command, registerRender, Render } from '../resource.js';
 import { ParamValue } from '../../compiler/types.js';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -155,7 +155,7 @@ describe('resolveConfig', () => {
                 dependencies: [{ resource: 'chuangacr', isHardDependency: true }],
                 config: {
                     image: makeParamValue([
-                        { type: 'dep', resource: 'chuangacr', export: 'server' },
+                        { type: 'dep', resourceType: 'TestType', resource: 'chuangacr', export: 'server' },
                         { type: 'literal', value: '/myapp:latest' }
                     ])
                 }
@@ -164,12 +164,12 @@ describe('resolveConfig', () => {
             const { resource: resolved, captureCommands } = await resolveConfig(resource);
 
             // Config value should be a shell variable reference
-            expect((resolved.config as any).image).toBe('$MERLIN_CHUANGACR_SERVER/myapp:latest');
+            expect((resolved.config as any).image).toBe('$MERLIN_TESTTYPE_CHUANGACR_STG_EAS_SERVER/myapp:latest');
 
             // Should have produced exactly one capture command
             expect(captureCommands).toHaveLength(1);
             const captureCmd = captureCommands[0];
-            expect(captureCmd.envCapture).toBe('MERLIN_CHUANGACR_SERVER');
+            expect(captureCmd.envCapture).toBe('MERLIN_TESTTYPE_CHUANGACR_STG_EAS_SERVER');
             expect(captureCmd.command).toBe('az');
             expect(captureCmd.args).toEqual(['acr', 'show', '-g', 'rg', '-n', 'myregistry', '-o', 'tsv', '--query', 'loginServer']);
         });
@@ -201,11 +201,11 @@ describe('resolveConfig', () => {
                 config: {
                     // Same export referenced twice
                     image: makeParamValue([
-                        { type: 'dep', resource: 'chuangacr', export: 'server' },
+                        { type: 'dep', resourceType: 'TestType', resource: 'chuangacr', export: 'server' },
                         { type: 'literal', value: '/myapp:latest' }
                     ]),
                     registryServer: makeParamValue([
-                        { type: 'dep', resource: 'chuangacr', export: 'server' }
+                        { type: 'dep', resourceType: 'TestType', resource: 'chuangacr', export: 'server' }
                     ])
                 }
             });
@@ -213,12 +213,12 @@ describe('resolveConfig', () => {
             const { resource: resolved, captureCommands } = await resolveConfig(resource);
 
             // Both config values reference the same variable
-            expect((resolved.config as any).image).toBe('$MERLIN_CHUANGACR_SERVER/myapp:latest');
-            expect((resolved.config as any).registryServer).toBe('$MERLIN_CHUANGACR_SERVER');
+            expect((resolved.config as any).image).toBe('$MERLIN_TESTTYPE_CHUANGACR_STG_EAS_SERVER/myapp:latest');
+            expect((resolved.config as any).registryServer).toBe('$MERLIN_TESTTYPE_CHUANGACR_STG_EAS_SERVER');
 
             // Only ONE capture command despite two references
             expect(captureCommands).toHaveLength(1);
-            expect(captureCommands[0].envCapture).toBe('MERLIN_CHUANGACR_SERVER');
+            expect(captureCommands[0].envCapture).toBe('MERLIN_TESTTYPE_CHUANGACR_STG_EAS_SERVER');
         });
 
         test('captures plain stdout from getter command', async () => {
@@ -249,7 +249,7 @@ describe('resolveConfig', () => {
                 config: {
                     storageAcct: makeParamValue([
                         { type: 'literal', value: 'STORAGE_ACCOUNT=' },
-                        { type: 'dep', resource: 'myresource', export: 'name' }
+                        { type: 'dep', resourceType: 'TestType', resource: 'myresource', export: 'name' }
                     ])
                 }
             });
@@ -257,10 +257,10 @@ describe('resolveConfig', () => {
             const { resource: resolved, captureCommands } = await resolveConfig(resource);
 
             // Variable reference substituted
-            expect((resolved.config as any).storageAcct).toBe('STORAGE_ACCOUNT=$MERLIN_MYRESOURCE_NAME');
+            expect((resolved.config as any).storageAcct).toBe('STORAGE_ACCOUNT=$MERLIN_TESTTYPE_MYRESOURCE_STG_EAS_NAME');
 
             expect(captureCommands).toHaveLength(1);
-            expect(captureCommands[0].envCapture).toBe('MERLIN_MYRESOURCE_NAME');
+            expect(captureCommands[0].envCapture).toBe('MERLIN_TESTTYPE_MYRESOURCE_STG_EAS_NAME');
             expect(captureCommands[0].command).toBe('echo');
         });
 
@@ -271,12 +271,12 @@ describe('resolveConfig', () => {
                 dependencies: [{ resource: 'missing-resource' }],
                 config: {
                     val: makeParamValue([
-                        { type: 'dep', resource: 'missing-resource', export: 'server' }
+                        { type: 'dep', resourceType: 'TestType', resource: 'missing-resource', export: 'server' }
                     ])
                 }
             });
 
-            await expect(resolveConfig(resource)).rejects.toThrow('no resource named "missing-resource"');
+            await expect(resolveConfig(resource)).rejects.toThrow('no resource "TestType.missing-resource"');
         });
 
         test('throws when dep export not found on resource', async () => {
@@ -294,7 +294,7 @@ describe('resolveConfig', () => {
                 dependencies: [{ resource: 'myresource' }],
                 config: {
                     val: makeParamValue([
-                        { type: 'dep', resource: 'myresource', export: 'nonexistent' }
+                        { type: 'dep', resourceType: 'TestType', resource: 'myresource', export: 'nonexistent' }
                     ])
                 }
             });
@@ -337,19 +337,19 @@ describe('resolveConfig', () => {
                 ring: 'staging',
                 region: 'eastasia',
                 config: {
-                    image: makeParamValue([{ type: 'dep', resource: 'chuangacr', export: 'server' }]),
-                    storage: makeParamValue([{ type: 'dep', resource: 'chuangabs', export: 'name' }])
+                    image: makeParamValue([{ type: 'dep', resourceType: 'TestType', resource: 'chuangacr', export: 'server' }]),
+                    storage: makeParamValue([{ type: 'dep', resourceType: 'TestType', resource: 'chuangabs', export: 'name' }])
                 }
             });
 
             const { resource: resolved, captureCommands } = await resolveConfig(resource);
 
-            expect((resolved.config as any).image).toBe('$MERLIN_CHUANGACR_SERVER');
-            expect((resolved.config as any).storage).toBe('$MERLIN_CHUANGABS_NAME');
+            expect((resolved.config as any).image).toBe('$MERLIN_TESTTYPE_CHUANGACR_STG_EAS_SERVER');
+            expect((resolved.config as any).storage).toBe('$MERLIN_TESTTYPE_CHUANGABS_STG_EAS_NAME');
             expect(captureCommands).toHaveLength(2);
             const varNames = captureCommands.map(c => c.envCapture);
-            expect(varNames).toContain('MERLIN_CHUANGACR_SERVER');
-            expect(varNames).toContain('MERLIN_CHUANGABS_NAME');
+            expect(varNames).toContain('MERLIN_TESTTYPE_CHUANGACR_STG_EAS_SERVER');
+            expect(varNames).toContain('MERLIN_TESTTYPE_CHUANGABS_STG_EAS_NAME');
         });
     });
 
@@ -401,5 +401,101 @@ describe('resolveConfig', () => {
             expect(typeof originalConfig.env).toBe('object');
             expect((originalConfig.env as ParamValue).__merlin_param__).toBe(true);
         });
+    });
+});
+
+// ── Registry: global resource lookup ───────────────────────────────────────
+
+describe('getResource — global resource lookup', () => {
+    beforeEach(() => {
+        clearRegistry();
+    });
+
+    function makeGlobalResource(overrides: Partial<Resource> = {}): Resource {
+        return {
+            name: 'globalres',
+            ring: 'staging',
+            region: undefined,   // registered without region
+            type: 'GlobalType',
+            isGlobalResource: true,
+            dependencies: [],
+            config: {},
+            exports: {},
+            ...overrides,
+        };
+    }
+
+    test('finds a global resource when caller provides a region', () => {
+        const res = makeGlobalResource();
+        registerResource(res);
+        // Caller is in eastasia, but globalres has no region
+        const found = getResource('GlobalType', 'globalres', 'staging', 'eastasia');
+        expect(found).toBeDefined();
+        expect(found!.isGlobalResource).toBe(true);
+    });
+
+    test('finds a global resource when caller provides a different region', () => {
+        const res = makeGlobalResource();
+        registerResource(res);
+        const found = getResource('GlobalType', 'globalres', 'staging', 'koreacentral');
+        expect(found).toBeDefined();
+    });
+
+    test('still finds a global resource by exact key (no region supplied)', () => {
+        const res = makeGlobalResource();
+        registerResource(res);
+        const found = getResource('GlobalType', 'globalres', 'staging');
+        expect(found).toBeDefined();
+    });
+
+    test('does NOT return a non-global resource via region-less fallback', () => {
+        // A regular resource registered without region should NOT match
+        // a caller that passes a region, unless it is marked as global.
+        const res: Resource = {
+            name: 'normalres',
+            ring: 'staging',
+            region: undefined,
+            type: 'NormalType',
+            isGlobalResource: false,
+            dependencies: [],
+            config: {},
+            exports: {},
+        };
+        registerResource(res);
+        // Exact key (no region) still works
+        expect(getResource('NormalType', 'normalres', 'staging')).toBeDefined();
+        // With region → should NOT fall back to non-global
+        expect(getResource('NormalType', 'normalres', 'staging', 'eastasia')).toBeUndefined();
+    });
+
+    test('resolveConfig resolves a dep on a global resource from a regional resource', async () => {
+        const mockGetter: ProprietyGetter = {
+            name: 'dnsNameGetter',
+            dependencies: [],
+            get: vi.fn().mockResolvedValue([{ command: 'echo', args: ['chuang.staging.example.com'] }] as Command[]),
+        };
+        registerProprietyGetter(mockGetter);
+
+        // Register a global DNS-zone-like resource (no region)
+        const globalRes = makeGlobalResource({
+            name: 'chuangdns',
+            exports: { domainName: { getter: mockGetter, args: {} } },
+        });
+        registerResource(globalRes);
+
+        // A regional container-app resource that depends on the global resource
+        const caResource = makeResource({
+            ring: 'staging',
+            region: 'eastasia',
+            dependencies: [{ resource: 'chuangdns', isHardDependency: false }],
+            config: {
+                dnsZone: makeParamValue([{ type: 'dep', resourceType: 'GlobalType', resource: 'chuangdns', export: 'domainName' }]),
+            },
+        });
+
+        const { resource: resolved, captureCommands } = await resolveConfig(caResource);
+        expect((resolved.config as any).dnsZone).toBe('$MERLIN_GLOBALTYPE_CHUANGDNS_STG_EAS_DOMAINNAME');
+        expect(captureCommands).toHaveLength(1);
+        expect(captureCommands[0].envCapture).toBe('MERLIN_GLOBALTYPE_CHUANGDNS_STG_EAS_DOMAINNAME');
     });
 });

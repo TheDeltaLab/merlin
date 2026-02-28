@@ -33,7 +33,10 @@ export const AuthProviderObjectSchema = z.object({
  * Dependency schema
  */
 export const DependencySchema = z.object({
-    resource: z.string().min(1),
+    resource: z.string().min(1).regex(
+        /^[A-Za-z][A-Za-z0-9]*\.[A-Za-z][A-Za-z0-9_-]*$/,
+        'Dependency resource must be in "Type.name" format (e.g., "AzureContainerRegistry.chuangacr")'
+    ),
     isHardDependency: z.boolean().optional(),
     authProvider: AuthProviderObjectSchema.optional()
 });
@@ -61,10 +64,16 @@ export const ExportSchema = z.union([
  * Main resource YAML schema
  */
 export const ResourceYAMLSchema = z.object({
-    name: z.string().min(1, 'Resource name is required'),
+    name: z.string().min(1, 'Resource name is required').refine(
+        (name) => !name.includes('.'),
+        'Resource name must not contain dots (dots are used as delimiters in Type.name references)'
+    ),
     type: z.string().min(1, 'Resource type is required'),
     project: z.string().optional(),
-    parent: z.string().optional(),
+    parent: z.string().regex(
+        /^[A-Za-z][A-Za-z0-9]*\.[A-Za-z][A-Za-z0-9_-]*$/,
+        'Parent must be in "Type.name" format (e.g., "AzureContainerAppEnvironment.chuangacenv")'
+    ).optional(),
 
     // Can be single value or array
     ring: z.union([

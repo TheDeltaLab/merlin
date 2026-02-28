@@ -421,9 +421,10 @@ describe('AzureContainerAppRender', () => {
             const args = render.renderCreate(resource)[0].args;
             const tagsIdx = args.indexOf('--tags');
             expect(tagsIdx).not.toBe(-1);
-            // Tags are merged into a single space-separated string so Azure CLI
-            // does not treat the second tag as an unrecognized positional argument.
-            expect(args[tagsIdx + 1]).toBe('env=staging owner=team');
+            // Each tag is its own args element so execa() passes them as separate
+            // subprocess arguments to Azure CLI.
+            expect(args).toContain('env=staging');
+            expect(args).toContain('owner=team');
         });
 
         it('includes registry credentials', () => {
@@ -783,6 +784,295 @@ describe('AzureContainerAppRender', () => {
             await expect(render.render(resource as unknown as Resource)).rejects.toThrow(
                 'Failed to get deployed properties for container app'
             );
+        });
+    });
+
+    // ── 8. renderBindDnsZone ─────────────────────────────────────────────────
+
+    describe('renderBindDnsZone()', () => {
+        // Resource name = 'myproject-myapp-stg-eus-aca'
+        // slug = 'MYPROJECT_MYAPP_STG_EUS_ACA'
+        const DNS_ZONE_RG_VAR    = 'MERLIN_MYPROJECT_MYAPP_STG_EUS_ACA_DNS_ZONE_RG';
+        const ENV_ARM_ID_VAR     = 'MERLIN_MYPROJECT_MYAPP_STG_EUS_ACA_ENV_ARM_ID';
+        const ENV_NAME_VAR       = 'MERLIN_MYPROJECT_MYAPP_STG_EUS_ACA_ENV_NAME';
+        const FQDN_VAR           = 'MERLIN_MYPROJECT_MYAPP_STG_EUS_ACA_FQDN';
+        const VERIFICATION_VAR   = 'MERLIN_MYPROJECT_MYAPP_STG_EUS_ACA_VERIFICATION_ID';
+
+        function makeResourceWithDns(
+            dnsZone = 'example.com',
+            subDomain = 'myapp'
+        ): AzureContainerAppResource {
+            return makeResource({ bindDnsZone: { dnsZone, subDomain } });
+        }
+
+        it('returns empty array when bindDnsZone is undefined', async () => {
+            mockNotFound();
+            const resource = makeResource();
+            const commands = await render.render(resource as unknown as Resource);
+            expect(commands.some(c =>
+                (c.command === 'az' && c.args.includes('hostname')) ||
+                (c.command === 'az' && c.args.includes('record-set')) ||
+                c.command === 'bash'
+            )).toBe(false);
+        });
+
+        it('DNS bind commands appear after containerapp create', async () => {
+            mockNotFound();
+            const resource = makeResourceWithDns();
+            const commands = await render.render(resource as unknown as Resource);
+
+            const createIdx = commands.findIndex(c => c.args[0] === 'containerapp' && c.args[1] === 'create');
+            const bindIdx   = commands.findIndex(c => c.args[0] === 'containerapp' && c.args[1] === 'hostname');
+            expect(createIdx).not.toBe(-1);
+            expect(bindIdx).not.toBe(-1);
+            expect(bindIdx).toBeGreaterThan(createIdx);
+        });
+
+        it('DNS bind commands appear after containerapp update', async () => {
+            const showResponse = JSON.stringify({
+                template: { containers: [{ image: 'img', name: 'c', resources: { cpu: '0.5', memory: '1Gi' } }], scale: {} },
+                configuration: { revisionMode: 'Single' },
+                tags: {},
+            });
+            mockResourceExists(showResponse);
+            const resource = makeResourceWithDns();
+            const commands = await render.render(resource as unknown as Resource);
+
+            const updateIdx = commands.findIndex(c => c.args[0] === 'containerapp' && c.args[1] === 'update');
+            const bindIdx   = commands.findIndex(c => c.args[0] === 'containerapp' && c.args[1] === 'hostname');
+            expect(updateIdx).not.toBe(-1);
+            expect(bindIdx).not.toBe(-1);
+            expect(bindIdx).toBeGreaterThan(updateIdx);
+        });
+
+        it('step 0a: queries DNS Zone resource group via az network dns zone list', async () => {
+            mockNotFound();
+            const resource = makeResourceWithDns('example.com');
+            const commands = await render.render(resource as unknown as Resource);
+
+            const cmd = commands.find(c =>
+                c.command === 'az' &&
+                c.args[0] === 'network' &&
+                c.args[1] === 'dns' &&
+                c.args[2] === 'zone' &&
+                c.args[3] === 'list'
+            );
+            expect(cmd).toBeDefined();
+            expect(cmd!.envCapture).toBe(DNS_ZONE_RG_VAR);
+            expect(hasParam(cmd!.args, '--query', `[?name=='example.com'].resourceGroup`)).toBe(true);
+            expect(hasParam(cmd!.args, '--output', 'tsv')).toBe(true);
+        });
+
+        it('step 0b: queries managed environment ARM ID via az containerapp show', async () => {
+            mockNotFound();
+            const resource = makeResourceWithDns();
+            const commands = await render.render(resource as unknown as Resource);
+
+            const cmd = commands.find(c =>
+                c.command === 'az' &&
+                c.args.includes('properties.managedEnvironmentId') &&
+                c.envCapture === ENV_ARM_ID_VAR
+            );
+            expect(cmd).toBeDefined();
+            expect(cmd!.args[0]).toBe('containerapp');
+            expect(cmd!.args[1]).toBe('show');
+            expect(hasParam(cmd!.args, '--query', 'properties.managedEnvironmentId')).toBe(true);
+            expect(hasParam(cmd!.args, '--output', 'tsv')).toBe(true);
+        });
+
+        it('step 0c: extracts env name from ARM ID via bash + sed', async () => {
+            mockNotFound();
+            const resource = makeResourceWithDns();
+            const commands = await render.render(resource as unknown as Resource);
+
+            const cmd = commands.find(c =>
+                c.command === 'bash' &&
+                c.envCapture === ENV_NAME_VAR
+            );
+            expect(cmd).toBeDefined();
+            expect(cmd!.args[0]).toBe('-c');
+            // Should reference the ARM ID var and use sed to strip path prefix
+            expect(cmd!.args[1]).toContain(`$${ENV_ARM_ID_VAR}`);
+            expect(cmd!.args[1]).toContain(`sed`);
+        });
+
+        it('step 1: captures FQDN from containerapp show', async () => {
+            mockNotFound();
+            const resource = makeResourceWithDns();
+            const commands = await render.render(resource as unknown as Resource);
+
+            const cmd = commands.find(c =>
+                c.command === 'az' &&
+                c.args.includes('properties.configuration.ingress.fqdn') &&
+                c.envCapture === FQDN_VAR
+            );
+            expect(cmd).toBeDefined();
+            expect(cmd!.args[0]).toBe('containerapp');
+            expect(cmd!.args[1]).toBe('show');
+            expect(hasParam(cmd!.args, '--query', 'properties.configuration.ingress.fqdn')).toBe(true);
+            expect(hasParam(cmd!.args, '--output', 'tsv')).toBe(true);
+        });
+
+        it('step 2: creates CNAME record with correct arguments', async () => {
+            mockNotFound();
+            const resource = makeResourceWithDns('example.com', 'myapp');
+            const commands = await render.render(resource as unknown as Resource);
+
+            const cmd = commands.find(c =>
+                c.command === 'az' &&
+                c.args.includes('cname') &&
+                c.args.includes('set-record')
+            );
+            expect(cmd).toBeDefined();
+            expect(hasParam(cmd!.args, '--resource-group', `$${DNS_ZONE_RG_VAR}`)).toBe(true);
+            expect(hasParam(cmd!.args, '--zone-name', 'example.com')).toBe(true);
+            expect(hasParam(cmd!.args, '--record-set-name', 'myapp')).toBe(true);
+            expect(hasParam(cmd!.args, '--cname', `$${FQDN_VAR}`)).toBe(true);
+            expect(cmd!.envCapture).toBeUndefined();
+        });
+
+        it('step 3: captures customDomainVerificationId from containerapp show', async () => {
+            mockNotFound();
+            const resource = makeResourceWithDns();
+            const commands = await render.render(resource as unknown as Resource);
+
+            const cmd = commands.find(c =>
+                c.command === 'az' &&
+                c.args.includes('properties.customDomainVerificationId') &&
+                c.envCapture === VERIFICATION_VAR
+            );
+            expect(cmd).toBeDefined();
+            expect(cmd!.args[0]).toBe('containerapp');
+            expect(cmd!.args[1]).toBe('show');
+            expect(hasParam(cmd!.args, '--query', 'properties.customDomainVerificationId')).toBe(true);
+            expect(hasParam(cmd!.args, '--output', 'tsv')).toBe(true);
+        });
+
+        it('step 4: creates TXT verification record with asuid.<subDomain>', async () => {
+            mockNotFound();
+            const resource = makeResourceWithDns('example.com', 'myapp');
+            const commands = await render.render(resource as unknown as Resource);
+
+            const cmd = commands.find(c =>
+                c.command === 'az' &&
+                c.args.includes('txt') &&
+                c.args.includes('add-record')
+            );
+            expect(cmd).toBeDefined();
+            expect(hasParam(cmd!.args, '--resource-group', `$${DNS_ZONE_RG_VAR}`)).toBe(true);
+            expect(hasParam(cmd!.args, '--zone-name', 'example.com')).toBe(true);
+            expect(hasParam(cmd!.args, '--record-set-name', 'asuid.myapp')).toBe(true);
+            expect(hasParam(cmd!.args, '--value', `$${VERIFICATION_VAR}`)).toBe(true);
+            expect(cmd!.envCapture).toBeUndefined();
+        });
+
+        it('step 5: binds custom hostname to container app', async () => {
+            mockNotFound();
+            const resource = makeResourceWithDns('example.com', 'myapp');
+            const commands = await render.render(resource as unknown as Resource);
+
+            const cmd = commands.find(c =>
+                c.command === 'az' &&
+                c.args[0] === 'containerapp' &&
+                c.args[1] === 'hostname' &&
+                c.args[2] === 'bind'
+            );
+            expect(cmd).toBeDefined();
+            expect(hasParam(cmd!.args, '--hostname', 'myapp.example.com')).toBe(true);
+            expect(hasParam(cmd!.args, '--resource-group', 'myproject-rg-stg-eus')).toBe(true);
+            expect(hasParam(cmd!.args, '--name', 'myproject-myapp-stg-eus-aca')).toBe(true);
+            expect(hasParam(cmd!.args, '--environment', `$${ENV_NAME_VAR}`)).toBe(true);
+            expect(hasParam(cmd!.args, '--validation-method', 'CNAME')).toBe(true);
+            expect(cmd!.envCapture).toBeUndefined();
+        });
+
+        it('DNS bind steps are emitted in order: 0a→0b→0c→1→2→3→4→5', async () => {
+            mockNotFound();
+            const resource = makeResourceWithDns('example.com', 'myapp');
+            const commands = await render.render(resource as unknown as Resource);
+
+            const idx0a = commands.findIndex(c => c.command === 'az' && c.args[2] === 'zone' && c.args[3] === 'list');
+            const idx0b = commands.findIndex(c => c.command === 'az' && c.args.includes('properties.managedEnvironmentId'));
+            const idx0c = commands.findIndex(c => c.command === 'bash' && c.envCapture === ENV_NAME_VAR);
+            const idx1  = commands.findIndex(c => c.command === 'az' && c.args.includes('properties.configuration.ingress.fqdn'));
+            const idx2  = commands.findIndex(c => c.command === 'az' && c.args.includes('cname'));
+            const idx3  = commands.findIndex(c => c.command === 'az' && c.args.includes('properties.customDomainVerificationId'));
+            const idx4  = commands.findIndex(c => c.command === 'az' && c.args.includes('txt') && c.args.includes('add-record'));
+            const idx5  = commands.findIndex(c => c.command === 'az' && c.args[1] === 'hostname' && c.args[2] === 'bind');
+
+            expect(idx0a).not.toBe(-1);
+            expect(idx0b).toBeGreaterThan(idx0a);
+            expect(idx0c).toBeGreaterThan(idx0b);
+            expect(idx1).toBeGreaterThan(idx0c);
+            expect(idx2).toBeGreaterThan(idx1);
+            expect(idx3).toBeGreaterThan(idx2);
+            expect(idx4).toBeGreaterThan(idx3);
+            expect(idx5).toBeGreaterThan(idx4);
+        });
+
+        it('bindDnsZone field does NOT appear in containerapp create args', async () => {
+            mockNotFound();
+            const resource = makeResourceWithDns();
+            const commands = await render.render(resource as unknown as Resource);
+            const createCmd = commands.find(c => c.args[0] === 'containerapp' && c.args[1] === 'create');
+            expect(createCmd).toBeDefined();
+            expect(createCmd!.args.some(a => a.toLowerCase().includes('binddnszone'))).toBe(false);
+            expect(createCmd!.args.some(a => a.includes('example.com') || a.includes('myapp.example'))).toBe(false);
+        });
+
+        it('bindDnsZone field does NOT appear in containerapp update args', async () => {
+            const showResponse = JSON.stringify({
+                template: { containers: [{ image: 'img', name: 'c', resources: { cpu: '0.5', memory: '1Gi' } }], scale: {} },
+                configuration: { revisionMode: 'Single' },
+                tags: {},
+            });
+            mockResourceExists(showResponse);
+            const resource = makeResourceWithDns();
+            const commands = await render.render(resource as unknown as Resource);
+            const updateCmd = commands.find(c => c.args[0] === 'containerapp' && c.args[1] === 'update');
+            expect(updateCmd).toBeDefined();
+            expect(updateCmd!.args.some(a => a.toLowerCase().includes('binddnszone'))).toBe(false);
+        });
+
+        it('env var names use correct slug from resource name', async () => {
+            mockNotFound();
+            const resource = makeResourceWithDns();
+            const commands = await render.render(resource as unknown as Resource);
+
+            // resourceName = 'myproject-myapp-stg-eus-aca' → slug = 'MYPROJECT_MYAPP_STG_EUS_ACA'
+            expect(commands.some(c => c.envCapture === FQDN_VAR)).toBe(true);
+            expect(commands.some(c => c.envCapture === VERIFICATION_VAR)).toBe(true);
+            expect(commands.some(c => c.envCapture === DNS_ZONE_RG_VAR)).toBe(true);
+            expect(commands.some(c => c.envCapture === ENV_ARM_ID_VAR)).toBe(true);
+            expect(commands.some(c => c.envCapture === ENV_NAME_VAR)).toBe(true);
+        });
+
+        it('subDomain with dots produces correct record names and hostname', async () => {
+            mockNotFound();
+            const resource = makeResource({ bindDnsZone: { dnsZone: 'example.com', subDomain: 'foo.bar' } });
+            const commands = await render.render(resource as unknown as Resource);
+
+            const txtCmd = commands.find(c => c.command === 'az' && c.args.includes('txt') && c.args.includes('add-record'));
+            expect(txtCmd).toBeDefined();
+            expect(hasParam(txtCmd!.args, '--record-set-name', 'asuid.foo.bar')).toBe(true);
+
+            const bindCmd = commands.find(c => c.command === 'az' && c.args[1] === 'hostname' && c.args[2] === 'bind');
+            expect(bindCmd).toBeDefined();
+            expect(hasParam(bindCmd!.args, '--hostname', 'foo.bar.example.com')).toBe(true);
+        });
+
+        it('dnsZone value is correctly used in --zone-name for all DNS commands', async () => {
+            mockNotFound();
+            const resource = makeResource({ bindDnsZone: { dnsZone: 'my-custom-zone.io', subDomain: 'api' } });
+            const commands = await render.render(resource as unknown as Resource);
+
+            const cnameCmd = commands.find(c => c.command === 'az' && c.args.includes('cname'));
+            expect(cnameCmd).toBeDefined();
+            expect(hasParam(cnameCmd!.args, '--zone-name', 'my-custom-zone.io')).toBe(true);
+
+            const txtCmd = commands.find(c => c.command === 'az' && c.args.includes('txt'));
+            expect(txtCmd).toBeDefined();
+            expect(hasParam(txtCmd!.args, '--zone-name', 'my-custom-zone.io')).toBe(true);
         });
     });
 });

@@ -34,10 +34,17 @@ import {
     AzureContainerAppEnvironmentRender
 } from './azure/azureContainerAppEnvironment.js';
 import {
+    AZURE_LOG_ANALYTICS_WORKSPACE_RESOURCE_TYPE,
+    AzureLogAnalyticsWorkspaceRender
+} from './azure/azureLogAnalyticsWorkspace.js';
+import {
     AzureResourceManagedIdentityGetter,
     AzureResourceNameGetter,
     AzureContainerRegistryServerGetter,
     AzureContainerAppFqdnGetter,
+    AzureLogAnalyticsWorkspaceCustomerIdGetter,
+    AzureLogAnalyticsWorkspaceSharedKeyGetter,
+    AzureDnsZoneNameGetter,
 } from './azure/proprietyGetter.js';
 
 // Register all auth providers
@@ -51,6 +58,7 @@ registerRender(AZURE_RESOURCE_GROUP, new AzureResourceGroupRender());
 registerRender(AZURE_CONTAINER_APP_TYPE, new AzureContainerAppRender());
 registerRender(AZURE_AD_APP_RESOURCE_TYPE, new AzureADAppRender());
 registerRender(AZURE_DNS_ZONE_RESOURCE_TYPE, new AzureDnsZoneRender());
+registerRender(AZURE_LOG_ANALYTICS_WORKSPACE_RESOURCE_TYPE, new AzureLogAnalyticsWorkspaceRender());
 registerRender(AZURE_CONTAINER_APP_ENVIRONMENT_TYPE, new AzureContainerAppEnvironmentRender());
 
 // Register all propriety getters
@@ -58,6 +66,9 @@ registerProprietyGetter(new AzureResourceManagedIdentityGetter());
 registerProprietyGetter(new AzureResourceNameGetter());
 registerProprietyGetter(new AzureContainerRegistryServerGetter());
 registerProprietyGetter(new AzureContainerAppFqdnGetter());
+registerProprietyGetter(new AzureLogAnalyticsWorkspaceCustomerIdGetter());
+registerProprietyGetter(new AzureLogAnalyticsWorkspaceSharedKeyGetter());
+registerProprietyGetter(new AzureDnsZoneNameGetter());
 
 export function initializeMerlin(): void {
     // Initialization happens during module load

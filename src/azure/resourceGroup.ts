@@ -1,4 +1,4 @@
-import { Resource, Command } from '../common/resource.js';
+import { Resource, Command, RenderContext } from '../common/resource.js';
 import { AzureResourceRender } from './render.js';
 import { execSync } from 'child_process';
 
@@ -16,7 +16,7 @@ export class AzureResourceGroupRender extends AzureResourceRender {
     }
     supportConnectorInResourceName: boolean = true;
 
-    async renderImpl(resource: Resource): Promise<Command[]> {
+    async renderImpl(resource: Resource, _context?: RenderContext): Promise<Command[]> {
         // Check if resource group already exists
         const deployedProps = await this.getDeployedProps(resource);
 

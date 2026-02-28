@@ -1,5 +1,5 @@
 import { AzureResource } from './resource.js';
-import { Resource, ResourceSchema, Command, RING_SHORT_NAME_MAP } from '../common/resource.js';
+import { Resource, ResourceSchema, Command, RenderContext, RING_SHORT_NAME_MAP } from '../common/resource.js';
 import { AzureResourceRender } from './render.js';
 import { execSync } from 'child_process';
 
@@ -32,6 +32,9 @@ export class AzureDnsZoneRender extends AzureResourceRender {
 
     supportConnectorInResourceName: boolean = true;
 
+    /** DNS Zones are global Azure resources — region is irrelevant for lookup. */
+    override isGlobalResource = true;
+
     /**
      * Returns the actual DNS zone name passed to Azure CLI --name.
      * Format: {dnsName}.{parentName}  e.g. "chuangdns.thebrainly.dev"
@@ -45,7 +48,7 @@ export class AzureDnsZoneRender extends AzureResourceRender {
         return dnsName;
     }
 
-    async renderImpl(resource: Resource): Promise<Command[]> {
+    async renderImpl(resource: Resource, context?: RenderContext): Promise<Command[]> {
         if (!AzureDnsZoneRender.isAzureDnsZoneResource(resource)) {
             throw new Error(`Resource ${resource.name} is not an Azure DNS Zone resource`);
         }
@@ -58,7 +61,7 @@ export class AzureDnsZoneRender extends AzureResourceRender {
         // DNS zones are global but their resource group still needs a location.
         // We cannot use ensureResourceGroupCommands() because that requires resource.region.
         // Instead, we generate the RG commands directly using config.location.
-        const rgCommands = await this.ensureResourceGroupCommandsForDnsZone(resource as AzureDnsZoneResource);
+        const rgCommands = await this.ensureResourceGroupCommandsForDnsZone(resource as AzureDnsZoneResource, context);
         ret.push(...rgCommands);
 
         // Get deployed properties to check if DNS zone exists
@@ -84,7 +87,9 @@ export class AzureDnsZoneRender extends AzureResourceRender {
      * to AzureResourceGroupRender which requires region. Instead, we check the RG directly
      * and generate a create command using config.location.
      */
-    private async ensureResourceGroupCommandsForDnsZone(resource: AzureDnsZoneResource): Promise<Command[]> {
+    private async ensureResourceGroupCommandsForDnsZone(resource: AzureDnsZoneResource, context?: RenderContext): Promise<Command[]> {
+        if (context?.skipResourceGroup) return [];
+
         const resourceGroupName = this.getResourceGroupName(resource);
 
         try {

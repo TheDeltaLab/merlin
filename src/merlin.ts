@@ -89,6 +89,7 @@ program
     .option('--region <region>', 'Target region (eastus, westus, krc)')
     .option('--dir <path>', 'Compiled output directory', '.merlin')
     .option('-o, --output-file <file>', 'Write generated commands to file')
+    .option('-c, --concurrency <number>', 'Max parallel resource deployments per level (default: 4)', '4')
     .action(async (argPath, options) => {
         const resourcePath = options.input ?? argPath;
         const outputPath = options.dir;
@@ -137,6 +138,10 @@ program
                     ? options.outputFile
                     : path.resolve(process.cwd(), options.outputFile);
                 args.push('--output', absoluteOutputFile);
+            }
+
+            if (options.concurrency) {
+                args.push('--concurrency', options.concurrency);
             }
 
             if (options.execute) {

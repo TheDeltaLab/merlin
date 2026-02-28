@@ -1,4 +1,4 @@
-name: chuangaca
+name: alluneed
 type: AzureContainerApp
 project: merlintest
 ring:
@@ -12,19 +12,30 @@ authProvider:
   name: AzureEntraID
 
 dependencies:
-  - resource: AzureContainerRegistry.chuangacr
+  - resource: AzureContainerRegistry.alluneed
     isHardDependency: true
-  - resource: AzureContainerAppEnvironment.chuangacenv
+  - resource: AzureContainerAppEnvironment.alluneed
     isHardDependency: true
+  - resource: AzureDnsZone.chuangdns
+    isHardDependency: false
 
 defaultConfig:
   # ── Container / Image ─────────────────────────────────────────────
-  image: ${ AzureContainerRegistry.chuangacr.server }/chuangdemo:latest
-  containerName: chuangdemo
-  cpu: 0.5
-  memory: 1.0Gi
+  image: ${ AzureContainerRegistry.alluneed.server }/alluneed:latest
+  containerName: alluneed
+  cpu: 4
+  memory: 8.0Gi
   envVars:
     - APP_ENV=${ this.ring }
+    - MODEL_BLOB_ACCOUNT=chuangdevstorage
+    - MODEL_BLOB_CONTAINER=speaker-embedding-models
+    - MODEL_BLOB_FOLDER=
+    - MODEL_CACHE_FOLDER=.model_cache
+    - WAV_CACHE_FOLDER=.wav_cache
+    - PROJECT_NAME=alluneed
+    - DEBUG_MODE=False
+    - LOG_LEVEL=INFO
+
 
   # ── Ingress (CREATE ONLY) ──────────────────────────────────────────
   ingress: external
@@ -40,44 +51,33 @@ defaultConfig:
   revisionsMode: single
 
   # ── Registry ──────────────────────────────────────────────────────
-  registryServer: ${ AzureContainerRegistry.chuangacr.server }
+  registryServer: ${ AzureContainerRegistry.alluneed.server }
   registryIdentity: system
 
   # ── Managed Identity (CREATE ONLY) ────────────────────────────────
   systemAssigned: true
 
   # ── Environment (CREATE ONLY) ─────────────────────────────────────
-  environment: ${ AzureContainerAppEnvironment.chuangacenv.name }
+  environment: ${ AzureContainerAppEnvironment.alluneed.name }
 
   # ── Misc ──────────────────────────────────────────────────────────
   noWait: false
+
+  bindDnsZone:
+      dnsZone: ${ AzureDnsZone.chuangdns.domainName }
+      subDomain: alluneed.${ this.region }.${ this.ring }
+    
   tags:
     merlin: "true"
+    env: ${ this.ring }
 
 specificConfig:
   - ring: staging
-    cpu: 1
-    memory: 2.0Gi
     maxReplicas: 5
-    tags:
-      env: staging
   - ring: test
-    cpu: 0.25
-    memory: 0.5Gi
-    minReplicas: 0
-    maxReplicas: 1
-    tags:
-      env: test
+    maxReplicas: 2
 
-# exports example:
-# simple format:
-# identity: getResourceIdentity
 
-# object format:
-# identity:
-#   name: getResourceIdentity
-#   someArg: someValue
-#   anotherArg: anotherValue
 exports:
   identity: AzureResourceManagedIdentity
   url: AzureContainerAppFqdn

@@ -2,7 +2,7 @@
  * Runtime parameter resolver.
  *
  * Resolves all ParamValue entries in resource.config at deploy time,
- * replacing them with shell variable references ($MERLIN_<RESOURCE>_<EXPORT>)
+ * replacing them with shell variable references ($MERLIN_<TYPE>_<NAME>_<RING>[_<REGION>]_<EXPORT>)
  * and collecting the corresponding capture commands (with envCapture set)
  * that must be emitted before the resource's own deployment commands.
  *
@@ -11,7 +11,7 @@
  * so dry-run works correctly even when resources don't exist yet.
  */
 
-import { Resource, Command } from './resource.js';
+import { Resource, Command, getRender, RING_SHORT_NAME_MAP, REGION_SHORT_NAME_MAP } from './resource.js';
 import { getResource } from './registry.js';
 import { ParamValue, ParamSegment, isParamValue } from '../compiler/types.js';
 
@@ -21,7 +21,7 @@ import { ParamValue, ParamSegment, isParamValue } from '../compiler/types.js';
 export interface ResolveConfigResult<T extends Resource> {
     /**
      * The resource with all ParamValue entries replaced by shell variable
-     * references such as "$MERLIN_CHUANGACR_SERVER".
+     * references such as "$MERLIN_ACR_CHUANGACR_STG_EAS_SERVER".
      */
     resource: T;
 
@@ -40,7 +40,7 @@ export interface ResolveConfigResult<T extends Resource> {
  * Instead of executing ProprietyGetter commands eagerly (which requires the
  * Azure resources to already exist), this function:
  *   1. Collects the getter commands as capture commands (envCapture set)
- *   2. Substitutes "$MERLIN_<RESOURCE>_<EXPORT>" strings into config values
+ *   2. Substitutes "$MERLIN_<TYPE>_<NAME>_<RING>[_<REGION>]_<EXPORT>" strings into config values
  *
  * Must be called at the start of Render.render() before accessing config fields.
  * This is handled automatically by AzureResourceRender.render() via the
@@ -122,11 +122,11 @@ async function resolveSegment(
 
         case 'dep': {
             // Resolve the dependency resource from the registry
-            const depResource = getResource(seg.resource, resource.ring, resource.region);
+            const depResource = getResource(seg.resourceType, seg.resource, resource.ring, resource.region);
             if (!depResource) {
                 throw new Error(
-                    `Cannot resolve parameter "\${ ${seg.resource}.${seg.export} }": ` +
-                    `no resource named "${seg.resource}" registered for ring="${resource.ring}"` +
+                    `Cannot resolve parameter "\${ ${seg.resourceType}.${seg.resource}.${seg.export} }": ` +
+                    `no resource "${seg.resourceType}.${seg.resource}" registered for ring="${resource.ring}"` +
                     (resource.region ? `, region="${resource.region}"` : '')
                 );
             }
@@ -136,14 +136,14 @@ async function resolveSegment(
             if (!exportDef) {
                 const available = Object.keys(depResource.exports).join(', ') || '(none)';
                 throw new Error(
-                    `Cannot resolve parameter "\${ ${seg.resource}.${seg.export} }": ` +
-                    `resource "${seg.resource}" does not have an export named "${seg.export}". ` +
+                    `Cannot resolve parameter "\${ ${seg.resourceType}.${seg.resource}.${seg.export} }": ` +
+                    `resource "${seg.resourceType}.${seg.resource}" does not have an export named "${seg.export}". ` +
                     `Available exports: ${available}`
                 );
             }
 
-            // Derive the shell variable name: MERLIN_<RESOURCE>_<EXPORT>
-            const varName = toVarName(seg.resource, seg.export);
+            // Derive the shell variable name: MERLIN_<TYPE>_<NAME>_<RING>[_<REGION>]_<EXPORT>
+            const varName = toVarName(seg.resourceType, seg.resource, seg.export, resource.ring, resource.region);
 
             // Only add the capture command once (dedup by varName)
             if (!seen.has(varName)) {
@@ -153,7 +153,7 @@ async function resolveSegment(
                 const commands = await exportDef.getter.get(depResource, exportDef.args);
                 if (!commands.length) {
                     throw new Error(
-                        `ProprietyGetter "${exportDef.getter.name}" for "${seg.resource}.${seg.export}" returned no commands`
+                        `ProprietyGetter "${exportDef.getter.name}" for "${seg.resourceType}.${seg.resource}.${seg.export}" returned no commands`
                     );
                 }
 
@@ -169,10 +169,45 @@ async function resolveSegment(
 }
 
 /**
- * Converts a resource name + export name to an uppercase shell variable name.
- * Example: ("chuangacr", "server") → "MERLIN_CHUANGACR_SERVER"
+ * Converts a dependency reference + the calling resource's ring/region into
+ * a unique uppercase shell variable name.
+ *
+ * Uses short names for type (via Render.getShortResourceTypeName()),
+ * ring (RING_SHORT_NAME_MAP) and region (REGION_SHORT_NAME_MAP) to keep
+ * variable names concise while guaranteeing uniqueness across ring×region.
+ *
+ * Example: ("AzureContainerRegistry", "chuangacr", "server", "staging", "eastasia")
+ *        → "MERLIN_ACR_CHUANGACR_STG_EAS_SERVER"
  */
-function toVarName(resource: string, exportName: string): string {
+function toVarName(
+    resourceType: string,
+    resource: string,
+    exportName: string,
+    ring: string,
+    region?: string
+): string {
     const slug = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '_');
-    return `MERLIN_${slug(resource)}_${slug(exportName)}`;
+
+    // Use short type name from the Render implementation
+    let shortType: string;
+    try {
+        shortType = getRender(resourceType).getShortResourceTypeName();
+    } catch {
+        shortType = resourceType; // fallback to full type name
+    }
+
+    const shortRing = RING_SHORT_NAME_MAP[ring as keyof typeof RING_SHORT_NAME_MAP] ?? ring;
+    const shortRegion = region
+        ? REGION_SHORT_NAME_MAP[region as keyof typeof REGION_SHORT_NAME_MAP] ?? region
+        : undefined;
+
+    const parts = [
+        'MERLIN',
+        slug(shortType),
+        slug(resource),
+        slug(shortRing),
+    ];
+    if (shortRegion) parts.push(slug(shortRegion));
+    parts.push(slug(exportName));
+    return parts.join('_');
 }

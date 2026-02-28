@@ -1,4 +1,4 @@
-import { Resource, ResourceSchema, Command } from '../common/resource.js';
+import { Resource, ResourceSchema, Command, RenderContext } from '../common/resource.js';
 import { AzureResourceRender } from './render.js';
 import { RING_SHORT_NAME_MAP } from '../common/resource.js';
 import { execSync } from 'child_process';
@@ -96,7 +96,7 @@ export class AzureADAppRender extends AzureResourceRender {
         'publicClientRedirectUris': '--public-client-redirect-uris',
     };
 
-    async renderImpl(resource: Resource): Promise<Command[]> {
+    async renderImpl(resource: Resource, _context?: RenderContext): Promise<Command[]> {
         if (!AzureADAppRender.isAzureADAppResource(resource)) {
             throw new Error(`Resource ${resource.name} is not an Azure AD App resource`);
         }
