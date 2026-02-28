@@ -258,11 +258,10 @@ export class AzureContainerRegistryRender extends AzureResourceRender {
         if (!config.images || config.images.length === 0) return [];
 
         const registryName = this.getResourceName(resource);
-        // ACR login server format: <registryName>.azurecr.io
-        const loginServer = `${registryName}.azurecr.io`;
         const commands: Command[] = [];
 
-        // Pre-validate all images before emitting any commands
+        // Single pass: validate all images AND detect whether ACR login is needed
+        let hasGenerateScript = false;
         for (const image of config.images) {
             if (!image.source && !image.generateScript) {
                 throw new Error(
@@ -276,30 +275,29 @@ export class AzureContainerRegistryRender extends AzureResourceRender {
                     `cannot specify both 'source' and 'generateScript', choose one`
                 );
             }
+            if (image.generateScript) hasGenerateScript = true;
         }
 
-        // Login to ACR once before all docker operations
-        commands.push({
-            command: 'az',
-            args: ['acr', 'login', '--name', registryName]
-        });
+        // ACR login is only needed when docker push is used (generateScript path)
+        if (hasGenerateScript) {
+            commands.push(this.acrLoginCommand(registryName));
+        }
+
+        // loginServer is only needed for the generateScript docker push path
+        const loginServer = hasGenerateScript ? `${registryName}.azurecr.io` : '';
 
         for (const image of config.images) {
             if (image.source) {
-                // Pull from source, tag, and push to ACR — one set of commands per tag
+                // Import from source directly into ACR — one import command per tag
                 for (const tag of image.tags) {
-                    const targetImage = `${loginServer}/${image.name}:${tag}`;
                     commands.push({
-                        command: 'docker',
-                        args: ['pull', image.source]
-                    });
-                    commands.push({
-                        command: 'docker',
-                        args: ['tag', image.source, targetImage]
-                    });
-                    commands.push({
-                        command: 'docker',
-                        args: ['push', targetImage]
+                        command: 'az',
+                        args: [
+                            'acr', 'import',
+                            '--name', registryName,
+                            '--source', image.source,
+                            '--image', `${image.name}:${tag}`,
+                        ]
                     });
                 }
             } else if (image.generateScript) {
@@ -325,6 +323,10 @@ export class AzureContainerRegistryRender extends AzureResourceRender {
         }
 
         return commands;
+    }
+
+    private acrLoginCommand(registryName: string): Command {
+        return { command: 'az', args: ['acr', 'login', '--name', registryName] };
     }
 
     override getShortResourceTypeName(): string {
