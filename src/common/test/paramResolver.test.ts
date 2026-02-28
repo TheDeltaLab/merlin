@@ -132,8 +132,7 @@ describe('resolveConfig', () => {
                 dependencies: [],
                 get: vi.fn().mockResolvedValue([{
                     command: 'az',
-                    args: ['acr', 'show', '-g', 'rg', '-n', 'myregistry', '-o', 'json'],
-                    resultParser: (out: string) => JSON.parse(out).loginServer
+                    args: ['acr', 'show', '-g', 'rg', '-n', 'myregistry', '-o', 'tsv', '--query', 'loginServer'],
                 }] as Command[])
             };
             registerProprietyGetter(mockGetter);
@@ -172,9 +171,7 @@ describe('resolveConfig', () => {
             const captureCmd = captureCommands[0];
             expect(captureCmd.envCapture).toBe('MERLIN_CHUANGACR_SERVER');
             expect(captureCmd.command).toBe('az');
-            expect(captureCmd.args).toEqual(['acr', 'show', '-g', 'rg', '-n', 'myregistry', '-o', 'json']);
-            // resultParser should be preserved for execute mode
-            expect(typeof captureCmd.resultParser).toBe('function');
+            expect(captureCmd.args).toEqual(['acr', 'show', '-g', 'rg', '-n', 'myregistry', '-o', 'tsv', '--query', 'loginServer']);
         });
 
         test('deduplicates capture commands when same export is referenced multiple times', async () => {
@@ -224,8 +221,8 @@ describe('resolveConfig', () => {
             expect(captureCommands[0].envCapture).toBe('MERLIN_CHUANGACR_SERVER');
         });
 
-        test('uses plain stdout capture when getter has no resultParser', async () => {
-            // AzureResourceNameGetter uses `echo` with no resultParser
+        test('captures plain stdout from getter command', async () => {
+            // AzureResourceNameGetter uses `echo` to output the resource name directly
             const mockGetter: ProprietyGetter = {
                 name: 'echoGetter',
                 dependencies: [],
@@ -262,11 +259,9 @@ describe('resolveConfig', () => {
             // Variable reference substituted
             expect((resolved.config as any).storageAcct).toBe('STORAGE_ACCOUNT=$MERLIN_MYRESOURCE_NAME');
 
-            // Capture command has no resultParser
             expect(captureCommands).toHaveLength(1);
             expect(captureCommands[0].envCapture).toBe('MERLIN_MYRESOURCE_NAME');
             expect(captureCommands[0].command).toBe('echo');
-            expect(captureCommands[0].resultParser).toBeUndefined();
         });
 
         test('throws when dep resource not found in registry', async () => {

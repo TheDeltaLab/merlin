@@ -63,25 +63,25 @@ docker tag mcr.microsoft.com/mcr/hello-world merlintestchuangacrtstkrcacr.azurec
 docker push merlintestchuangacrtstkrcacr.azurecr.io/chuangdemo:v0.0.1
 
 # chuangaca (staging/eastasia)
-MERLIN_CHUANGACR_SERVER=$(az acr show -g merlintest-rg-stg-eas -n merlintestchuangacrstgeasacr -o json)
+MERLIN_CHUANGACR_SERVER=$(az acr show -g merlintest-rg-stg-eas -n merlintestchuangacrstgeasacr -o tsv --query loginServer)
 MERLIN_CHUANGACENV_NAME=$(echo merlintest-chuangacenv-stg-eas-acenv)
 az group create --name merlintest-rg-stg-eas --location eastasia --tags merlin=true env=staging
 az containerapp create --name merlintest-chuangaca-stg-eas-aca --resource-group merlintest-rg-stg-eas --image $MERLIN_CHUANGACR_SERVER/chuangdemo:latest --container-name chuangdemo --cpu 1 --memory 1Gi --min-replicas 1 --max-replicas 5 --revisions-mode single --registry-server $MERLIN_CHUANGACR_SERVER --registry-identity system --environment $MERLIN_CHUANGACENV_NAME --ingress external --target-port 8080 --transport auto --allow-insecure false --system-assigned true --env-vars APP_ENV=staging --tags merlin=true env=staging
 
 # chuangaca (staging/koreacentral)
-MERLIN_CHUANGACR_SERVER=$(az acr show -g merlintest-rg-stg-krc -n merlintestchuangacrstgkrcacr -o json)
+MERLIN_CHUANGACR_SERVER=$(az acr show -g merlintest-rg-stg-krc -n merlintestchuangacrstgkrcacr -o tsv --query loginServer)
 MERLIN_CHUANGACENV_NAME=$(echo merlintest-chuangacenv-stg-krc-acenv)
 az group create --name merlintest-rg-stg-krc --location koreacentral --tags merlin=true env=staging
 az containerapp create --name merlintest-chuangaca-stg-krc-aca --resource-group merlintest-rg-stg-krc --image $MERLIN_CHUANGACR_SERVER/chuangdemo:latest --container-name chuangdemo --cpu 1 --memory 1Gi --min-replicas 1 --max-replicas 5 --revisions-mode single --registry-server $MERLIN_CHUANGACR_SERVER --registry-identity system --environment $MERLIN_CHUANGACENV_NAME --ingress external --target-port 8080 --transport auto --allow-insecure false --system-assigned true --env-vars APP_ENV=staging --tags merlin=true env=staging
 
 # chuangaca (test/eastasia)
-MERLIN_CHUANGACR_SERVER=$(az acr show -g merlintest-rg-tst-eas -n merlintestchuangacrtsteasacr -o json)
+MERLIN_CHUANGACR_SERVER=$(az acr show -g merlintest-rg-tst-eas -n merlintestchuangacrtsteasacr -o tsv --query loginServer)
 MERLIN_CHUANGACENV_NAME=$(echo merlintest-chuangacenv-tst-eas-acenv)
 az group create --name merlintest-rg-tst-eas --location eastasia --tags merlin=true env=test
 az containerapp create --name merlintest-chuangaca-tst-eas-aca --resource-group merlintest-rg-tst-eas --image $MERLIN_CHUANGACR_SERVER/chuangdemo:latest --container-name chuangdemo --cpu 0.25 --memory 0.5Gi --min-replicas 0 --max-replicas 1 --revisions-mode single --registry-server $MERLIN_CHUANGACR_SERVER --registry-identity system --environment $MERLIN_CHUANGACENV_NAME --ingress external --target-port 8080 --transport auto --allow-insecure false --system-assigned true --env-vars APP_ENV=test --tags merlin=true env=test
 
 # chuangaca (test/koreacentral)
-MERLIN_CHUANGACR_SERVER=$(az acr show -g merlintest-rg-tst-krc -n merlintestchuangacrtstkrcacr -o json)
+MERLIN_CHUANGACR_SERVER=$(az acr show -g merlintest-rg-tst-krc -n merlintestchuangacrtstkrcacr -o tsv --query loginServer)
 MERLIN_CHUANGACENV_NAME=$(echo merlintest-chuangacenv-tst-krc-acenv)
 az group create --name merlintest-rg-tst-krc --location koreacentral --tags merlin=true env=test
 az containerapp create --name merlintest-chuangaca-tst-krc-aca --resource-group merlintest-rg-tst-krc --image $MERLIN_CHUANGACR_SERVER/chuangdemo:latest --container-name chuangdemo --cpu 0.25 --memory 0.5Gi --min-replicas 0 --max-replicas 1 --revisions-mode single --registry-server $MERLIN_CHUANGACR_SERVER --registry-identity system --environment $MERLIN_CHUANGACENV_NAME --ingress external --target-port 8080 --transport auto --allow-insecure false --system-assigned true --env-vars APP_ENV=test --tags merlin=true env=test

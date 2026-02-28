@@ -19,18 +19,9 @@ export class AzureResourceManagedIdentityGetter implements ProprietyGetter {
             args: [
                 'ad', 'sp', 'list',
                 '--filter', `displayName eq '${identityName}' and servicePrincipalType eq 'ManagedIdentity'`,
-                '-o', 'json'
-            ],
-            resultParser: (output: string): string => {
-                const result = JSON.parse(output);
-                if (!Array.isArray(result)) {
-                    throw new Error('Expected result to be an array');
-                }
-                if (result.length !== 1) {
-                    throw new Error(`Expected 1 result, got ${result.length} items`);
-                }
-                return result[0].id as string;
-            }
+                '-o', 'tsv',
+                '--query', '[0].id'
+            ]
         }];
     }
 }
@@ -70,15 +61,9 @@ export class AzureContainerRegistryServerGetter implements ProprietyGetter {
                 'acr', 'show',
                 '-g', resourceGroup,
                 '-n', resourceName,
-                '-o', 'json'
-            ],
-            resultParser: (output: string): string => {
-                const result = JSON.parse(output);
-                if (!result.loginServer) {
-                    throw new Error('Expected loginServer in az acr show output');
-                }
-                return result.loginServer as string;
-            }
+                '-o', 'tsv',
+                '--query', 'loginServer'
+            ]
         }];
     }
 }
@@ -99,16 +84,9 @@ export class AzureContainerAppFqdnGetter implements ProprietyGetter {
                 'containerapp', 'show',
                 '-g', resourceGroup,
                 '-n', resourceName,
-                '-o', 'json'
-            ],
-            resultParser: (output: string): string => {
-                const result = JSON.parse(output);
-                const fqdn = result?.properties?.configuration?.ingress?.fqdn;
-                if (!fqdn) {
-                    throw new Error('Expected fqdn in az containerapp show output');
-                }
-                return fqdn as string;
-            }
+                '-o', 'tsv',
+                '--query', 'properties.configuration.ingress.fqdn'
+            ]
         }];
     }
 }

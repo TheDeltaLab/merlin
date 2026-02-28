@@ -162,7 +162,7 @@ export class Deployer {
    * Execute commands sequentially with error handling.
    *
    * Commands with `envCapture` are treated as capture steps:
-   *   - Their stdout (post-resultParser) is stored in captureVars
+   *   - Their stdout is stored in captureVars
    *   - Subsequent command args have $VARNAME references expanded from captureVars
    */
   private async executeCommands(
@@ -182,12 +182,9 @@ export class Deployer {
 
         try {
           if (command.envCapture) {
-            // Capture command: run it, parse result, store in map
+            // Capture command: run it and store stdout in map
             const { stdout } = await execa(command.command, command.args);
-            const value = command.resultParser
-              ? command.resultParser(stdout.trim())
-              : stdout.trim();
-            captureVars.set(command.envCapture, value);
+            captureVars.set(command.envCapture, stdout.trim());
           } else {
             // Regular command: expand any $VARNAME references in args first
             const expandedArgs = command.args.map(arg => expandVars(arg, captureVars));

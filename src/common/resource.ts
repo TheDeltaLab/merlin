@@ -139,7 +139,7 @@ export interface ProprietyGetter {
     dependencies: Dependency[];
 }
 
-export interface Command<T = string> {
+export interface Command {
     command: string;
     args: string[];
     /**
@@ -150,7 +150,6 @@ export interface Command<T = string> {
      *   subsequent commands' args where `$VARNAME` appears.
      */
     envCapture?: string;
-    resultParser?(output: string): T;
 }
 
 export function commandToString(cmd: Command): string {
