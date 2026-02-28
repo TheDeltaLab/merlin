@@ -14,18 +14,17 @@ authProvider:
 dependencies:
   - resource: chuangacr
     isHardDependency: true
-  - resource: chuangabs
-    isHardDependency: false
+  - resource: chuangacenv
+    isHardDependency: true
 
 defaultConfig:
   # ── Container / Image ─────────────────────────────────────────────
-  image: ${ chuangacr.server }/myapp:latest
-  containerName: myapp
+  image: ${ chuangacr.server }/chuangdemo:latest
+  containerName: chuangdemo
   cpu: 0.5
-  memory: 1Gi
+  memory: 1.0Gi
   envVars:
     - APP_ENV=${ this.ring }
-    - STORAGE_ACCOUNT=${ chuangabs.name }
 
   # ── Ingress (CREATE ONLY) ──────────────────────────────────────────
   ingress: external
@@ -48,7 +47,7 @@ defaultConfig:
   systemAssigned: true
 
   # ── Environment (CREATE ONLY) ─────────────────────────────────────
-  environment: my-container-env
+  environment: ${ chuangacenv.name }
 
   # ── Misc ──────────────────────────────────────────────────────────
   noWait: false
@@ -58,6 +57,7 @@ defaultConfig:
 specificConfig:
   - ring: staging
     cpu: 1
+    memory: 2.0Gi
     maxReplicas: 5
     tags:
       env: staging
@@ -80,5 +80,4 @@ specificConfig:
 #   anotherArg: anotherValue
 exports:
   identity: AzureResourceManagedIdentity
-  apiScope: getResourceApiScope
   url: AzureContainerAppFqdn

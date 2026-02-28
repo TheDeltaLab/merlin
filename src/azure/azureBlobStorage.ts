@@ -167,7 +167,7 @@ export class AzureBlobStorageRender extends AzureResourceRender {
     
     supportConnectorInResourceName: boolean = false;
 
-    async render(resource: Resource): Promise<Command[]> {
+    async renderImpl(resource: Resource): Promise<Command[]> {
         if (!AzureBlobStorageRender.isAzureBlobStorageResource(resource)) {
             throw new Error(`Resource ${resource.name} is not an Azure Blob Storage resource`);
         }

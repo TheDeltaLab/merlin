@@ -14,28 +14,36 @@ program
     .command('compile')
     .description('Compile YAML resource definitions to TypeScript')
     .argument('[path]', 'Path to YAML file or directory', './resources')
+    .option('-i, --input <path>', 'Path to YAML resource definitions directory (overrides [path] argument)')
     .option('-o, --output <path>', 'Output directory', '.merlin')
     .option('-w, --watch', 'Watch for changes and recompile')
     .option('--validate-only', 'Validate without generating code')
-    .action(async (path, options) => {
+    .option('--no-cache', 'Skip the compilation cache and always recompile')
+    .action(async (argPath, options) => {
+        const inputPath = options.input ?? argPath;
         const compiler = new Compiler();
 
         try {
             const result = await compiler.compile({
-                inputPath: path,
+                inputPath: inputPath,
                 outputPath: options.output,
                 watch: options.watch,
-                validate: options.validateOnly
+                validate: options.validateOnly,
+                skipCache: !options.cache
             });
 
             if (result.success) {
-                console.log(`✅ Compiled ${result.generatedFiles.length} files`);
-                result.generatedFiles.forEach(f => console.log(`   - ${f}`));
+                if (result.cacheHit) {
+                    console.log('⚡ Compilation skipped (cache hit — no YAML files changed)');
+                } else {
+                    console.log(`✅ Compiled ${result.generatedFiles.length} files`);
+                    result.generatedFiles.forEach(f => console.log(`   - ${f}`));
 
-                // Check if build succeeded
-                const buildWarning = result.warnings.find(w => w.message.includes('Build failed'));
-                if (!buildWarning) {
-                    console.log(`📦 Built output to ${options.output}/dist`);
+                    // Check if build succeeded
+                    const buildWarning = result.warnings.find(w => w.message.includes('Build failed'));
+                    if (!buildWarning) {
+                        console.log(`📦 Built output to ${options.output}/dist`);
+                    }
                 }
 
                 if (result.warnings.length > 0) {
@@ -61,7 +69,7 @@ program
             if (options.watch) {
                 console.log('\n👀 Watching for changes...');
                 await compiler.watch({
-                    inputPath: path,
+                    inputPath: inputPath,
                     outputPath: options.output
                 });
             }
@@ -75,12 +83,14 @@ program
     .command('deploy')
     .description('Deploy infrastructure resources')
     .argument('[path]', 'Path to resource configuration file or directory', './resources')
+    .option('-i, --input <path>', 'Path to YAML resource definitions directory (overrides [path] argument)')
     .option('-e, --execute', 'Actually execute the deployment (default is dry-run)')
     .option('-r, --ring <ring>', 'Target ring (test, staging, production)')
     .option('--region <region>', 'Target region (eastus, westus, krc)')
     .option('--dir <path>', 'Compiled output directory', '.merlin')
     .option('-o, --output-file <file>', 'Write generated commands to file')
-    .action(async (resourcePath, options) => {
+    .action(async (argPath, options) => {
+        const resourcePath = options.input ?? argPath;
         const outputPath = options.dir;
 
         try {
@@ -104,7 +114,11 @@ program
                 process.exit(1);
             }
 
-            console.log(`✅ Compiled ${compileResult.generatedFiles.length} files\n`);
+            if (compileResult.cacheHit) {
+                console.log('⚡ Compilation skipped (cache hit)\n');
+            } else {
+                console.log(`✅ Compiled ${compileResult.generatedFiles.length} files\n`);
+            }
 
             // Build the deploy command arguments
             const args: string[] = [];
@@ -155,14 +169,16 @@ program
     .command('validate')
     .description('Validate resource configuration files')
     .argument('[path]', 'Path to resource configuration file or directory', './resources')
-    .action(async (path) => {
+    .option('-i, --input <path>', 'Path to YAML resource definitions directory (overrides [path] argument)')
+    .action(async (argPath, options) => {
+        const inputPath = options.input ?? argPath;
         // Auto-compile before validation (user preference)
         console.log('🔨 Compiling resources...');
         const compiler = new Compiler();
 
         try {
             const result = await compiler.compile({
-                inputPath: path,
+                inputPath: inputPath,
                 outputPath: '.merlin'
             });
 

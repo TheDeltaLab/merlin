@@ -170,6 +170,250 @@ describe('Deployer', () => {
       expect(consoleLogSpy).toHaveBeenCalledWith('No resources match the specified filters');
     });
 
+    describe('dependency ordering', () => {
+      it('should render dependencies before dependents', async () => {
+        // chuangaca is inserted first but depends on chuangacr — should render after
+        const mockResources: Resource[] = [
+          {
+            name: 'chuangaca',
+            type: 'AzureContainerApp',
+            ring: 'staging',
+            region: 'eastasia',
+            project: 'merlintest',
+            authProvider: { provider: {} as any, args: {} },
+            dependencies: [{ resource: 'chuangacr', isHardDependency: true }],
+            config: {},
+            exports: {}
+          },
+          {
+            name: 'chuangacr',
+            type: 'AzureContainerRegistry',
+            ring: 'staging',
+            region: 'eastasia',
+            project: 'merlintest',
+            authProvider: { provider: {} as any, args: {} },
+            dependencies: [],
+            config: {},
+            exports: {}
+          }
+        ];
+
+        const renderOrder: string[] = [];
+        const mockRender: Render = {
+          render: vi.fn().mockImplementation(async (r: Resource) => {
+            renderOrder.push(r.name);
+            return [{ command: 'az', args: [] } as Command];
+          })
+        };
+
+        vi.spyOn(registry, 'getAllResources').mockReturnValue(mockResources);
+        vi.spyOn(resource, 'getRender').mockReturnValue(mockRender);
+
+        await deployer.deploy({ execute: false });
+
+        expect(renderOrder).toEqual(['chuangacr', 'chuangaca']);
+      });
+
+      it('should order all name-matched dependency variants before any dependent variant', async () => {
+        // 4 chuangaca (2 rings × 2 regions), each depends on 'chuangacr' by name
+        // 4 chuangacr variants with no deps
+        // Expected: all chuangacr variants before any chuangaca variant
+        const rings = ['staging', 'test'] as const;
+        const regions = ['eastasia', 'koreacentral'] as const;
+
+        const acrResources: Resource[] = rings.flatMap(ring =>
+          regions.map(region => ({
+            name: 'chuangacr', type: 'AzureContainerRegistry',
+            ring, region, project: 'merlintest',
+            authProvider: { provider: {} as any, args: {} },
+            dependencies: [], config: {}, exports: {}
+          }))
+        );
+
+        const acaResources: Resource[] = rings.flatMap(ring =>
+          regions.map(region => ({
+            name: 'chuangaca', type: 'AzureContainerApp',
+            ring, region, project: 'merlintest',
+            authProvider: { provider: {} as any, args: {} },
+            dependencies: [{ resource: 'chuangacr', isHardDependency: true }],
+            config: {}, exports: {}
+          }))
+        );
+
+        // Deliberately put dependents before dependencies
+        const mockResources = [...acaResources, ...acrResources];
+
+        const renderOrder: string[] = [];
+        const mockRender: Render = {
+          render: vi.fn().mockImplementation(async (r: Resource) => {
+            renderOrder.push(r.name);
+            return [];
+          })
+        };
+
+        vi.spyOn(registry, 'getAllResources').mockReturnValue(mockResources);
+        vi.spyOn(resource, 'getRender').mockReturnValue(mockRender);
+
+        await deployer.deploy({ execute: false });
+
+        // All 4 acr variants must appear before any aca variant
+        const firstAcaIndex = renderOrder.findIndex(n => n === 'chuangaca');
+        const lastAcrIndex = renderOrder.lastIndexOf('chuangacr');
+        expect(lastAcrIndex).toBeLessThan(firstAcaIndex);
+        expect(renderOrder.filter(n => n === 'chuangacr')).toHaveLength(4);
+        expect(renderOrder.filter(n => n === 'chuangaca')).toHaveLength(4);
+      });
+
+      it('should not error when a declared dependency is not in the filtered set', async () => {
+        // chuangaca depends on chuangacr, but chuangacr is absent from the set
+        const mockResources: Resource[] = [
+          {
+            name: 'chuangaca',
+            type: 'AzureContainerApp',
+            ring: 'staging',
+            region: 'eastasia',
+            project: 'merlintest',
+            authProvider: { provider: {} as any, args: {} },
+            dependencies: [{ resource: 'chuangacr', isHardDependency: true }],
+            config: {},
+            exports: {}
+          }
+        ];
+
+        const mockRender: Render = {
+          render: vi.fn().mockResolvedValue([])
+        };
+
+        vi.spyOn(registry, 'getAllResources').mockReturnValue(mockResources);
+        vi.spyOn(resource, 'getRender').mockReturnValue(mockRender);
+
+        await expect(deployer.deploy({ execute: false })).resolves.toBeUndefined();
+        expect(mockRender.render).toHaveBeenCalledTimes(1);
+      });
+
+      it('should throw on direct circular dependency (A → B → A)', async () => {
+        const mockResources: Resource[] = [
+          {
+            name: 'resourceA',
+            type: 'AzureBlobStorage',
+            ring: 'test',
+            region: 'eastus',
+            project: 'test',
+            authProvider: { provider: {} as any, args: {} },
+            dependencies: [{ resource: 'resourceB' }],
+            config: {},
+            exports: {}
+          },
+          {
+            name: 'resourceB',
+            type: 'AzureBlobStorage',
+            ring: 'test',
+            region: 'eastus',
+            project: 'test',
+            authProvider: { provider: {} as any, args: {} },
+            dependencies: [{ resource: 'resourceA' }],
+            config: {},
+            exports: {}
+          }
+        ];
+
+        vi.spyOn(registry, 'getAllResources').mockReturnValue(mockResources);
+
+        await expect(deployer.deploy({ execute: false })).rejects.toThrow(
+          /Circular dependency detected/
+        );
+      });
+
+      it('should throw on transitive circular dependency (A → B → C → A)', async () => {
+        const make = (name: string, depName: string): Resource => ({
+          name,
+          type: 'AzureBlobStorage',
+          ring: 'test',
+          region: 'eastus',
+          project: 'test',
+          authProvider: { provider: {} as any, args: {} },
+          dependencies: [{ resource: depName }],
+          config: {},
+          exports: {}
+        });
+
+        const mockResources = [
+          make('resourceA', 'resourceB'),
+          make('resourceB', 'resourceC'),
+          make('resourceC', 'resourceA'),
+        ];
+
+        vi.spyOn(registry, 'getAllResources').mockReturnValue(mockResources);
+
+        await expect(deployer.deploy({ execute: false })).rejects.toThrow(
+          /Circular dependency detected/
+        );
+      });
+
+      it('should throw on self-dependency', async () => {
+        const mockResources: Resource[] = [
+          {
+            name: 'resourceA',
+            type: 'AzureBlobStorage',
+            ring: 'test',
+            region: 'eastus',
+            project: 'test',
+            authProvider: { provider: {} as any, args: {} },
+            dependencies: [{ resource: 'resourceA' }],
+            config: {},
+            exports: {}
+          }
+        ];
+
+        vi.spyOn(registry, 'getAllResources').mockReturnValue(mockResources);
+
+        await expect(deployer.deploy({ execute: false })).rejects.toThrow(
+          /Circular dependency detected/
+        );
+      });
+
+      it('should handle diamond dependency (D before B and C, both before A)', async () => {
+        const make = (name: string, deps: string[]): Resource => ({
+          name,
+          type: 'AzureBlobStorage',
+          ring: 'test',
+          region: 'eastus',
+          project: 'test',
+          authProvider: { provider: {} as any, args: {} },
+          dependencies: deps.map(d => ({ resource: d })),
+          config: {},
+          exports: {}
+        });
+
+        // Insertion order: A (depends on B, C), B (depends on D), C (depends on D), D (no deps)
+        const mockResources = [
+          make('A', ['B', 'C']),
+          make('B', ['D']),
+          make('C', ['D']),
+          make('D', []),
+        ];
+
+        const renderOrder: string[] = [];
+        const mockRender: Render = {
+          render: vi.fn().mockImplementation(async (r: Resource) => {
+            renderOrder.push(r.name);
+            return [];
+          })
+        };
+
+        vi.spyOn(registry, 'getAllResources').mockReturnValue(mockResources);
+        vi.spyOn(resource, 'getRender').mockReturnValue(mockRender);
+
+        await deployer.deploy({ execute: false });
+
+        const idx = (n: string) => renderOrder.indexOf(n);
+        expect(idx('D')).toBeLessThan(idx('B'));
+        expect(idx('D')).toBeLessThan(idx('C'));
+        expect(idx('B')).toBeLessThan(idx('A'));
+        expect(idx('C')).toBeLessThan(idx('A'));
+      });
+    });
+
     it('should throw error if render fails', async () => {
       const mockResources: Resource[] = [
         {

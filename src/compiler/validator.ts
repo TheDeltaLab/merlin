@@ -4,6 +4,7 @@
 
 import { ResourceYAMLSchema } from './schemas.js';
 import { ParsedYAML, ValidationResult, CompilationError, ErrorSeverity } from './types.js';
+import { parseParamString } from './interpolation.js';
 
 /**
  * Validates a parsed YAML resource against schema and semantic rules
@@ -38,9 +39,12 @@ export function validate(parsed: ParsedYAML): ValidationResult {
     const semanticErrors = performSemanticValidation(data, parsed.source);
     errors.push(...semanticErrors);
 
+    // Only ERROR-severity issues make a resource invalid; WARNINGs are informational
+    const hasErrors = errors.some(e => e.severity === ErrorSeverity.ERROR);
+
     return {
-        valid: errors.length === 0,
-        data: errors.length === 0 ? data : undefined,
+        valid: !hasErrors,
+        data: !hasErrors ? data : undefined,
         errors
     };
 }
@@ -84,7 +88,100 @@ function performSemanticValidation(data: any, source: string): CompilationError[
         }
     }
 
+    // 3. Validate parameter references in config
+    const paramErrors = validateParamRefs(data, source);
+    errors.push(...paramErrors);
+
     return errors;
+}
+
+/**
+ * Validates ${ } parameter references in defaultConfig and specificConfig.
+ *
+ * Checks:
+ *   - Syntax validity (malformed expressions → ERROR)
+ *   - Dependency declarations (${ resName.export } must have resName in dependencies → ERROR)
+ *   - Region usage (${ this.region } on a resource with no regions declared → WARNING)
+ *
+ * Does NOT validate export key names — that would require cross-file analysis.
+ */
+function validateParamRefs(data: any, source: string): CompilationError[] {
+    const errors: CompilationError[] = [];
+    const declaredDeps = new Set<string>(data.dependencies.map((d: any) => d.resource));
+    const hasRegions = !!data.region;
+
+    const configsToCheck: Array<{ config: Record<string, unknown>; path: string }> = [
+        { config: data.defaultConfig, path: 'defaultConfig' },
+        ...data.specificConfig.map((sc: any, i: number) => ({
+            config: sc as Record<string, unknown>,
+            path: `specificConfig[${i}]`
+        }))
+    ];
+
+    for (const { config, path } of configsToCheck) {
+        collectParamErrors(config, path, declaredDeps, hasRegions, source, errors);
+    }
+
+    return errors;
+}
+
+function collectParamErrors(
+    obj: unknown,
+    path: string,
+    declaredDeps: Set<string>,
+    hasRegions: boolean,
+    source: string,
+    errors: CompilationError[]
+): void {
+    if (typeof obj === 'string') {
+        let parsed;
+        try {
+            parsed = parseParamString(obj);
+        } catch (e) {
+            errors.push({
+                severity: ErrorSeverity.ERROR,
+                message: (e as Error).message,
+                source,
+                path,
+                hint: 'Parameter expressions must use format: ${ resourceName.exportKey }, ${ this.ring }, or ${ this.region }'
+            });
+            return;
+        }
+        if (!parsed) return;
+
+        for (const seg of parsed.segments) {
+            if (seg.type === 'dep' && !declaredDeps.has(seg.resource)) {
+                errors.push({
+                    severity: ErrorSeverity.ERROR,
+                    message: `Parameter reference "\${ ${seg.resource}.${seg.export} }" in "${path}" references undeclared dependency "${seg.resource}"`,
+                    source,
+                    path,
+                    hint: `Add "- resource: ${seg.resource}" to the dependencies array, or remove this parameter reference`
+                });
+            }
+            if (seg.type === 'self' && seg.field === 'region' && !hasRegions) {
+                errors.push({
+                    severity: ErrorSeverity.WARNING,
+                    message: `Parameter reference "\${ this.region }" in "${path}" is used but no regions are declared for this resource`,
+                    source,
+                    path,
+                    hint: 'Region will be an empty string at runtime — add a "region:" field to the resource, or use "${ this.ring }" instead'
+                });
+            }
+        }
+        return;
+    }
+    if (Array.isArray(obj)) {
+        obj.forEach((item, i) =>
+            collectParamErrors(item, `${path}[${i}]`, declaredDeps, hasRegions, source, errors)
+        );
+        return;
+    }
+    if (typeof obj === 'object' && obj !== null) {
+        for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+            collectParamErrors(v, `${path}.${k}`, declaredDeps, hasRegions, source, errors);
+        }
+    }
 }
 
 /**

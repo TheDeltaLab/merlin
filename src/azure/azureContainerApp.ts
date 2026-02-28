@@ -92,6 +92,27 @@ export interface AzureContainerAppConfig extends ResourceSchema {
 
 export interface AzureContainerAppResource extends AzureResource<AzureContainerAppConfig> {}
 
+// Valid CPU → memory combinations for Consumption Container Apps.
+// Source: https://learn.microsoft.com/en-us/azure/container-apps/containers#allocations
+const VALID_CPU_MEMORY_COMBINATIONS: ReadonlyMap<number, string> = new Map([
+    [0.25, '0.5Gi'],
+    [0.5,  '1.0Gi'],
+    [0.75, '1.5Gi'],
+    [1.0,  '2.0Gi'],
+    [1.25, '2.5Gi'],
+    [1.5,  '3.0Gi'],
+    [1.75, '3.5Gi'],
+    [2.0,  '4.0Gi'],
+    [2.25, '4.5Gi'],
+    [2.5,  '5.0Gi'],
+    [2.75, '5.5Gi'],
+    [3.0,  '6.0Gi'],
+    [3.25, '6.5Gi'],
+    [3.5,  '7.0Gi'],
+    [3.75, '7.5Gi'],
+    [4.0,  '8.0Gi'],
+]);
+
 export class AzureContainerAppRender extends AzureResourceRender {
 
     /** Container app names support hyphens */
@@ -101,9 +122,33 @@ export class AzureContainerAppRender extends AzureResourceRender {
         return 'aca';
     }
 
-    async render(resource: Resource): Promise<Command[]> {
+    async renderImpl(resource: Resource): Promise<Command[]> {
         if (!AzureContainerAppRender.isAzureContainerAppResource(resource)) {
             throw new Error(`Resource ${resource.name} is not an Azure Container App resource`);
+        }
+
+        const { cpu, memory } = resource.config;
+        if (cpu !== undefined || memory !== undefined) {
+            if (cpu === undefined || memory === undefined) {
+                throw new Error(
+                    `Resource ${resource.name}: cpu and memory must both be specified together.`
+                );
+            }
+            const expectedMemory = VALID_CPU_MEMORY_COMBINATIONS.get(cpu);
+            if (expectedMemory === undefined) {
+                const validCpus = [...VALID_CPU_MEMORY_COMBINATIONS.keys()].join(', ');
+                throw new Error(
+                    `Resource ${resource.name}: invalid cpu value ${cpu}. Valid cpu values are: ${validCpus}.`
+                );
+            }
+            // Normalise memory string for comparison (e.g. "1Gi" === "1.0Gi")
+            const normalisedMemory = parseFloat(memory).toFixed(1) + 'Gi';
+            if (normalisedMemory !== expectedMemory) {
+                throw new Error(
+                    `Resource ${resource.name}: invalid cpu/memory combination (cpu: ${cpu}, memory: ${memory}). ` +
+                    `For cpu ${cpu}, memory must be ${expectedMemory}.`
+                );
+            }
         }
 
         const ret: Command[] = [];
@@ -298,7 +343,7 @@ export class AzureContainerAppRender extends AzureResourceRender {
      */
     private static readonly CREATE_ONLY_BOOLEAN_FLAG_MAP: Record<string, string> = {
         'allowInsecure': '--allow-insecure',
-        'systemAssigned': '--system-assigned',
+        // Note: --system-assigned is a presence-only flag (no value) — handled inline in renderCreate()
     };
 
     /**
@@ -340,6 +385,11 @@ export class AzureContainerAppRender extends AzureResourceRender {
         // --no-wait is a presence-only flag (no value argument)
         if (config.noWait === true) {
             args.push('--no-wait');
+        }
+
+        // --system-assigned is a presence-only flag (no value argument)
+        if (config.systemAssigned === true) {
+            args.push('--system-assigned');
         }
 
         this.addTags(args, config.tags);

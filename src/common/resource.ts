@@ -97,7 +97,7 @@ export interface Resource<Schema extends ResourceSchema = ResourceSchema> {
      * How to be added as dependency of another resource
      *
      */
-    authProvider: {
+    authProvider?: {
         provider: AuthProvider;
         args: Record<string, string>;
     };
@@ -139,10 +139,17 @@ export interface ProprietyGetter {
     dependencies: Dependency[];
 }
 
-export interface Command<T = string> {
+export interface Command {
     command: string;
     args: string[];
-    resultParser?(output: string): T;
+    /**
+     * If set, this command's stdout is captured into a shell environment variable
+     * with this name (e.g. 'MERLIN_CHUANGACR_SERVER').
+     * - In print/file-output mode: emitted as `VARNAME=$(command args)`
+     * - In execute mode: stdout is stored in-memory and substituted into
+     *   subsequent commands' args where `$VARNAME` appears.
+     */
+    envCapture?: string;
 }
 
 export function commandToString(cmd: Command): string {

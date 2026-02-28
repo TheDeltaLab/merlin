@@ -53,14 +53,13 @@ describe('Validator', () => {
                 expect(result.errors.some(e => e.path === 'ring')).toBe(true);
             });
 
-            test('should reject resource missing authProvider', () => {
+            test('should accept resource missing authProvider', () => {
                 const data = { ...createResourceYAML(), authProvider: undefined };
                 const parsed = createParsedYAML(data);
 
                 const result = validate(parsed);
 
-                expect(result.valid).toBe(false);
-                expect(result.errors.some(e => e.path === 'authProvider')).toBe(true);
+                expect(result.valid).toBe(true);
             });
 
             test('should reject resource missing defaultConfig', () => {
@@ -480,6 +479,178 @@ describe('Validator', () => {
             result.errors.forEach(error => {
                 expect(error.source).toBe('/test/custom-source.yml');
             });
+        });
+    });
+});
+
+// ── Parameter reference validation tests ──────────────────────────────────
+
+describe('Validator - Parameter Reference Validation', () => {
+    describe('Valid parameter expressions', () => {
+        test('passes for ${ this.ring } in defaultConfig', () => {
+            const data = createResourceYAML({
+                defaultConfig: { envVar: '${ this.ring }' },
+                specificConfig: []
+            });
+            const result = validate(createParsedYAML(data));
+            expect(result.valid).toBe(true);
+            expect(result.errors).toHaveLength(0);
+        });
+
+        test('passes for ${ this.region } when regions are declared', () => {
+            const data = createResourceYAML({
+                region: 'eastasia',
+                defaultConfig: { regionTag: '${ this.region }' },
+                specificConfig: []
+            });
+            const result = validate(createParsedYAML(data));
+            expect(result.valid).toBe(true);
+            expect(result.errors).toHaveLength(0);
+        });
+
+        test('passes for ${ dep.export } when dep is declared in dependencies', () => {
+            const data = createResourceYAML({
+                dependencies: [{ resource: 'myregistry', isHardDependency: true }],
+                defaultConfig: { image: '${ myregistry.server }/myapp:latest' },
+                specificConfig: []
+            });
+            const result = validate(createParsedYAML(data));
+            expect(result.valid).toBe(true);
+            expect(result.errors).toHaveLength(0);
+        });
+
+        test('passes for params in array values', () => {
+            const data = createResourceYAML({
+                defaultConfig: {
+                    envVars: ['APP_ENV=${ this.ring }', 'PLAIN=value']
+                },
+                specificConfig: []
+            });
+            const result = validate(createParsedYAML(data));
+            expect(result.valid).toBe(true);
+        });
+
+        test('passes for params in nested objects', () => {
+            const data = createResourceYAML({
+                defaultConfig: {
+                    tags: { env: '${ this.ring }' }
+                },
+                specificConfig: []
+            });
+            const result = validate(createParsedYAML(data));
+            expect(result.valid).toBe(true);
+        });
+    });
+
+    describe('Undeclared dependency reference → ERROR', () => {
+        test('errors for ${ undeclared.export } when not in dependencies', () => {
+            const data = createResourceYAML({
+                dependencies: [], // no dependencies declared
+                defaultConfig: { image: '${ unknownResource.server }/myapp:latest' },
+                specificConfig: []
+            });
+            const result = validate(createParsedYAML(data));
+            expect(result.valid).toBe(false);
+            const paramError = result.errors.find(e => e.message.includes('undeclared dependency'));
+            expect(paramError).toBeDefined();
+            expect(paramError!.severity).toBe(ErrorSeverity.ERROR);
+            expect(paramError!.message).toContain('unknownResource');
+        });
+
+        test('error hint suggests adding to dependencies', () => {
+            const data = createResourceYAML({
+                dependencies: [],
+                defaultConfig: { val: '${ missingDep.name }' },
+                specificConfig: []
+            });
+            const result = validate(createParsedYAML(data));
+            const paramError = result.errors.find(e => e.message.includes('undeclared dependency'));
+            expect(paramError!.hint).toContain('missingDep');
+        });
+
+        test('errors for undeclared dep in specificConfig', () => {
+            const data = createResourceYAML({
+                ring: 'staging',
+                dependencies: [],
+                defaultConfig: {},
+                specificConfig: [{ ring: 'staging', val: '${ missing.export }' }]
+            });
+            const result = validate(createParsedYAML(data));
+            expect(result.valid).toBe(false);
+            expect(result.errors.some(e => e.message.includes('undeclared dependency'))).toBe(true);
+        });
+    });
+
+    describe('Malformed expressions → ERROR', () => {
+        test('errors for expression with no dot (e.g., ${ noExport })', () => {
+            const data = createResourceYAML({
+                defaultConfig: { val: '${ noExport }' },
+                specificConfig: []
+            });
+            const result = validate(createParsedYAML(data));
+            expect(result.valid).toBe(false);
+            expect(result.errors.some(e => e.severity === ErrorSeverity.ERROR)).toBe(true);
+        });
+
+        test('errors for expression with leading dot (e.g., ${ .foo })', () => {
+            const data = createResourceYAML({
+                defaultConfig: { val: '${ .foo }' },
+                specificConfig: []
+            });
+            const result = validate(createParsedYAML(data));
+            expect(result.valid).toBe(false);
+        });
+    });
+
+    describe('${ this.region } on region-less resource → WARNING', () => {
+        test('warns for ${ this.region } when no regions declared', () => {
+            const data = createResourceYAML({
+                region: undefined, // no region
+                defaultConfig: { regionVal: '${ this.region }' },
+                specificConfig: []
+            });
+            const result = validate(createParsedYAML(data));
+            // Should still be valid (warning, not error)
+            expect(result.valid).toBe(true);
+            const warning = result.errors.find(e => e.severity === ErrorSeverity.WARNING);
+            expect(warning).toBeDefined();
+            expect(warning!.message).toContain('this.region');
+        });
+
+        test('no warning for ${ this.region } when region IS declared', () => {
+            const data = createResourceYAML({
+                region: 'eastasia',
+                defaultConfig: { regionVal: '${ this.region }' },
+                specificConfig: []
+            });
+            const result = validate(createParsedYAML(data));
+            expect(result.valid).toBe(true);
+            expect(result.errors).toHaveLength(0);
+        });
+    });
+
+    describe('Error location paths', () => {
+        test('error path points to defaultConfig field', () => {
+            const data = createResourceYAML({
+                dependencies: [],
+                defaultConfig: { image: '${ missing.server }' },
+                specificConfig: []
+            });
+            const result = validate(createParsedYAML(data));
+            const paramError = result.errors.find(e => e.message.includes('undeclared dependency'));
+            expect(paramError!.path).toContain('defaultConfig');
+        });
+
+        test('error path points to specificConfig field', () => {
+            const data = createResourceYAML({
+                ring: 'staging',
+                dependencies: [],
+                defaultConfig: {},
+                specificConfig: [{ ring: 'staging', val: '${ missing.export }' }]
+            });
+            const result = validate(createParsedYAML(data));
+            const paramError = result.errors.find(e => e.message.includes('undeclared dependency'));
+            expect(paramError!.path).toContain('specificConfig[0]');
         });
     });
 });

@@ -1,5 +1,6 @@
 
 import { Command, Render, Region, Resource, REGION_SHORT_NAME_MAP, RING_SHORT_NAME_MAP } from "../common/resource";
+import { resolveConfig } from "../common/paramResolver.js";
 
 
 export abstract class AzureResourceRender implements Render {
@@ -8,7 +9,28 @@ export abstract class AzureResourceRender implements Render {
      */
     abstract supportConnectorInResourceName: boolean;
 
-    abstract render(resource: Resource): Promise<Command[]>;
+    /**
+     * Outer render method (Template Method pattern).
+     * Resolves all ${ } parameter expressions in resource.config into shell
+     * variable references, collects the capture commands (envCapture set),
+     * then delegates to renderImpl() with the resolved resource.
+     *
+     * The returned Command[] starts with any capture commands (e.g.
+     * `MERLIN_CHUANGACR_SERVER=$(az acr show ...)`) followed by the resource's
+     * own deployment commands.  This ensures variables are set before they are
+     * referenced in subsequent args.
+     */
+    async render(resource: Resource): Promise<Command[]> {
+        const { resource: resolved, captureCommands } = await resolveConfig(resource);
+        const renderCommands = await this.renderImpl(resolved);
+        return [...captureCommands, ...renderCommands];
+    }
+
+    /**
+     * Subclasses implement their render logic here.
+     * The resource passed in has all parameter expressions already resolved to plain values.
+     */
+    protected abstract renderImpl(resource: Resource): Promise<Command[]>;
 
     abstract getShortResourceTypeName(): string;
 
@@ -99,9 +121,10 @@ export abstract class AzureResourceRender implements Render {
     protected addTags(args: string[], tags?: Record<string, string>): void {
         if (tags && Object.keys(tags).length > 0) {
             args.push('--tags');
-            for (const [key, value] of Object.entries(tags)) {
-                args.push(`${key}=${value}`);
-            }
+            // All key=value pairs must be passed as a single space-separated string.
+            // Passing them as separate array elements causes Azure CLI to treat the
+            // second tag as an unrecognized positional argument.
+            args.push(Object.entries(tags).map(([k, v]) => `${k}=${v}`).join(' '));
         }
     }
 

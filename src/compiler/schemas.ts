@@ -77,11 +77,11 @@ export const ResourceYAMLSchema = z.object({
         z.array(RegionSchema).min(1, 'Region array cannot be empty')
     ]).optional(),
 
-    // AuthProvider can be just a string (name) or object with args
+    // AuthProvider can be just a string (name) or object with args, or omitted
     authProvider: z.union([
         z.string().min(1, 'AuthProvider name is required'),
         AuthProviderObjectSchema
-    ]),
+    ]).optional(),
 
     dependencies: z.array(DependencySchema).optional().default([]),
 

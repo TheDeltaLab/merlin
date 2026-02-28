@@ -4,6 +4,7 @@
 
 import { ResourceYAML, ExpandedResource, AuthProviderRef, AuthProviderYAML, ExportRef } from './types.js';
 import { Ring, Region } from '../common/resource.js';
+import { parseConfigParams } from './interpolation.js';
 
 /**
  * Expands a resource YAML into multiple resources (one per ring+region combination)
@@ -36,6 +37,11 @@ export function expand(resource: ResourceYAML): ExpandedResource[] {
         const configsToMerge = matchingConfigs.map(({ ring, region, ...config }) => config);
         const mergedConfig = deepMerge(resource.defaultConfig, ...configsToMerge);
 
+        // Parse ${ } parameter expressions in the merged config.
+        // Must happen AFTER deepMerge so that raw strings are merged first,
+        // avoiding any accidental merging of two ParamValue objects.
+        const paramConfig = parseConfigParams(mergedConfig);
+
         return {
             name: resource.name,
             ring,
@@ -45,7 +51,7 @@ export function expand(resource: ResourceYAML): ExpandedResource[] {
             parent: resource.parent,
             authProvider: toAuthProviderRef(resource.authProvider),
             dependencies: resource.dependencies,
-            config: mergedConfig,
+            config: paramConfig,
             exports: toExportRefs(resource.exports)
         };
     });
@@ -54,7 +60,11 @@ export function expand(resource: ResourceYAML): ExpandedResource[] {
 /**
  * Converts authProvider from YAML format to AuthProviderRef
  */
-function toAuthProviderRef(authProvider: string | AuthProviderYAML): AuthProviderRef {
+function toAuthProviderRef(authProvider: string | AuthProviderYAML | undefined): AuthProviderRef | undefined {
+    if (authProvider === undefined || authProvider === null) {
+        return undefined;
+    }
+
     if (typeof authProvider === 'string') {
         return {
             name: authProvider,

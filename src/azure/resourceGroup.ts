@@ -16,7 +16,7 @@ export class AzureResourceGroupRender extends AzureResourceRender {
     }
     supportConnectorInResourceName: boolean = true;
 
-    async render(resource: Resource): Promise<Command[]> {
+    async renderImpl(resource: Resource): Promise<Command[]> {
         // Check if resource group already exists
         const deployedProps = await this.getDeployedProps(resource);
 

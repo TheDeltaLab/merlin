@@ -108,11 +108,13 @@ function generateResourceObject(resource: ExpandedResource): string {
         code += `  parent: ${JSON.stringify(resource.parent)},\n`;
     }
 
-    // AuthProvider - now includes args
-    code += `  authProvider: {\n`;
-    code += `    provider: getAuthProvider(${JSON.stringify(resource.authProvider.name)}),\n`;
-    code += `    args: ${JSON.stringify(resource.authProvider.args)}\n`;
-    code += `  },\n`;
+    // AuthProvider - now includes args (optional)
+    if (resource.authProvider) {
+        code += `  authProvider: {\n`;
+        code += `    provider: getAuthProvider(${JSON.stringify(resource.authProvider.name)}),\n`;
+        code += `    args: ${JSON.stringify(resource.authProvider.args)}\n`;
+        code += `  },\n`;
+    }
 
     // Dependencies
     code += `  dependencies: ${JSON.stringify(resource.dependencies, null, 2)},\n`;

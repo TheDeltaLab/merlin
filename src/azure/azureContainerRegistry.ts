@@ -22,6 +22,13 @@ export type RoleAssignmentMode = 'rbac' | 'rbac-abac';
 // Zone redundancy
 export type ZoneRedundancy = 'Disabled' | 'Enabled';
 
+export interface ContainerImage {
+    name: string;
+    tags: string[];
+    source?: string;         // Source image to import (mutually exclusive with generateScript)
+    generateScript?: string; // Script path to build the image (mutually exclusive with source)
+}
+
 export interface AzureContainerRegistryConfig extends ResourceSchema {
     // Required configuration
     sku?: ContainerRegistrySku;
@@ -45,6 +52,9 @@ export interface AzureContainerRegistryConfig extends ResourceSchema {
     // Update-only options
     anonymousPullEnabled?: boolean;
     dataEndpointEnabled?: boolean;
+
+    // Images to import or build into this registry
+    images?: ContainerImage[];
 }
 
 export interface AzureContainerRegistryResource extends AzureResource<AzureContainerRegistryConfig> {
@@ -55,7 +65,7 @@ export class AzureContainerRegistryRender extends AzureResourceRender {
 
     supportConnectorInResourceName: boolean = false;
 
-    async render(resource: Resource): Promise<Command[]> {
+    async renderImpl(resource: Resource): Promise<Command[]> {
         if (!AzureContainerRegistryRender.isAzureContainerRegistryResource(resource)) {
             throw new Error(`Resource ${resource.name} is not an Azure Container Registry resource`);
         }
@@ -75,6 +85,10 @@ export class AzureContainerRegistryRender extends AzureResourceRender {
         } else {
             ret.push(...this.renderUpdate(resource as AzureContainerRegistryResource));
         }
+
+        // Process images after registry is created/updated
+        const imageCommands = this.renderImages(resource as AzureContainerRegistryResource);
+        ret.push(...imageCommands);
 
         return ret;
     }
@@ -237,6 +251,80 @@ export class AzureContainerRegistryRender extends AzureResourceRender {
             command: 'az',
             args: args
         }];
+    }
+
+    private renderImages(resource: AzureContainerRegistryResource): Command[] {
+        const config = resource.config;
+        if (!config.images || config.images.length === 0) return [];
+
+        const registryName = this.getResourceName(resource);
+        // ACR login server format: <registryName>.azurecr.io
+        const loginServer = `${registryName}.azurecr.io`;
+        const commands: Command[] = [];
+
+        // Pre-validate all images before emitting any commands
+        for (const image of config.images) {
+            if (!image.source && !image.generateScript) {
+                throw new Error(
+                    `Image '${image.name}' in resource '${resource.name}': ` +
+                    `must specify either 'source' or 'generateScript'`
+                );
+            }
+            if (image.source && image.generateScript) {
+                throw new Error(
+                    `Image '${image.name}' in resource '${resource.name}': ` +
+                    `cannot specify both 'source' and 'generateScript', choose one`
+                );
+            }
+        }
+
+        // Login to ACR once before all docker operations
+        commands.push({
+            command: 'az',
+            args: ['acr', 'login', '--name', registryName]
+        });
+
+        for (const image of config.images) {
+            if (image.source) {
+                // Pull from source, tag, and push to ACR — one set of commands per tag
+                for (const tag of image.tags) {
+                    const targetImage = `${loginServer}/${image.name}:${tag}`;
+                    commands.push({
+                        command: 'docker',
+                        args: ['pull', image.source]
+                    });
+                    commands.push({
+                        command: 'docker',
+                        args: ['tag', image.source, targetImage]
+                    });
+                    commands.push({
+                        command: 'docker',
+                        args: ['push', targetImage]
+                    });
+                }
+            } else if (image.generateScript) {
+                // 1. Execute the build script (script writes built image name to MERLIN_ACR_IMAGE env var)
+                commands.push({
+                    command: 'bash',
+                    args: [image.generateScript]
+                });
+
+                // 2. For each tag: docker tag + docker push
+                for (const tag of image.tags) {
+                    const targetImage = `${loginServer}/${image.name}:${tag}`;
+                    commands.push({
+                        command: 'docker',
+                        args: ['tag', '$MERLIN_ACR_IMAGE', targetImage]
+                    });
+                    commands.push({
+                        command: 'docker',
+                        args: ['push', targetImage]
+                    });
+                }
+            }
+        }
+
+        return commands;
     }
 
     override getShortResourceTypeName(): string {

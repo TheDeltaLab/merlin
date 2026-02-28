@@ -22,14 +22,17 @@ export class Deployer {
    */
   async deploy(options: DeployOptions): Promise<void> {
     // 1. Get all resources and filter by ring/region
-    const resources = this.filterResources(getAllResources(), options);
+    const filtered = this.filterResources(getAllResources(), options);
 
-    if (resources.length === 0) {
+    if (filtered.length === 0) {
       console.log('No resources match the specified filters');
       return;
     }
 
-    // 2. Render commands for each resource
+    // 2. Sort by dependency order (dependencies render before dependents)
+    const resources = this.sortByDependencies(filtered);
+
+    // 3. Render commands for each resource
     const allCommands: Array<{ resource: Resource; commands: Command[] }> = [];
 
     for (const resource of resources) {
@@ -59,6 +62,75 @@ export class Deployer {
   }
 
   /**
+   * Sorts resources in topological order so dependencies are rendered before dependents.
+   * Uses Kahn's BFS algorithm. Throws on circular dependencies.
+   * Dependencies are matched by resource name — all resources with a given name
+   * are treated as predecessors of any resource that declares a dependency on that name.
+   */
+  private sortByDependencies(resources: Resource[]): Resource[] {
+    // Index resources by name for fast lookup
+    const byName = new Map<string, Resource[]>();
+    for (const r of resources) {
+      const list = byName.get(r.name) ?? [];
+      list.push(r);
+      byName.set(r.name, list);
+    }
+
+    const resourceKey = (r: Resource) =>
+      r.region ? `${r.name}:${r.ring}:${r.region}` : `${r.name}:${r.ring}`;
+
+    const keyToResource = new Map<string, Resource>();
+    const inDegree = new Map<string, number>();
+    const dependents = new Map<string, Set<string>>(); // predecessor → successors
+
+    for (const r of resources) {
+      const key = resourceKey(r);
+      keyToResource.set(key, r);
+      inDegree.set(key, 0);
+      dependents.set(key, new Set());
+    }
+
+    for (const r of resources) {
+      const rKey = resourceKey(r);
+      for (const dep of r.dependencies) {
+        for (const depResource of (byName.get(dep.resource) ?? [])) {
+          const depKey = resourceKey(depResource);
+          inDegree.set(rKey, inDegree.get(rKey)! + 1);
+          dependents.get(depKey)!.add(rKey);
+        }
+      }
+    }
+
+    // Kahn's BFS
+    const queue: string[] = [];
+    for (const [key, degree] of inDegree) {
+      if (degree === 0) queue.push(key);
+    }
+
+    const sorted: Resource[] = [];
+    while (queue.length > 0) {
+      const key = queue.shift()!;
+      sorted.push(keyToResource.get(key)!);
+      for (const sKey of dependents.get(key)!) {
+        const newDeg = inDegree.get(sKey)! - 1;
+        inDegree.set(sKey, newDeg);
+        if (newDeg === 0) queue.push(sKey);
+      }
+    }
+
+    if (sorted.length !== resources.length) {
+      const cycleKeys = [...inDegree.entries()]
+        .filter(([, d]) => d > 0)
+        .map(([k]) => k);
+      throw new Error(
+        `Circular dependency detected among resources: ${cycleKeys.join(', ')}`
+      );
+    }
+
+    return sorted;
+  }
+
+  /**
    * Filter resources by ring and region
    */
   private filterResources(resources: Resource[], options: DeployOptions): Resource[] {
@@ -74,34 +146,56 @@ export class Deployer {
   }
 
   /**
-   * Execute commands sequentially with error handling
+   * Formats a single command as a shell line.
+   * - If the command has envCapture, emits: VARNAME=$(command args)
+   * - Otherwise emits: command args
+   */
+  private commandToShellLine(command: Command): string {
+    const cmdStr = `${command.command} ${command.args.join(' ')}`;
+    if (command.envCapture) {
+      return `${command.envCapture}=$(${cmdStr})`;
+    }
+    return cmdStr;
+  }
+
+  /**
+   * Execute commands sequentially with error handling.
+   *
+   * Commands with `envCapture` are treated as capture steps:
+   *   - Their stdout is stored in captureVars
+   *   - Subsequent command args have $VARNAME references expanded from captureVars
    */
   private async executeCommands(
     allCommands: Array<{ resource: Resource; commands: Command[] }>
   ): Promise<void> {
     console.log('\nExecuting deployment commands...\n');
 
+    // Shared in-memory map for captured variable values across all resources
+    const captureVars = new Map<string, string>();
+
     for (const { resource, commands } of allCommands) {
       console.log(`Deploying ${resource.name} (${resource.ring}${resource.region ? `/${resource.region}` : ''})...`);
 
       for (const command of commands) {
-        const commandStr = `${command.command} ${command.args.join(' ')}`;
+        const commandStr = this.commandToShellLine(command);
         console.log(`> ${commandStr}`);
 
         try {
-          const { stdout, stderr } = await execa(command.command, command.args);
+          if (command.envCapture) {
+            // Capture command: run it and store stdout in map
+            const { stdout } = await execa(command.command, command.args);
+            captureVars.set(command.envCapture, stdout.trim());
+          } else {
+            // Regular command: expand any $VARNAME references in args first
+            const expandedArgs = command.args.map(arg => expandVars(arg, captureVars));
+            const { stdout, stderr } = await execa(command.command, expandedArgs);
 
-          if (stdout) {
-            console.log(stdout);
-          }
-          if (stderr) {
-            console.error(stderr);
-          }
-
-          // Parse result if parser is provided
-          if (command.resultParser && stdout) {
-            const parsed = command.resultParser(stdout);
-            // Store or use parsed result if needed in the future
+            if (stdout) {
+              console.log(stdout);
+            }
+            if (stderr) {
+              console.error(stderr);
+            }
           }
         } catch (error) {
           console.error(`✗ Failed to execute: ${commandStr}`);
@@ -117,7 +211,8 @@ export class Deployer {
   }
 
   /**
-   * Print commands without executing
+   * Print commands without executing.
+   * Capture commands are shown as VARNAME=$(command args).
    */
   private printCommands(allCommands: Array<{ resource: Resource; commands: Command[] }>): void {
     console.log('\nGenerated deployment commands (dry-run mode):\n');
@@ -125,17 +220,18 @@ export class Deployer {
     for (const { resource, commands } of allCommands) {
       console.log(`# ${resource.name} (${resource.ring}${resource.region ? `/${resource.region}` : ''})`);
       for (const command of commands) {
-        console.log(`${command.command} ${command.args.join(' ')}`);
+        console.log(this.commandToShellLine(command));
       }
       console.log('');
     }
 
     console.log('Use --execute flag to actually run these commands');
-    console.log('Use --output <file> to write commands to a file');
+    console.log('Use --output-file <file> to write commands to a file');
   }
 
   /**
-   * Write commands to shell script file
+   * Write commands to shell script file.
+   * Capture commands are emitted as VARNAME=$(command args).
    */
   private async writeCommandsToFile(
     allCommands: Array<{ resource: Resource; commands: Command[] }>,
@@ -146,7 +242,7 @@ export class Deployer {
     for (const { resource, commands } of allCommands) {
       lines.push(`# ${resource.name} (${resource.ring}${resource.region ? `/${resource.region}` : ''})`);
       for (const command of commands) {
-        lines.push(`${command.command} ${command.args.join(' ')}`);
+        lines.push(this.commandToShellLine(command));
       }
       lines.push('');
     }
@@ -155,6 +251,17 @@ export class Deployer {
     console.log(`✅ Deployment commands written to: ${outputFile}`);
     console.log(`   Total commands: ${allCommands.reduce((sum, { commands }) => sum + commands.length, 0)}`);
   }
+}
+
+/**
+ * Expands $VARNAME references in a string using the provided map.
+ * Only replaces variables that are present in the map; unknown $VARNAME
+ * references are left as-is (so shell can handle them).
+ */
+function expandVars(arg: string, captureVars: Map<string, string>): string {
+  return arg.replace(/\$([A-Z][A-Z0-9_]*)/g, (match, varName) => {
+    return captureVars.has(varName) ? captureVars.get(varName)! : match;
+  });
 }
 
 // Export singleton instance
