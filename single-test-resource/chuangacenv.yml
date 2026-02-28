@@ -8,9 +8,13 @@ region:
   - eastasia
   - koreacentral
 
-dependencies: []
+dependencies: 
+  - resource: chuanglaw
+    isHardDependency: true
 
 defaultConfig:
+  logsWorkspaceId: ${ chuanglaw.customerId }
+  logsWorkspaceKey: ${ chuanglaw.sharedKey }
   tags:
     merlin: "true"
     env: ${ this.ring }

@@ -121,10 +121,12 @@ export abstract class AzureResourceRender implements Render {
     protected addTags(args: string[], tags?: Record<string, string>): void {
         if (tags && Object.keys(tags).length > 0) {
             args.push('--tags');
-            // All key=value pairs must be passed as a single space-separated string.
-            // Passing them as separate array elements causes Azure CLI to treat the
-            // second tag as an unrecognized positional argument.
-            args.push(Object.entries(tags).map(([k, v]) => `${k}=${v}`).join(' '));
+            // Each key=value pair is pushed as a separate args element so that
+            // execa() passes them as distinct subprocess arguments to Azure CLI.
+            // args.join(' ') in shell-output mode produces the same correct string.
+            for (const [k, v] of Object.entries(tags)) {
+                args.push(`${k}=${v}`);
+            }
         }
     }
 

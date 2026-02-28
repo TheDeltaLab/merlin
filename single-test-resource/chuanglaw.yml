@@ -1,0 +1,23 @@
+name: chuanglaw
+type: AzureLogAnalyticsWorkspace
+project: merlintest
+ring:
+  - staging
+  - test
+region:
+  - eastasia
+  - koreacentral
+
+dependencies: []
+
+defaultConfig:
+  location: ${ this.region }
+
+  tags:
+    merlin: "true"
+    env: ${ this.ring }
+
+
+exports:
+  customerId: AzureLogAnalyticsWorkspaceCustomerId
+  sharedKey: AzureLogAnalyticsWorkspaceSharedKey

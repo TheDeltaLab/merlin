@@ -421,9 +421,10 @@ describe('AzureContainerAppRender', () => {
             const args = render.renderCreate(resource)[0].args;
             const tagsIdx = args.indexOf('--tags');
             expect(tagsIdx).not.toBe(-1);
-            // Tags are merged into a single space-separated string so Azure CLI
-            // does not treat the second tag as an unrecognized positional argument.
-            expect(args[tagsIdx + 1]).toBe('env=staging owner=team');
+            // Each tag is its own args element so execa() passes them as separate
+            // subprocess arguments to Azure CLI.
+            expect(args).toContain('env=staging');
+            expect(args).toContain('owner=team');
         });
 
         it('includes registry credentials', () => {

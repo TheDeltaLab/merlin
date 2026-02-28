@@ -1,4 +1,4 @@
-import { Command, Dependency, ProprietyGetter, Resource, getRender, registerProprietyGetter } from "../common/resource.js";
+import { Command, Dependency, ProprietyGetter, Resource, getRender } from "../common/resource.js";
 import { AzureResourceRender } from "./render.js";
 
 /**
@@ -91,8 +91,49 @@ export class AzureContainerAppFqdnGetter implements ProprietyGetter {
     }
 }
 
-// Register propriety getters
-registerProprietyGetter(new AzureResourceManagedIdentityGetter());
-registerProprietyGetter(new AzureResourceNameGetter());
-registerProprietyGetter(new AzureContainerRegistryServerGetter());
-registerProprietyGetter(new AzureContainerAppFqdnGetter());
+export class AzureLogAnalyticsWorkspaceCustomerIdGetter implements ProprietyGetter {
+    name: string = 'AzureLogAnalyticsWorkspaceCustomerId';
+
+    dependencies: Dependency[] = [];
+
+    async get(resource: Resource, _args: Record<string, string>): Promise<Command[]> {
+        const render = getRender(resource.type) as AzureResourceRender;
+        const resourceGroup = render.getResourceGroupName(resource);
+        const resourceName = render.getResourceName(resource);
+
+        return [{
+            command: 'az',
+            args: [
+                'monitor', 'log-analytics', 'workspace', 'show',
+                '--name', resourceName,
+                '-g', resourceGroup,
+                '-o', 'tsv',
+                '--query', 'customerId'
+            ]
+        }];
+    }
+}
+
+export class AzureLogAnalyticsWorkspaceSharedKeyGetter implements ProprietyGetter {
+    name: string = 'AzureLogAnalyticsWorkspaceSharedKey';
+
+    dependencies: Dependency[] = [];
+
+    async get(resource: Resource, _args: Record<string, string>): Promise<Command[]> {
+        const render = getRender(resource.type) as AzureResourceRender;
+        const resourceGroup = render.getResourceGroupName(resource);
+        const resourceName = render.getResourceName(resource);
+
+        return [{
+            command: 'az',
+            args: [
+                'monitor', 'log-analytics', 'workspace', 'get-shared-keys',
+                '--name', resourceName,
+                '-g', resourceGroup,
+                '-o', 'tsv',
+                '--query', 'primarySharedKey'
+            ]
+        }];
+    }
+}
+
