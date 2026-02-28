@@ -4,8 +4,8 @@
 
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { resolveConfig } from '../paramResolver.js';
-import { clearRegistry, registerResource } from '../registry.js';
-import { Resource, registerProprietyGetter, ProprietyGetter, Dependency, Command } from '../resource.js';
+import { clearRegistry, registerResource, getResource } from '../registry.js';
+import { Resource, registerProprietyGetter, ProprietyGetter, Dependency, Command, registerRender, Render } from '../resource.js';
 import { ParamValue } from '../../compiler/types.js';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -401,5 +401,101 @@ describe('resolveConfig', () => {
             expect(typeof originalConfig.env).toBe('object');
             expect((originalConfig.env as ParamValue).__merlin_param__).toBe(true);
         });
+    });
+});
+
+// ── Registry: global resource lookup ───────────────────────────────────────
+
+describe('getResource — global resource lookup', () => {
+    beforeEach(() => {
+        clearRegistry();
+    });
+
+    function makeGlobalResource(overrides: Partial<Resource> = {}): Resource {
+        return {
+            name: 'globalres',
+            ring: 'staging',
+            region: undefined,   // registered without region
+            type: 'GlobalType',
+            isGlobalResource: true,
+            dependencies: [],
+            config: {},
+            exports: {},
+            ...overrides,
+        };
+    }
+
+    test('finds a global resource when caller provides a region', () => {
+        const res = makeGlobalResource();
+        registerResource(res);
+        // Caller is in eastasia, but globalres has no region
+        const found = getResource('globalres', 'staging', 'eastasia');
+        expect(found).toBeDefined();
+        expect(found!.isGlobalResource).toBe(true);
+    });
+
+    test('finds a global resource when caller provides a different region', () => {
+        const res = makeGlobalResource();
+        registerResource(res);
+        const found = getResource('globalres', 'staging', 'koreacentral');
+        expect(found).toBeDefined();
+    });
+
+    test('still finds a global resource by exact key (no region supplied)', () => {
+        const res = makeGlobalResource();
+        registerResource(res);
+        const found = getResource('globalres', 'staging');
+        expect(found).toBeDefined();
+    });
+
+    test('does NOT return a non-global resource via region-less fallback', () => {
+        // A regular resource registered without region should NOT match
+        // a caller that passes a region, unless it is marked as global.
+        const res: Resource = {
+            name: 'normalres',
+            ring: 'staging',
+            region: undefined,
+            type: 'NormalType',
+            isGlobalResource: false,
+            dependencies: [],
+            config: {},
+            exports: {},
+        };
+        registerResource(res);
+        // Exact key (no region) still works
+        expect(getResource('normalres', 'staging')).toBeDefined();
+        // With region → should NOT fall back to non-global
+        expect(getResource('normalres', 'staging', 'eastasia')).toBeUndefined();
+    });
+
+    test('resolveConfig resolves a dep on a global resource from a regional resource', async () => {
+        const mockGetter: ProprietyGetter = {
+            name: 'dnsNameGetter',
+            dependencies: [],
+            get: vi.fn().mockResolvedValue([{ command: 'echo', args: ['chuang.staging.example.com'] }] as Command[]),
+        };
+        registerProprietyGetter(mockGetter);
+
+        // Register a global DNS-zone-like resource (no region)
+        const globalRes = makeGlobalResource({
+            name: 'chuangdns',
+            exports: { domainName: { getter: mockGetter, args: {} } },
+        });
+        registerResource(globalRes);
+
+        // A regional container-app resource that depends on the global resource
+        const caResource = makeResource({
+            ring: 'staging',
+            region: 'eastasia',
+            dependencies: [{ resource: 'chuangdns', isHardDependency: false }],
+            config: {
+                dnsZone: makeParamValue([{ type: 'dep', resource: 'chuangdns', export: 'domainName' }]),
+            },
+        });
+
+        const { resource: resolved, captureCommands } = await resolveConfig(caResource);
+        expect((resolved.config as any).dnsZone).toBe('$MERLIN_CHUANGDNS_DOMAINNAME');
+        expect(captureCommands).toHaveLength(1);
+        expect(captureCommands[0].envCapture).toBe('MERLIN_CHUANGDNS_DOMAINNAME');
     });
 });

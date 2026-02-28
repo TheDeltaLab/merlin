@@ -10,6 +10,13 @@ export abstract class AzureResourceRender implements Render {
     abstract supportConnectorInResourceName: boolean;
 
     /**
+     * Whether this resource type is a global (region-agnostic) resource.
+     * Subclasses that represent global resources (e.g. DNS Zones) should override this to true.
+     * Defaults to false.
+     */
+    isGlobalResource: boolean = false;
+
+    /**
      * Outer render method (Template Method pattern).
      * Resolves all ${ } parameter expressions in resource.config into shell
      * variable references, collects the capture commands (envCapture set),

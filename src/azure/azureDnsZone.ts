@@ -32,6 +32,9 @@ export class AzureDnsZoneRender extends AzureResourceRender {
 
     supportConnectorInResourceName: boolean = true;
 
+    /** DNS Zones are global Azure resources — region is irrelevant for lookup. */
+    override isGlobalResource = true;
+
     /**
      * Returns the actual DNS zone name passed to Azure CLI --name.
      * Format: {dnsName}.{parentName}  e.g. "chuangdns.thebrainly.dev"

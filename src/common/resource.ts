@@ -94,6 +94,13 @@ export interface Resource<Schema extends ResourceSchema = ResourceSchema> {
     region?: Region;
 
     /**
+     * Whether this resource is global (region-agnostic), e.g. Azure DNS Zones.
+     * Set automatically from the Render implementation at registration time.
+     * When true, dependency lookups for this resource ignore the caller's region.
+     */
+    isGlobalResource?: boolean;
+
+    /**
      * How to be added as dependency of another resource
      *
      */
@@ -161,6 +168,14 @@ export function commandToString(cmd: Command): string {
 
 export interface Render {
     render(resource: Resource): Promise<Command[]>;
+
+    /**
+     * Whether this resource type is a global (region-agnostic) resource,
+     * e.g. Azure DNS Zones. When true, resources of this type are registered
+     * without a region, and dependency lookups ignore the caller's region.
+     * Defaults to false.
+     */
+    isGlobalResource?: boolean;
 }
 
 

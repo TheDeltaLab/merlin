@@ -2,7 +2,7 @@
  * Resource registry for runtime resource lookup
  */
 
-import { Resource } from './resource.js';
+import { Resource, getRender } from './resource.js';
 
 /**
  * Global resource registry
@@ -10,9 +10,21 @@ import { Resource } from './resource.js';
 const RESOURCE_REGISTRY = new Map<string, Resource>();
 
 /**
- * Registers a resource for runtime lookup
+ * Registers a resource for runtime lookup.
+ * Reads isGlobalResource from the corresponding Render implementation and
+ * stamps it onto the resource before storing, so lookup logic can rely on it.
  */
 export function registerResource(resource: Resource): void {
+    // Stamp isGlobalResource from the Render implementation onto the resource
+    try {
+        const render = getRender(resource.type);
+        if (render.isGlobalResource) {
+            resource = { ...resource, isGlobalResource: true };
+        }
+    } catch {
+        // Render not found — leave isGlobalResource as-is (undefined / false)
+    }
+
     const key = makeResourceKey(resource.name, resource.ring, resource.region);
 
     if (RESOURCE_REGISTRY.has(key)) {
@@ -23,15 +35,28 @@ export function registerResource(resource: Resource): void {
 }
 
 /**
- * Gets a resource by name, ring, and optional region
+ * Gets a resource by name, ring, and optional region.
+ * If the resource is registered as a global resource (isGlobalResource = true),
+ * the region is ignored and the lookup falls back to the ring-only key.
  */
 export function getResource(
     name: string,
     ring: string,
     region?: string
 ): Resource | undefined {
-    const key = makeResourceKey(name, ring, region);
-    return RESOURCE_REGISTRY.get(key);
+    // First try exact match (with region)
+    const exactKey = makeResourceKey(name, ring, region);
+    const exact = RESOURCE_REGISTRY.get(exactKey);
+    if (exact) return exact;
+
+    // If region was provided, also try the global (region-less) key
+    if (region) {
+        const globalKey = makeResourceKey(name, ring, undefined);
+        const global = RESOURCE_REGISTRY.get(globalKey);
+        if (global?.isGlobalResource) return global;
+    }
+
+    return undefined;
 }
 
 /**

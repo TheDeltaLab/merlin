@@ -1,0 +1,23 @@
+name: alluneedacenv
+type: AzureContainerAppEnvironment
+project: merlintest
+ring:
+  - staging
+  - test
+region:
+  - eastasia
+  - koreacentral
+
+dependencies: 
+  - resource: alluneedlaw
+    isHardDependency: true
+
+defaultConfig:
+  logsWorkspaceId: ${ alluneedlaw.customerId }
+  logsWorkspaceKey: ${ alluneedlaw.sharedKey }
+  tags:
+    merlin: "true"
+    env: ${ this.ring }
+
+exports:
+  name: AzureResourceName

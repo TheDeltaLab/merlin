@@ -1,5 +1,6 @@
 import { Command, Dependency, ProprietyGetter, Resource, getRender } from "../common/resource.js";
 import { AzureResourceRender } from "./render.js";
+import { AzureDnsZoneRender, AzureDnsZoneResource } from "./azureDnsZone.js";
 
 /**
  * ProprietyGetter for Azure Resource Managed Identity,
@@ -137,3 +138,22 @@ export class AzureLogAnalyticsWorkspaceSharedKeyGetter implements ProprietyGette
     }
 }
 
+/**
+ * ProprietyGetter for Azure DNS Zone full domain name.
+ * Returns the complete DNS zone name (e.g. "chuang.staging.thebrainly.dev")
+ * by combining dnsName and parentName from the resource config.
+ */
+export class AzureDnsZoneNameGetter implements ProprietyGetter {
+    name: string = 'AzureDnsZoneName';
+
+    dependencies: Dependency[] = [];
+
+    async get(resource: Resource, _args: Record<string, string>): Promise<Command[]> {
+        const render = getRender(resource.type) as AzureDnsZoneRender;
+        const dnsZoneName = render.getDnsZoneName(resource as AzureDnsZoneResource);
+        return [{
+            command: 'echo',
+            args: [dnsZoneName]
+        }];
+    }
+}

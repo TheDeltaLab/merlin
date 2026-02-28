@@ -1,0 +1,83 @@
+name: alluneedaca
+type: AzureContainerApp
+project: merlintest
+ring:
+  - staging
+  - test
+region:
+  - eastasia
+  - koreacentral
+
+authProvider:
+  name: AzureEntraID
+
+dependencies:
+  - resource: alluneedacr
+    isHardDependency: true
+  - resource: alluneedacenv
+    isHardDependency: true
+  - resource: chuangdns
+    isHardDependency: false
+
+defaultConfig:
+  # ── Container / Image ─────────────────────────────────────────────
+  image: ${ alluneedacr.server }/alluneed:latest
+  containerName: alluneed
+  cpu: 4
+  memory: 8.0Gi
+  envVars:
+    - APP_ENV=${ this.ring }
+    - MODEL_BLOB_ACCOUNT=chuangdevstorage
+    - MODEL_BLOB_CONTAINER=speaker-embedding-models
+    - MODEL_BLOB_FOLDER=
+    - MODEL_CACHE_FOLDER=.model_cache
+    - WAV_CACHE_FOLDER=.wav_cache
+    - PROJECT_NAME=alluneed
+    - DEBUG_MODE=False
+    - LOG_LEVEL=INFO
+
+
+  # ── Ingress (CREATE ONLY) ──────────────────────────────────────────
+  ingress: external
+  targetPort: 8080
+  transport: auto
+  allowInsecure: false
+
+  # ── Scaling ───────────────────────────────────────────────────────
+  minReplicas: 1
+  maxReplicas: 3
+
+  # ── Revision ──────────────────────────────────────────────────────
+  revisionsMode: single
+
+  # ── Registry ──────────────────────────────────────────────────────
+  registryServer: ${ alluneedacr.server }
+  registryIdentity: system
+
+  # ── Managed Identity (CREATE ONLY) ────────────────────────────────
+  systemAssigned: true
+
+  # ── Environment (CREATE ONLY) ─────────────────────────────────────
+  environment: ${ alluneedacenv.name }
+
+  # ── Misc ──────────────────────────────────────────────────────────
+  noWait: false
+
+  bindDnsZone:
+      dnsZone: ${ chuangdns.cdomainName }
+      subDomain: alluneed.${ this.region }.${ this.ring }
+    
+  tags:
+    merlin: "true"
+    env: ${ this.ring }
+
+specificConfig:
+  - ring: staging
+    maxReplicas: 5
+  - ring: test
+    maxReplicas: 2
+
+
+exports:
+  identity: AzureResourceManagedIdentity
+  url: AzureContainerAppFqdn
