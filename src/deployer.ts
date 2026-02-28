@@ -174,7 +174,11 @@ export class Deployer {
         .map(t => t.trim())
         .filter(Boolean);
       return existingTags.includes(tag);
-    } catch {
+    } catch (error) {
+      console.warn(
+        `Failed to check existing ACR image tag for ${registryName}/${repository}:${tag}. Continuing with push.`,
+        error
+      );
       return false;
     }
   }

@@ -522,7 +522,7 @@ describe('Deployer', () => {
           stdout: 'latest',
           stderr: '',
           exitCode: 0
-        } as any);
+        } as Awaited<ReturnType<typeof execa>>);
 
       vi.spyOn(registry, 'getAllResources').mockReturnValue(mockResources);
       vi.spyOn(resource, 'getRender').mockReturnValue(mockRender);
@@ -575,12 +575,12 @@ describe('Deployer', () => {
           stdout: 'v1.0',
           stderr: '',
           exitCode: 0
-        } as any)
+        } as Awaited<ReturnType<typeof execa>>)
         .mockResolvedValueOnce({
           stdout: '',
           stderr: '',
           exitCode: 0
-        } as any);
+        } as Awaited<ReturnType<typeof execa>>);
 
       vi.spyOn(registry, 'getAllResources').mockReturnValue(mockResources);
       vi.spyOn(resource, 'getRender').mockReturnValue(mockRender);
