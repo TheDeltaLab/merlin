@@ -7,13 +7,6 @@ import { Deployer } from '../deployer.js';
 import * as registry from '../common/registry.js';
 import * as resource from '../common/resource.js';
 import type { Resource, Render, Command } from '../common/resource.js';
-import { execa } from 'execa';
-
-vi.mock('execa', () => ({
-  execa: vi.fn(),
-}));
-
-const mockExeca = vi.mocked(execa);
 
 describe('Deployer', () => {
   let deployer: Deployer;
@@ -485,119 +478,6 @@ describe('Deployer', () => {
         expect.stringContaining('Generated deployment commands (dry-run mode)')
       );
       expect(consoleLogSpy).toHaveBeenCalledWith('az storage account create --name teststorage');
-    });
-
-    it('should skip docker push when ACR image tag already exists', async () => {
-      const mockResources: Resource[] = [
-        {
-          name: 'test-acr',
-          type: 'AzureContainerRegistry',
-          ring: 'test',
-          region: 'eastus',
-          project: 'testproject',
-          authProvider: { provider: {} as any, args: {} },
-          dependencies: [],
-          config: {},
-          exports: {}
-        }
-      ];
-
-      const mockCommands: Command[] = [
-        {
-          command: 'docker',
-          args: ['push', 'myacr.azurecr.io/nginx:latest'],
-          skipIfAcrImageExists: {
-            registryName: 'myacr',
-            repository: 'nginx',
-            tag: 'latest'
-          }
-        }
-      ];
-
-      const mockRender: Render = {
-        render: vi.fn().mockResolvedValue(mockCommands)
-      };
-
-      mockExeca.mockResolvedValueOnce({
-          stdout: 'latest',
-          stderr: '',
-          exitCode: 0
-        } as Awaited<ReturnType<typeof execa>>);
-
-      vi.spyOn(registry, 'getAllResources').mockReturnValue(mockResources);
-      vi.spyOn(resource, 'getRender').mockReturnValue(mockRender);
-
-      await deployer.deploy({ execute: true });
-
-      expect(mockExeca).toHaveBeenCalledTimes(1);
-      expect(mockExeca).toHaveBeenCalledWith(
-        'az',
-        ['acr', 'repository', 'show-tags', '--name', 'myacr', '--repository', 'nginx', '-o', 'tsv'],
-        { reject: false }
-      );
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('(skipped: image already exists in ACR)')
-      );
-    });
-
-    it('should execute docker push when ACR image tag does not exist', async () => {
-      const mockResources: Resource[] = [
-        {
-          name: 'test-acr',
-          type: 'AzureContainerRegistry',
-          ring: 'test',
-          region: 'eastus',
-          project: 'testproject',
-          authProvider: { provider: {} as any, args: {} },
-          dependencies: [],
-          config: {},
-          exports: {}
-        }
-      ];
-
-      const mockCommands: Command[] = [
-        {
-          command: 'docker',
-          args: ['push', 'myacr.azurecr.io/nginx:latest'],
-          skipIfAcrImageExists: {
-            registryName: 'myacr',
-            repository: 'nginx',
-            tag: 'latest'
-          }
-        }
-      ];
-
-      const mockRender: Render = {
-        render: vi.fn().mockResolvedValue(mockCommands)
-      };
-
-      mockExeca.mockResolvedValueOnce({
-          stdout: 'v1.0',
-          stderr: '',
-          exitCode: 0
-        } as Awaited<ReturnType<typeof execa>>)
-        .mockResolvedValueOnce({
-          stdout: '',
-          stderr: '',
-          exitCode: 0
-        } as Awaited<ReturnType<typeof execa>>);
-
-      vi.spyOn(registry, 'getAllResources').mockReturnValue(mockResources);
-      vi.spyOn(resource, 'getRender').mockReturnValue(mockRender);
-
-      await deployer.deploy({ execute: true });
-
-      expect(mockExeca).toHaveBeenNthCalledWith(
-        1,
-        'az',
-        ['acr', 'repository', 'show-tags', '--name', 'myacr', '--repository', 'nginx', '-o', 'tsv'],
-        { reject: false }
-      );
-      expect(mockExeca).toHaveBeenNthCalledWith(
-        2,
-        'docker',
-        ['push', 'myacr.azurecr.io/nginx:latest']
-      );
     });
   });
 });

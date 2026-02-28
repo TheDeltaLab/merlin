@@ -64,6 +64,8 @@ export interface AzureContainerRegistryResource extends AzureResource<AzureConta
 export class AzureContainerRegistryRender extends AzureResourceRender {
 
     supportConnectorInResourceName: boolean = false;
+    private static readonly CONDITIONAL_PUSH_SCRIPT =
+        'if az acr repository show-tags --name "$1" --repository "$2" -o tsv | grep -Fxq "$3"; then echo "Skipping push for $4 because tag already exists in ACR"; else docker push "$4"; fi';
 
     async renderImpl(resource: Resource): Promise<Command[]> {
         if (!AzureContainerRegistryRender.isAzureContainerRegistryResource(resource)) {
@@ -297,15 +299,7 @@ export class AzureContainerRegistryRender extends AzureResourceRender {
                         command: 'docker',
                         args: ['tag', image.source, targetImage]
                     });
-                    commands.push({
-                        command: 'docker',
-                        args: ['push', targetImage],
-                        skipIfAcrImageExists: {
-                            registryName,
-                            repository: image.name,
-                            tag
-                        }
-                    });
+                    commands.push(this.renderConditionalPushCommand(registryName, image.name, tag, targetImage));
                 }
             } else if (image.generateScript) {
                 // 1. Execute the build script (script writes built image name to MERLIN_ACR_IMAGE env var)
@@ -321,15 +315,7 @@ export class AzureContainerRegistryRender extends AzureResourceRender {
                         command: 'docker',
                         args: ['tag', '$MERLIN_ACR_IMAGE', targetImage]
                     });
-                    commands.push({
-                        command: 'docker',
-                        args: ['push', targetImage],
-                        skipIfAcrImageExists: {
-                            registryName,
-                            repository: image.name,
-                            tag
-                        }
-                    });
+                    commands.push(this.renderConditionalPushCommand(registryName, image.name, tag, targetImage));
                 }
             }
         }
@@ -339,5 +325,25 @@ export class AzureContainerRegistryRender extends AzureResourceRender {
 
     override getShortResourceTypeName(): string {
         return 'acr';
+    }
+
+    private renderConditionalPushCommand(
+        registryName: string,
+        repository: string,
+        tag: string,
+        targetImage: string
+    ): Command {
+        return {
+            command: 'bash',
+            args: [
+                '-c',
+                AzureContainerRegistryRender.CONDITIONAL_PUSH_SCRIPT,
+                'merlin-acr-push-check',
+                registryName,
+                repository,
+                tag,
+                targetImage
+            ]
+        };
     }
 }

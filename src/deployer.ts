@@ -158,31 +158,6 @@ export class Deployer {
     return cmdStr;
   }
 
-  private async shouldSkipCommand(command: Command): Promise<boolean> {
-    if (!command.skipIfAcrImageExists) return false;
-
-    const { registryName, repository, tag } = command.skipIfAcrImageExists;
-    try {
-      const { stdout, exitCode } = await execa(
-        'az',
-        ['acr', 'repository', 'show-tags', '--name', registryName, '--repository', repository, '-o', 'tsv'],
-        { reject: false }
-      );
-      if (exitCode !== 0) return false;
-      const existingTags = stdout
-        .split('\n')
-        .map(t => t.trim())
-        .filter(Boolean);
-      return existingTags.includes(tag);
-    } catch (error) {
-      console.warn(
-        `Failed to check existing ACR image tag for ${registryName}/${repository}:${tag}. Continuing with push.`,
-        error
-      );
-      return false;
-    }
-  }
-
   /**
    * Execute commands sequentially with error handling.
    *
@@ -203,11 +178,6 @@ export class Deployer {
 
       for (const command of commands) {
         const commandStr = this.commandToShellLine(command);
-        if (await this.shouldSkipCommand(command)) {
-          console.log(`> ${commandStr} (skipped: image already exists in ACR)`);
-          continue;
-        }
-
         console.log(`> ${commandStr}`);
 
         try {
