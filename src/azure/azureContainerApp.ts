@@ -1,5 +1,5 @@
 import { AzureResource } from './resource.js';
-import { Resource, ResourceSchema, Command } from '../common/resource.js';
+import { Resource, ResourceSchema, Command, RenderContext } from '../common/resource.js';
 import { AzureResourceRender } from './render.js';
 import { execSync } from 'child_process';
 
@@ -144,7 +144,7 @@ export class AzureContainerAppRender extends AzureResourceRender {
         return 'aca';
     }
 
-    async renderImpl(resource: Resource): Promise<Command[]> {
+    async renderImpl(resource: Resource, context?: RenderContext): Promise<Command[]> {
         if (!AzureContainerAppRender.isAzureContainerAppResource(resource)) {
             throw new Error(`Resource ${resource.name} is not an Azure Container App resource`);
         }
@@ -176,7 +176,7 @@ export class AzureContainerAppRender extends AzureResourceRender {
         const ret: Command[] = [];
 
         // Ensure resource group exists first
-        const rgCommands = await this.ensureResourceGroupCommands(resource);
+        const rgCommands = await this.ensureResourceGroupCommands(resource, context);
         ret.push(...rgCommands);
 
         // Check if container app already exists

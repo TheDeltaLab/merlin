@@ -561,9 +561,9 @@ describe('Transformer - Parameter Interpolation', () => {
         test('wraps parameterized string in defaultConfig as ParamValue', () => {
             const resource = createResourceYAML({
                 defaultConfig: {
-                    image: '${ acr.server }/myapp:latest'
+                    image: '${ AzureContainerRegistry.acr.server }/myapp:latest'
                 },
-                dependencies: [{ resource: 'acr', isHardDependency: true }],
+                dependencies: [{ resource: 'AzureContainerRegistry.acr', isHardDependency: true }],
                 specificConfig: []
             });
 
@@ -642,10 +642,10 @@ describe('Transformer - Parameter Interpolation', () => {
             const resource = createResourceYAML({
                 ring: ['staging', 'test'],
                 defaultConfig: {
-                    image: '${ acr.server }/myapp:latest',
+                    image: '${ AzureContainerRegistry.acr.server }/myapp:latest',
                     cpu: 0.5
                 },
-                dependencies: [{ resource: 'acr', isHardDependency: true }],
+                dependencies: [{ resource: 'AzureContainerRegistry.acr', isHardDependency: true }],
                 specificConfig: [
                     { ring: 'staging', cpu: 1 }
                 ]

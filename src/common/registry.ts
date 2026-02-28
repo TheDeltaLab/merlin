@@ -25,7 +25,7 @@ export function registerResource(resource: Resource): void {
         // Render not found — leave isGlobalResource as-is (undefined / false)
     }
 
-    const key = makeResourceKey(resource.name, resource.ring, resource.region);
+    const key = makeResourceKey(resource.type, resource.name, resource.ring, resource.region);
 
     if (RESOURCE_REGISTRY.has(key)) {
         throw new Error(`Duplicate resource: ${key}`);
@@ -35,23 +35,24 @@ export function registerResource(resource: Resource): void {
 }
 
 /**
- * Gets a resource by name, ring, and optional region.
+ * Gets a resource by type, name, ring, and optional region.
  * If the resource is registered as a global resource (isGlobalResource = true),
  * the region is ignored and the lookup falls back to the ring-only key.
  */
 export function getResource(
+    type: string,
     name: string,
     ring: string,
     region?: string
 ): Resource | undefined {
     // First try exact match (with region)
-    const exactKey = makeResourceKey(name, ring, region);
+    const exactKey = makeResourceKey(type, name, ring, region);
     const exact = RESOURCE_REGISTRY.get(exactKey);
     if (exact) return exact;
 
     // If region was provided, also try the global (region-less) key
     if (region) {
-        const globalKey = makeResourceKey(name, ring, undefined);
+        const globalKey = makeResourceKey(type, name, ring, undefined);
         const global = RESOURCE_REGISTRY.get(globalKey);
         if (global?.isGlobalResource) return global;
     }
@@ -74,8 +75,9 @@ export function clearRegistry(): void {
 }
 
 /**
- * Creates a unique key for a resource
+ * Creates a unique key for a resource.
+ * Format: type:name:ring[:region]
  */
-function makeResourceKey(name: string, ring: string, region?: string): string {
-    return region ? `${name}:${ring}:${region}` : `${name}:${ring}`;
+export function makeResourceKey(type: string, name: string, ring: string, region?: string): string {
+    return region ? `${type}:${name}:${ring}:${region}` : `${type}:${name}:${ring}`;
 }

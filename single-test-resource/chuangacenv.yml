@@ -8,13 +8,13 @@ region:
   - eastasia
   - koreacentral
 
-dependencies: 
-  - resource: chuanglaw
+dependencies:
+  - resource: AzureLogAnalyticsWorkspace.chuanglaw
     isHardDependency: true
 
 defaultConfig:
-  logsWorkspaceId: ${ chuanglaw.customerId }
-  logsWorkspaceKey: ${ chuanglaw.sharedKey }
+  logsWorkspaceId: ${ AzureLogAnalyticsWorkspace.chuanglaw.customerId }
+  logsWorkspaceKey: ${ AzureLogAnalyticsWorkspace.chuanglaw.sharedKey }
   tags:
     merlin: "true"
     env: ${ this.ring }

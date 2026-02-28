@@ -32,7 +32,7 @@ describe('Generator', () => {
                 const resources = [createExpandedResource({ name: 'myres', ring: 'test' })];
                 const result = generate('/test/source.yml', resources);
 
-                expect(result.content).toContain('export const myres_test: Resource');
+                expect(result.content).toContain('export const TestType_myres_test: Resource');
             });
 
             test('should generate Resource objects', () => {
@@ -49,7 +49,7 @@ describe('Generator', () => {
                 const resources = [createExpandedResource({ name: 'testres', ring: 'staging' })];
                 const result = generate('/test/source.yml', resources);
 
-                expect(result.content).toContain('registerResource(testres_staging)');
+                expect(result.content).toContain('registerResource(TestType_testres_staging)');
             });
 
             test('should add source comment', () => {
@@ -69,8 +69,8 @@ describe('Generator', () => {
                 });
                 const result = generate('/test/a.yml', [resource]);
 
-                expect(result.content).toContain('myres_staging');
-                expect(result.resources).toContain('myres_staging');
+                expect(result.content).toContain('TestType_myres_staging');
+                expect(result.resources).toContain('TestType_myres_staging');
             });
 
             test('should name resource with ring and region', () => {
@@ -81,8 +81,8 @@ describe('Generator', () => {
                 });
                 const result = generate('/test/a.yml', [resource]);
 
-                expect(result.content).toContain('myres_staging_eastus');
-                expect(result.resources).toContain('myres_staging_eastus');
+                expect(result.content).toContain('TestType_myres_staging_eastus');
+                expect(result.resources).toContain('TestType_myres_staging_eastus');
             });
 
             test('should handle resource names with hyphens', () => {
@@ -92,7 +92,7 @@ describe('Generator', () => {
                 });
                 const result = generate('/test/a.yml', [resource]);
 
-                expect(result.content).toContain('my-resource_test');
+                expect(result.content).toContain('TestType_my-resource_test');
             });
         });
 
@@ -195,9 +195,9 @@ describe('Generator', () => {
                 ];
                 const result = generate('/test/source.yml', resources);
 
-                expect(result.content).toContain('res1_test');
-                expect(result.content).toContain('res1_staging');
-                expect(result.content).toContain('res1_production');
+                expect(result.content).toContain('TestType_res1_test');
+                expect(result.content).toContain('TestType_res1_staging');
+                expect(result.content).toContain('TestType_res1_production');
                 expect(result.resources).toHaveLength(3);
             });
 
@@ -208,8 +208,8 @@ describe('Generator', () => {
                 ];
                 const result = generate('/test/source.yml', resources);
 
-                expect(result.content).toContain('registerResource(res_test_eastus)');
-                expect(result.content).toContain('registerResource(res_test_westus)');
+                expect(result.content).toContain('registerResource(TestType_res_test_eastus)');
+                expect(result.content).toContain('registerResource(TestType_res_test_westus)');
             });
         });
     });

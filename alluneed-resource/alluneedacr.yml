@@ -1,4 +1,4 @@
-name: alluneedacr
+name: alluneed
 type: AzureContainerRegistry
 project: merlintest
 ring:

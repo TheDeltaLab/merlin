@@ -39,7 +39,8 @@ export interface ResourceSchema {
  */
 export interface Dependency {
     /**
-     * The resource name this dependency depends on
+     * The resource this dependency depends on, in "Type.name" format
+     * e.g., "AzureContainerRegistry.chuangacr"
      */
     resource: string;
 
@@ -73,7 +74,8 @@ export interface Resource<Schema extends ResourceSchema = ResourceSchema> {
     project?: string;
 
     /**
-     * The parent resource, e.g. a container app needs azure container environment
+     * The parent resource, in "Type.name" format
+     * e.g., "AzureContainerAppEnvironment.chuangacenv"
      */
     parent?: string;
 
@@ -159,6 +161,18 @@ export interface Command {
     envCapture?: string;
 }
 
+/**
+ * Context passed from the deployer to render implementations.
+ * Allows the deployer to control certain render behaviors.
+ */
+export interface RenderContext {
+    /**
+     * When true, the render should skip resource group creation/checking
+     * because resource groups are managed centrally by the deployer.
+     */
+    skipResourceGroup?: boolean;
+}
+
 export function commandToString(cmd: Command): string {
     if (!cmd.args || cmd.args.length === 0) {
         return cmd.command;
@@ -167,7 +181,13 @@ export function commandToString(cmd: Command): string {
 }
 
 export interface Render {
-    render(resource: Resource): Promise<Command[]>;
+    render(resource: Resource, context?: RenderContext): Promise<Command[]>;
+
+    /**
+     * Returns an abbreviated resource type name used in shell variable names
+     * and resource naming (e.g. 'aca', 'acenv', 'acr').
+     */
+    getShortResourceTypeName(): string;
 
     /**
      * Whether this resource type is a global (region-agnostic) resource,

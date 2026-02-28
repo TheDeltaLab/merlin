@@ -75,9 +75,9 @@ import { Resource, getAuthProvider, getProprietyGetter, registerResource } from 
  * Generates the resource variable name
  */
 function generateResourceName(resource: ExpandedResource): string {
-    // With region: name_ring_region
-    // Without region: name_ring
-    const parts = [resource.name, resource.ring];
+    // With region: type_name_ring_region
+    // Without region: type_name_ring
+    const parts = [resource.type, resource.name, resource.ring];
     if (resource.region) {
         parts.push(resource.region);
     }

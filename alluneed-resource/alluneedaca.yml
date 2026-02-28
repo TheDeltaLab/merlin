@@ -1,4 +1,4 @@
-name: alluneedaca
+name: alluneed
 type: AzureContainerApp
 project: merlintest
 ring:
@@ -12,16 +12,16 @@ authProvider:
   name: AzureEntraID
 
 dependencies:
-  - resource: alluneedacr
+  - resource: AzureContainerRegistry.alluneed
     isHardDependency: true
-  - resource: alluneedacenv
+  - resource: AzureContainerAppEnvironment.alluneed
     isHardDependency: true
-  - resource: chuangdns
+  - resource: AzureDnsZone.chuangdns
     isHardDependency: false
 
 defaultConfig:
   # ── Container / Image ─────────────────────────────────────────────
-  image: ${ alluneedacr.server }/alluneed:latest
+  image: ${ AzureContainerRegistry.alluneed.server }/alluneed:latest
   containerName: alluneed
   cpu: 4
   memory: 8.0Gi
@@ -51,20 +51,20 @@ defaultConfig:
   revisionsMode: single
 
   # ── Registry ──────────────────────────────────────────────────────
-  registryServer: ${ alluneedacr.server }
+  registryServer: ${ AzureContainerRegistry.alluneed.server }
   registryIdentity: system
 
   # ── Managed Identity (CREATE ONLY) ────────────────────────────────
   systemAssigned: true
 
   # ── Environment (CREATE ONLY) ─────────────────────────────────────
-  environment: ${ alluneedacenv.name }
+  environment: ${ AzureContainerAppEnvironment.alluneed.name }
 
   # ── Misc ──────────────────────────────────────────────────────────
   noWait: false
 
   bindDnsZone:
-      dnsZone: ${ chuangdns.cdomainName }
+      dnsZone: ${ AzureDnsZone.chuangdns.domainName }
       subDomain: alluneed.${ this.region }.${ this.ring }
     
   tags:

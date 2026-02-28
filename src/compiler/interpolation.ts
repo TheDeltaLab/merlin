@@ -16,9 +16,9 @@ const PARAM_PATTERN = /\$\{\s*([^}]+?)\s*\}/g;
  * (caller should keep the original string unchanged).
  *
  * Supported expression forms:
- *   ${ this.ring }            → { type: 'self', field: 'ring' }
- *   ${ this.region }          → { type: 'self', field: 'region' }
- *   ${ resourceName.export }  → { type: 'dep', resource: 'resourceName', export: 'export' }
+ *   ${ this.ring }                → { type: 'self', field: 'ring' }
+ *   ${ this.region }              → { type: 'self', field: 'region' }
+ *   ${ Type.name.export }         → { type: 'dep', resourceType: 'Type', resource: 'name', export: 'export' }
  *
  * @throws Error for unrecognized expression syntax
  */
@@ -62,6 +62,7 @@ export function parseParamString(value: string): ParamValue | null {
 
 /**
  * Parse a single expression inside ${ }
+ * Supports: this.ring, this.region, Type.name.exportKey
  * @throws Error for unrecognized syntax
  */
 function parseExpression(expr: string): ParamSegment {
@@ -75,19 +76,28 @@ function parseExpression(expr: string): ParamSegment {
         return { type: 'self', field: 'region' };
     }
 
-    // resourceName.exportKey
-    const dotIndex = expr.indexOf('.');
-    if (dotIndex > 0 && dotIndex < expr.length - 1) {
-        const resource = expr.slice(0, dotIndex).trim();
-        const exportKey = expr.slice(dotIndex + 1).trim();
-        if (resource && exportKey && !resource.includes(' ') && !exportKey.includes(' ')) {
-            return { type: 'dep', resource, export: exportKey };
+    // Type.name.exportKey — must have exactly two dots
+    const firstDot = expr.indexOf('.');
+    if (firstDot > 0) {
+        const secondDot = expr.indexOf('.', firstDot + 1);
+        if (secondDot > firstDot + 1 && secondDot < expr.length - 1) {
+            const resourceType = expr.slice(0, firstDot).trim();
+            const resource = expr.slice(firstDot + 1, secondDot).trim();
+            const exportKey = expr.slice(secondDot + 1).trim();
+            if (
+                resourceType && resource && exportKey &&
+                !resourceType.includes(' ') &&
+                !resource.includes(' ') &&
+                !exportKey.includes(' ')
+            ) {
+                return { type: 'dep', resourceType, resource, export: exportKey };
+            }
         }
     }
 
     throw new Error(
         `Invalid parameter expression: "\${ ${expr} }". ` +
-        `Expected "this.ring", "this.region", or "<resourceName>.<exportKey>".`
+        `Expected "this.ring", "this.region", or "<Type>.<name>.<exportKey>".`
     );
 }
 

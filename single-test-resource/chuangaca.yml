@@ -12,14 +12,14 @@ authProvider:
   name: AzureEntraID
 
 dependencies:
-  - resource: chuangacr
+  - resource: AzureContainerRegistry.chuangacr
     isHardDependency: true
-  - resource: chuangacenv
+  - resource: AzureContainerAppEnvironment.chuangacenv
     isHardDependency: true
 
 defaultConfig:
   # ── Container / Image ─────────────────────────────────────────────
-  image: ${ chuangacr.server }/chuangdemo:latest
+  image: ${ AzureContainerRegistry.chuangacr.server }/chuangdemo:latest
   containerName: chuangdemo
   cpu: 0.5
   memory: 1.0Gi
@@ -40,14 +40,14 @@ defaultConfig:
   revisionsMode: single
 
   # ── Registry ──────────────────────────────────────────────────────
-  registryServer: ${ chuangacr.server }
+  registryServer: ${ AzureContainerRegistry.chuangacr.server }
   registryIdentity: system
 
   # ── Managed Identity (CREATE ONLY) ────────────────────────────────
   systemAssigned: true
 
   # ── Environment (CREATE ONLY) ─────────────────────────────────────
-  environment: ${ chuangacenv.name }
+  environment: ${ AzureContainerAppEnvironment.chuangacenv.name }
 
   # ── Misc ──────────────────────────────────────────────────────────
   noWait: false

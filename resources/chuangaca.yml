@@ -12,20 +12,20 @@ authProvider:
   name: AzureEntraID
 
 dependencies:
-  - resource: chuangacr
+  - resource: AzureContainerRegistry.chuangacr
     isHardDependency: true
-  - resource: chuangabs
+  - resource: AzureBlobStorage.chuangabs
     isHardDependency: false
 
 defaultConfig:
   # ── Container / Image ─────────────────────────────────────────────
-  image: ${ chuangacr.server }/myapp:latest
+  image: ${ AzureContainerRegistry.chuangacr.server }/myapp:latest
   containerName: myapp
   cpu: 0.5
   memory: 1Gi
   envVars:
     - APP_ENV=${ this.ring }
-    - STORAGE_ACCOUNT=${ chuangabs.name }
+    - STORAGE_ACCOUNT=${ AzureBlobStorage.chuangabs.name }
 
   # ── Ingress (CREATE ONLY) ──────────────────────────────────────────
   ingress: external
@@ -41,7 +41,7 @@ defaultConfig:
   revisionsMode: single
 
   # ── Registry ──────────────────────────────────────────────────────
-  registryServer: ${ chuangacr.server }
+  registryServer: ${ AzureContainerRegistry.chuangacr.server }
   registryIdentity: system
 
   # ── Managed Identity (CREATE ONLY) ────────────────────────────────

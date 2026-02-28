@@ -15,6 +15,7 @@ interface CliOptions {
   region?: string;
   execute: boolean;
   outputFile?: string;
+  concurrency?: number;
 }
 
 /**
@@ -37,21 +38,28 @@ function parseArguments(): CliOptions {
       options.region = args[++i];
     } else if (arg === '--output' || arg === '-o') {
       options.outputFile = args[++i];
+    } else if (arg === '--concurrency' || arg === '-c') {
+      const val = parseInt(args[++i], 10);
+      if (!isNaN(val) && val > 0) {
+        options.concurrency = val;
+      }
     } else if (arg === '--help' || arg === '-h') {
       console.log(`
 Usage: node deploy.js [options]
 
 Options:
-  --execute, -e          Execute the deployment (default is dry-run)
-  --ring, -r <ring>      Target ring (test, staging, production)
-  --region <region>      Target region (eastus, westus, eastasia, koreacentral, koreasouth)
-  --output, -o <file>    Write generated commands to file
-  --help, -h             Show this help message
+  --execute, -e              Execute the deployment (default is dry-run)
+  --ring, -r <ring>          Target ring (test, staging, production)
+  --region <region>          Target region (eastus, westus, eastasia, koreacentral, koreasouth)
+  --output, -o <file>        Write generated commands to file
+  --concurrency, -c <n>      Max parallel resource deployments per level (default: 4)
+  --help, -h                 Show this help message
 
 Examples:
   node deploy.js                                  # Show all deployment commands
   node deploy.js --ring staging                   # Show commands for staging ring
   node deploy.js --execute --ring test            # Execute deployment for test ring
+  node deploy.js --execute --concurrency 2        # Execute with max 2 parallel deployments
   node deploy.js -o deploy.sh                     # Write commands to deploy.sh file
   node deploy.js --ring production -o prod.sh     # Write production commands to file
 `);

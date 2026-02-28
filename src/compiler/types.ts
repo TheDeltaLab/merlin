@@ -118,13 +118,13 @@ export interface GeneratedFile {
 /**
  * A single segment of a parameterized string value.
  *
- * A string like "${ chuangacr.server }/myapp:latest" is parsed into:
- *   [ { type: 'dep', resource: 'chuangacr', export: 'server' },
+ * A string like "${ AzureContainerRegistry.chuangacr.server }/myapp:latest" is parsed into:
+ *   [ { type: 'dep', resourceType: 'AzureContainerRegistry', resource: 'chuangacr', export: 'server' },
  *     { type: 'literal', value: '/myapp:latest' } ]
  */
 export type ParamSegment =
     | { type: 'literal'; value: string }
-    | { type: 'dep'; resource: string; export: string }   // ${ resourceName.exportKey }
+    | { type: 'dep'; resourceType: string; resource: string; export: string }   // ${ Type.name.exportKey }
     | { type: 'self'; field: 'ring' | 'region' };          // ${ this.ring } | ${ this.region }
 
 /**

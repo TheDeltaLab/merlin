@@ -64,50 +64,50 @@ describe('parseParamString', () => {
         });
     });
 
-    describe('${ resourceName.exportKey } expressions', () => {
-        test('parses ${ chuangacr.server } as dep segment', () => {
-            const result = parseParamString('${ chuangacr.server }');
+    describe('${ Type.resourceName.exportKey } expressions', () => {
+        test('parses ${ AzureContainerRegistry.chuangacr.server } as dep segment', () => {
+            const result = parseParamString('${ AzureContainerRegistry.chuangacr.server }');
             expect(result).not.toBeNull();
             expect(result!.segments).toHaveLength(1);
-            expect(result!.segments[0]).toEqual({ type: 'dep', resource: 'chuangacr', export: 'server' });
+            expect(result!.segments[0]).toEqual({ type: 'dep', resourceType: 'AzureContainerRegistry', resource: 'chuangacr', export: 'server' });
         });
 
-        test('parses dep expression with prefix', () => {
-            const result = parseParamString('${ chuangacr.server }/myapp:latest');
+        test('parses dep expression with suffix', () => {
+            const result = parseParamString('${ AzureContainerRegistry.chuangacr.server }/myapp:latest');
             expect(result).not.toBeNull();
             expect(result!.segments).toHaveLength(2);
-            expect(result!.segments[0]).toEqual({ type: 'dep', resource: 'chuangacr', export: 'server' });
+            expect(result!.segments[0]).toEqual({ type: 'dep', resourceType: 'AzureContainerRegistry', resource: 'chuangacr', export: 'server' });
             expect(result!.segments[1]).toEqual({ type: 'literal', value: '/myapp:latest' });
         });
 
         test('parses dep expression with prefix and suffix', () => {
-            const result = parseParamString('prefix/${ myresource.name }/suffix');
+            const result = parseParamString('prefix/${ Storage.myresource.name }/suffix');
             expect(result).not.toBeNull();
             expect(result!.segments).toHaveLength(3);
             expect(result!.segments[0]).toEqual({ type: 'literal', value: 'prefix/' });
-            expect(result!.segments[1]).toEqual({ type: 'dep', resource: 'myresource', export: 'name' });
+            expect(result!.segments[1]).toEqual({ type: 'dep', resourceType: 'Storage', resource: 'myresource', export: 'name' });
             expect(result!.segments[2]).toEqual({ type: 'literal', value: '/suffix' });
         });
     });
 
     describe('Multiple expressions', () => {
         test('parses two dep expressions', () => {
-            const result = parseParamString('${ a.x }/${ b.y }');
+            const result = parseParamString('${ TypeA.a.x }/${ TypeB.b.y }');
             expect(result).not.toBeNull();
             expect(result!.segments).toHaveLength(3);
-            expect(result!.segments[0]).toEqual({ type: 'dep', resource: 'a', export: 'x' });
+            expect(result!.segments[0]).toEqual({ type: 'dep', resourceType: 'TypeA', resource: 'a', export: 'x' });
             expect(result!.segments[1]).toEqual({ type: 'literal', value: '/' });
-            expect(result!.segments[2]).toEqual({ type: 'dep', resource: 'b', export: 'y' });
+            expect(result!.segments[2]).toEqual({ type: 'dep', resourceType: 'TypeB', resource: 'b', export: 'y' });
         });
 
         test('parses mixed self and dep expressions', () => {
-            const result = parseParamString('APP_ENV=${ this.ring }-${ myres.name }');
+            const result = parseParamString('APP_ENV=${ this.ring }-${ Registry.myres.name }');
             expect(result).not.toBeNull();
             expect(result!.segments).toHaveLength(4);
             expect(result!.segments[0]).toEqual({ type: 'literal', value: 'APP_ENV=' });
             expect(result!.segments[1]).toEqual({ type: 'self', field: 'ring' });
             expect(result!.segments[2]).toEqual({ type: 'literal', value: '-' });
-            expect(result!.segments[3]).toEqual({ type: 'dep', resource: 'myres', export: 'name' });
+            expect(result!.segments[3]).toEqual({ type: 'dep', resourceType: 'Registry', resource: 'myres', export: 'name' });
         });
     });
 
@@ -149,12 +149,32 @@ describe('parseParamString', () => {
             );
         });
 
-        test('${ this.name } is treated as dep reference (this is the resource name)', () => {
-            // "this" as resource name is unusual but technically valid syntax-wise.
-            // The validator will flag it as undeclared dependency at semantic validation stage.
-            const result = parseParamString('${ this.name }');
-            expect(result).not.toBeNull();
-            expect(result!.segments[0]).toEqual({ type: 'dep', resource: 'this', export: 'name' });
+        test('throws for old format with single dot (e.g., ${ name.export })', () => {
+            // Old format ${ name.export } only has one dot, which is no longer valid.
+            // The new format requires two dots: ${ Type.name.export }
+            expect(() => parseParamString('${ chuangacr.server }')).toThrow(
+                'Invalid parameter expression'
+            );
+        });
+
+        test('throws for old format with single dot embedded in string', () => {
+            expect(() => parseParamString('prefix/${ myresource.name }/suffix')).toThrow(
+                'Invalid parameter expression'
+            );
+        });
+
+        test('error message suggests new Type.name.exportKey format', () => {
+            expect(() => parseParamString('${ chuangacr.server }')).toThrow(
+                '<Type>.<name>.<exportKey>'
+            );
+        });
+
+        test('${ this.name } with single dot is not a valid dep or self reference', () => {
+            // "this.name" has only one dot and is neither "this.ring" nor "this.region",
+            // so it is treated as an invalid single-dot expression.
+            expect(() => parseParamString('${ this.name }')).toThrow(
+                'Invalid parameter expression'
+            );
         });
     });
 });
@@ -162,7 +182,7 @@ describe('parseParamString', () => {
 describe('parseConfigParams', () => {
     describe('String values', () => {
         test('wraps parameterized string in ParamValue', () => {
-            const config = { image: '${ acr.server }/myapp:latest' };
+            const config = { image: '${ AzureContainerRegistry.acr.server }/myapp:latest' };
             const result = parseConfigParams(config);
             expect(isParamValue(result.image)).toBe(true);
         });
@@ -207,7 +227,7 @@ describe('parseConfigParams', () => {
             const config = {
                 envVars: [
                     'APP_ENV=${ this.ring }',
-                    'STORAGE_ACCOUNT=${ myabs.name }'
+                    'STORAGE_ACCOUNT=${ AzureBlobStorage.myabs.name }'
                 ]
             };
             const result = parseConfigParams(config);
@@ -235,7 +255,7 @@ describe('parseConfigParams', () => {
         test('processes parameterized strings in nested objects', () => {
             const config = {
                 database: {
-                    host: '${ mydb.host }',
+                    host: '${ AzureDatabase.mydb.host }',
                     port: 5432
                 }
             };
@@ -249,7 +269,7 @@ describe('parseConfigParams', () => {
             const config = {
                 level1: {
                     level2: {
-                        value: '${ dep.export }'
+                        value: '${ Registry.dep.export }'
                     }
                 }
             };
@@ -262,13 +282,13 @@ describe('parseConfigParams', () => {
     describe('Real-world YAML patterns', () => {
         test('processes chuangaca.yml-like config', () => {
             const config = {
-                image: '${ chuangacr.server }/myapp:latest',
+                image: '${ AzureContainerRegistry.chuangacr.server }/myapp:latest',
                 containerName: 'myapp',
                 cpu: 0.5,
                 memory: '1Gi',
                 envVars: [
                     'APP_ENV=${ this.ring }',
-                    'STORAGE_ACCOUNT=${ chuangabs.name }'
+                    'STORAGE_ACCOUNT=${ AzureBlobStorage.chuangabs.name }'
                 ],
                 tags: {
                     merlin: 'true',

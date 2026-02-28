@@ -240,8 +240,8 @@ describe('Validator', () => {
             test('should validate dependency resource field', () => {
                 const data = createResourceYAML({
                     dependencies: [
-                        { resource: 'dep1' },
-                        { resource: 'dep2', isHardDependency: true }
+                        { resource: 'DepType.dep1' },
+                        { resource: 'DepType.dep2', isHardDependency: true }
                     ]
                 });
                 const parsed = createParsedYAML(data);
@@ -254,7 +254,7 @@ describe('Validator', () => {
             test('should accept optional isHardDependency', () => {
                 const data = createResourceYAML({
                     dependencies: [
-                        { resource: 'dep1', isHardDependency: false }
+                        { resource: 'DepType.dep1', isHardDependency: false }
                     ]
                 });
                 const parsed = createParsedYAML(data);
@@ -268,7 +268,7 @@ describe('Validator', () => {
                 const data = createResourceYAML({
                     dependencies: [
                         {
-                            resource: 'dep1',
+                            resource: 'DepType.dep1',
                             authProvider: {
                                 name: 'customAuth',
                                 scope: 'resource'
@@ -508,10 +508,10 @@ describe('Validator - Parameter Reference Validation', () => {
             expect(result.errors).toHaveLength(0);
         });
 
-        test('passes for ${ dep.export } when dep is declared in dependencies', () => {
+        test('passes for ${ Type.name.export } when dep is declared in dependencies', () => {
             const data = createResourceYAML({
-                dependencies: [{ resource: 'myregistry', isHardDependency: true }],
-                defaultConfig: { image: '${ myregistry.server }/myapp:latest' },
+                dependencies: [{ resource: 'Registry.myregistry', isHardDependency: true }],
+                defaultConfig: { image: '${ Registry.myregistry.server }/myapp:latest' },
                 specificConfig: []
             });
             const result = validate(createParsedYAML(data));
@@ -543,10 +543,10 @@ describe('Validator - Parameter Reference Validation', () => {
     });
 
     describe('Undeclared dependency reference → ERROR', () => {
-        test('errors for ${ undeclared.export } when not in dependencies', () => {
+        test('errors for ${ Type.name.export } when not in dependencies', () => {
             const data = createResourceYAML({
                 dependencies: [], // no dependencies declared
-                defaultConfig: { image: '${ unknownResource.server }/myapp:latest' },
+                defaultConfig: { image: '${ UnknownType.unknownResource.server }/myapp:latest' },
                 specificConfig: []
             });
             const result = validate(createParsedYAML(data));
@@ -554,18 +554,18 @@ describe('Validator - Parameter Reference Validation', () => {
             const paramError = result.errors.find(e => e.message.includes('undeclared dependency'));
             expect(paramError).toBeDefined();
             expect(paramError!.severity).toBe(ErrorSeverity.ERROR);
-            expect(paramError!.message).toContain('unknownResource');
+            expect(paramError!.message).toContain('UnknownType.unknownResource');
         });
 
         test('error hint suggests adding to dependencies', () => {
             const data = createResourceYAML({
                 dependencies: [],
-                defaultConfig: { val: '${ missingDep.name }' },
+                defaultConfig: { val: '${ MissingType.missingDep.name }' },
                 specificConfig: []
             });
             const result = validate(createParsedYAML(data));
             const paramError = result.errors.find(e => e.message.includes('undeclared dependency'));
-            expect(paramError!.hint).toContain('missingDep');
+            expect(paramError!.hint).toContain('MissingType.missingDep');
         });
 
         test('errors for undeclared dep in specificConfig', () => {
@@ -573,7 +573,7 @@ describe('Validator - Parameter Reference Validation', () => {
                 ring: 'staging',
                 dependencies: [],
                 defaultConfig: {},
-                specificConfig: [{ ring: 'staging', val: '${ missing.export }' }]
+                specificConfig: [{ ring: 'staging', val: '${ MissingType.missing.export }' }]
             });
             const result = validate(createParsedYAML(data));
             expect(result.valid).toBe(false);
@@ -633,7 +633,7 @@ describe('Validator - Parameter Reference Validation', () => {
         test('error path points to defaultConfig field', () => {
             const data = createResourceYAML({
                 dependencies: [],
-                defaultConfig: { image: '${ missing.server }' },
+                defaultConfig: { image: '${ MissingType.missing.server }' },
                 specificConfig: []
             });
             const result = validate(createParsedYAML(data));
@@ -646,7 +646,7 @@ describe('Validator - Parameter Reference Validation', () => {
                 ring: 'staging',
                 dependencies: [],
                 defaultConfig: {},
-                specificConfig: [{ ring: 'staging', val: '${ missing.export }' }]
+                specificConfig: [{ ring: 'staging', val: '${ MissingType.missing.export }' }]
             });
             const result = validate(createParsedYAML(data));
             const paramError = result.errors.find(e => e.message.includes('undeclared dependency'));

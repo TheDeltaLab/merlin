@@ -1,4 +1,4 @@
-name: alluneedlaw
+name: alluneed
 type: AzureLogAnalyticsWorkspace
 project: merlintest
 ring:

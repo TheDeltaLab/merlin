@@ -100,7 +100,7 @@ function performSemanticValidation(data: any, source: string): CompilationError[
  *
  * Checks:
  *   - Syntax validity (malformed expressions → ERROR)
- *   - Dependency declarations (${ resName.export } must have resName in dependencies → ERROR)
+ *   - Dependency declarations (${ Type.name.export } must have Type.name in dependencies → ERROR)
  *   - Region usage (${ this.region } on a resource with no regions declared → WARNING)
  *
  * Does NOT validate export key names — that would require cross-file analysis.
@@ -143,21 +143,24 @@ function collectParamErrors(
                 message: (e as Error).message,
                 source,
                 path,
-                hint: 'Parameter expressions must use format: ${ resourceName.exportKey }, ${ this.ring }, or ${ this.region }'
+                hint: 'Parameter expressions must use format: ${ Type.name.exportKey }, ${ this.ring }, or ${ this.region }'
             });
             return;
         }
         if (!parsed) return;
 
         for (const seg of parsed.segments) {
-            if (seg.type === 'dep' && !declaredDeps.has(seg.resource)) {
-                errors.push({
-                    severity: ErrorSeverity.ERROR,
-                    message: `Parameter reference "\${ ${seg.resource}.${seg.export} }" in "${path}" references undeclared dependency "${seg.resource}"`,
-                    source,
-                    path,
-                    hint: `Add "- resource: ${seg.resource}" to the dependencies array, or remove this parameter reference`
-                });
+            if (seg.type === 'dep') {
+                const qualifiedRef = `${seg.resourceType}.${seg.resource}`;
+                if (!declaredDeps.has(qualifiedRef)) {
+                    errors.push({
+                        severity: ErrorSeverity.ERROR,
+                        message: `Parameter reference "\${ ${seg.resourceType}.${seg.resource}.${seg.export} }" in "${path}" references undeclared dependency "${qualifiedRef}"`,
+                        source,
+                        path,
+                        hint: `Add "- resource: ${qualifiedRef}" to the dependencies array, or remove this parameter reference`
+                    });
+                }
             }
             if (seg.type === 'self' && seg.field === 'region' && !hasRegions) {
                 errors.push({

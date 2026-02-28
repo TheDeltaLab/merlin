@@ -1,7 +1,7 @@
 name: complex-resource
 type: ComplexType
 project: my-project
-parent: parent-resource
+parent: ParentType.parent-resource
 ring:
   - staging
   - production
@@ -13,9 +13,9 @@ authProvider:
   tenantId: abc123
   clientId: def456
 dependencies:
-  - resource: dependency1
+  - resource: DepType1.dependency1
     isHardDependency: true
-  - resource: dependency2
+  - resource: DepType2.dependency2
     isHardDependency: false
     authProvider:
       name: customAuth

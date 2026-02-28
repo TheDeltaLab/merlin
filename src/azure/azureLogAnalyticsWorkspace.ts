@@ -1,5 +1,5 @@
 import { AzureResource } from './resource.js';
-import { Resource, ResourceSchema, Command } from '../common/resource.js';
+import { Resource, ResourceSchema, Command, RenderContext } from '../common/resource.js';
 import { AzureResourceRender } from './render.js';
 import { execSync } from 'child_process';
 
@@ -74,7 +74,7 @@ export class AzureLogAnalyticsWorkspaceRender extends AzureResourceRender {
         return 'law';
     }
 
-    async renderImpl(resource: Resource): Promise<Command[]> {
+    async renderImpl(resource: Resource, context?: RenderContext): Promise<Command[]> {
         if (!AzureLogAnalyticsWorkspaceRender.isAzureLogAnalyticsWorkspaceResource(resource)) {
             throw new Error(`Resource ${resource.name} is not an Azure Log Analytics Workspace resource`);
         }
@@ -82,7 +82,7 @@ export class AzureLogAnalyticsWorkspaceRender extends AzureResourceRender {
         const ret: Command[] = [];
 
         // Ensure resource group exists first
-        const rgCommands = await this.ensureResourceGroupCommands(resource);
+        const rgCommands = await this.ensureResourceGroupCommands(resource, context);
         ret.push(...rgCommands);
 
         // Get deployed properties to check if workspace exists

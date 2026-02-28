@@ -1,5 +1,5 @@
 
-import { Command, Render, Region, Resource, REGION_SHORT_NAME_MAP, RING_SHORT_NAME_MAP } from "../common/resource";
+import { Command, Render, Region, Resource, RenderContext, REGION_SHORT_NAME_MAP, RING_SHORT_NAME_MAP } from "../common/resource";
 import { resolveConfig } from "../common/paramResolver.js";
 
 
@@ -27,9 +27,9 @@ export abstract class AzureResourceRender implements Render {
      * own deployment commands.  This ensures variables are set before they are
      * referenced in subsequent args.
      */
-    async render(resource: Resource): Promise<Command[]> {
+    async render(resource: Resource, context?: RenderContext): Promise<Command[]> {
         const { resource: resolved, captureCommands } = await resolveConfig(resource);
-        const renderCommands = await this.renderImpl(resolved);
+        const renderCommands = await this.renderImpl(resolved, context);
         return [...captureCommands, ...renderCommands];
     }
 
@@ -37,7 +37,7 @@ export abstract class AzureResourceRender implements Render {
      * Subclasses implement their render logic here.
      * The resource passed in has all parameter expressions already resolved to plain values.
      */
-    protected abstract renderImpl(resource: Resource): Promise<Command[]>;
+    protected abstract renderImpl(resource: Resource, context?: RenderContext): Promise<Command[]>;
 
     abstract getShortResourceTypeName(): string;
 
@@ -140,9 +140,12 @@ export abstract class AzureResourceRender implements Render {
     /**
      * Ensure resource group exists and return creation commands if needed
      * @param resource - The resource that needs a resource group
+     * @param context - Optional render context; if skipResourceGroup is true, returns []
      * @returns Commands to create the resource group if it doesn't exist, empty array otherwise
      */
-    protected async ensureResourceGroupCommands(resource: Resource): Promise<Command[]> {
+    protected async ensureResourceGroupCommands(resource: Resource, context?: RenderContext): Promise<Command[]> {
+        if (context?.skipResourceGroup) return [];
+
         // Dynamic import to avoid circular dependency
         const { AzureResourceGroupRender } = await import('./resourceGroup.js');
 

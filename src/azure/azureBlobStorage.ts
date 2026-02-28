@@ -1,5 +1,5 @@
 import { AzureResource } from './resource.js';
-import { Resource, ResourceSchema, Command, Render } from '../common/resource.js';
+import { Resource, ResourceSchema, Command, Render, RenderContext } from '../common/resource.js';
 import { AzureResourceRender } from './render.js';
 import { execSync } from 'child_process';
 
@@ -167,7 +167,7 @@ export class AzureBlobStorageRender extends AzureResourceRender {
     
     supportConnectorInResourceName: boolean = false;
 
-    async renderImpl(resource: Resource): Promise<Command[]> {
+    async renderImpl(resource: Resource, context?: RenderContext): Promise<Command[]> {
         if (!AzureBlobStorageRender.isAzureBlobStorageResource(resource)) {
             throw new Error(`Resource ${resource.name} is not an Azure Blob Storage resource`);
         }
@@ -175,7 +175,7 @@ export class AzureBlobStorageRender extends AzureResourceRender {
         const ret: Command[] = [];
 
         // Ensure resource group exists first
-        const rgCommands = await this.ensureResourceGroupCommands(resource);
+        const rgCommands = await this.ensureResourceGroupCommands(resource, context);
         ret.push(...rgCommands);
 
         // Get deployed properties to check if storage account exists
