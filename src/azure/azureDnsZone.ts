@@ -87,8 +87,10 @@ export class AzureDnsZoneRender extends AzureResourceRender {
      * to AzureResourceGroupRender which requires region. Instead, we check the RG directly
      * and generate a create command using config.location.
      */
-    private async ensureResourceGroupCommandsForDnsZone(resource: AzureDnsZoneResource, context?: RenderContext): Promise<Command[]> {
-        if (context?.skipResourceGroup) return [];
+    private async ensureResourceGroupCommandsForDnsZone(resource: AzureDnsZoneResource, _context?: RenderContext): Promise<Command[]> {
+        // DNS zones are global resources — their RG is never pre-created in the deployer's
+        // Level 0 pass (which only handles regional resources). We must always check/create
+        // the RG here regardless of skipResourceGroup.
 
         const resourceGroupName = this.getResourceGroupName(resource);
 

@@ -1,5 +1,5 @@
 
-import { Command, Render, Region, Resource, RenderContext, REGION_SHORT_NAME_MAP, RING_SHORT_NAME_MAP } from "../common/resource";
+import { Command, Render, Resource, RenderContext, REGION_SHORT_NAME_MAP, RING_SHORT_NAME_MAP } from "../common/resource";
 import { resolveConfig } from "../common/paramResolver.js";
 
 
@@ -115,7 +115,9 @@ export abstract class AzureResourceRender implements Render {
             const value = config[configKey];
             if (Array.isArray(value) && value.length > 0) {
                 args.push(cliFlag);
-                args.push(value.join(' '));
+                for (const item of value) {
+                    args.push(String(item));
+                }
             }
         }
     }

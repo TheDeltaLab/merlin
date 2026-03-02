@@ -535,6 +535,14 @@ export class AzureContainerAppRender extends AzureResourceRender {
             ],
         });
 
+        // ── 等待 DNS 传播 ─────────────────────────────────────────────────────
+        // Azure DNS 控制平面返回 "Succeeded" 后，权威 DNS 服务器之间的同步
+        // 仍需数秒到数十秒，必须等待传播完成后再执行 hostname bind 验证。
+        commands.push({
+            command: 'bash',
+            args: ['-c', 'sleep 30'],
+        });
+
         // ── 步骤 5：将自定义域名绑定到容器应用 ──────────────────────────────
         commands.push({
             command: 'az',
