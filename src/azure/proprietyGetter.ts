@@ -1,6 +1,8 @@
 import { Command, Dependency, ProprietyGetter, Resource, getRender } from "../common/resource.js";
+import { resolveConfig } from "../common/paramResolver.js";
 import { AzureResourceRender } from "./render.js";
 import { AzureDnsZoneRender, AzureDnsZoneResource } from "./azureDnsZone.js";
+import { AzureADAppRender, AzureADAppResource } from "./azureADApp.js";
 
 /**
  * ProprietyGetter for Azure Resource Managed Identity,
@@ -133,6 +135,33 @@ export class AzureLogAnalyticsWorkspaceSharedKeyGetter implements ProprietyGette
                 '-g', resourceGroup,
                 '-o', 'tsv',
                 '--query', 'primarySharedKey'
+            ]
+        }];
+    }
+}
+
+/**
+ * ProprietyGetter for Azure AD App client ID (appId).
+ * Returns the appId (client ID) of the Azure AD application by display name.
+ */
+export class AzureADAppClientIdGetter implements ProprietyGetter {
+    name: string = 'AzureADAppClientId';
+
+    dependencies: Dependency[] = [];
+
+    async get(resource: Resource, _args: Record<string, string>): Promise<Command[]> {
+        const render = getRender(resource.type) as AzureADAppRender;
+        // config.displayName may be an unresolved param expression — resolve it first.
+        const { resource: resolved } = await resolveConfig(resource as AzureADAppResource);
+        const displayName = render.getDisplayName(resolved as AzureADAppResource);
+
+        return [{
+            command: 'az',
+            args: [
+                'ad', 'app', 'list',
+                '--filter', `displayName eq '${displayName}'`,
+                '-o', 'tsv',
+                '--query', '[0].appId'
             ]
         }];
     }

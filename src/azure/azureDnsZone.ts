@@ -217,19 +217,122 @@ export class AzureDnsZoneRender extends AzureResourceRender {
     }
 
     renderCreate(resource: AzureDnsZoneResource): Command[] {
-        const args: string[] = [];
         const config = resource.config;
+        const commands: Command[] = [];
 
-        // Base command
-        args.push('network', 'dns', 'zone', 'create');
+        // ── Step 1: Create the DNS zone ───────────────────────────────────────
+        const createArgs: string[] = [];
+        createArgs.push('network', 'dns', 'zone', 'create');
+        createArgs.push('--name', this.getDnsZoneName(resource));
+        createArgs.push('--resource-group', this.getResourceGroupName(resource));
+        this.addTags(createArgs, config.tags);
+        commands.push({ command: 'az', args: createArgs });
 
-        // --name uses the actual DNS zone name (e.g. "chuangdns.thebrainly.dev")
-        args.push('--name', this.getDnsZoneName(resource));
-        args.push('--resource-group', this.getResourceGroupName(resource));
+        // ── Step 2: NS delegation into parent zone (only when parentName is set) ──
+        // After creation, Azure assigns 4 nameservers to the new zone.
+        // We query them at deploy time and write NS records into the parent zone
+        // so that global DNS resolvers can find the child zone.
+        if (config.parentName) {
+            commands.push(...this.renderNsDelegation(resource));
+        }
 
-        this.addTags(args, config.tags);
+        return commands;
+    }
 
-        return [{ command: 'az', args }];
+    /**
+     * Generates commands to delegate the newly created child DNS zone into its
+     * parent zone via NS records.
+     *
+     * Flow:
+     *   1. Capture the 4 Azure-assigned nameservers of the child zone into env vars
+     *   2. Look up the resource group that owns the parent zone (unknown ahead of time)
+     *   3. Create an NS record-set in the parent zone pointing to the child's nameservers
+     *
+     * All dynamic values are resolved at deploy time via envCapture — no execSync calls.
+     */
+    private renderNsDelegation(resource: AzureDnsZoneResource): Command[] {
+        const { dnsName, parentName } = resource.config;
+        if (!parentName) return [];
+
+        const childZoneName = this.getDnsZoneName(resource);
+        const childResourceGroup = this.getResourceGroupName(resource);
+
+        // Slug helper: uppercase, non-alphanumeric → underscore (mirrors paramResolver.ts toVarName)
+        const slug = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '_');
+        const zoneSlug = slug(childZoneName);
+
+        // Variable names for captured values
+        const ns1Var = `MERLIN_${zoneSlug}_NS1`;
+        const ns2Var = `MERLIN_${zoneSlug}_NS2`;
+        const ns3Var = `MERLIN_${zoneSlug}_NS3`;
+        const ns4Var = `MERLIN_${zoneSlug}_NS4`;
+        const parentRgVar = `MERLIN_${zoneSlug}_PARENT_RG`;
+
+        const commands: Command[] = [];
+
+        // ── Capture child zone's 4 nameservers ────────────────────────────────
+        // az network dns zone show returns nameServers as a JSON array;
+        // --query uses JMESPath index expressions to pick each one.
+        for (const [varName, index] of [
+            [ns1Var, 0], [ns2Var, 1], [ns3Var, 2], [ns4Var, 3],
+        ] as [string, number][]) {
+            commands.push({
+                command: 'az',
+                args: [
+                    'network', 'dns', 'zone', 'show',
+                    '--name', childZoneName,
+                    '--resource-group', childResourceGroup,
+                    '--query', `nameServers[${index}]`,
+                    '--output', 'tsv',
+                ],
+                envCapture: varName,
+            });
+        }
+
+        // ── Capture parent zone's resource group ──────────────────────────────
+        // The parent zone may live in a different resource group; look it up by name.
+        commands.push({
+            command: 'az',
+            args: [
+                'network', 'dns', 'zone', 'list',
+                '--query', `[?name=='${parentName}'].resourceGroup`,
+                '--output', 'tsv',
+            ],
+            envCapture: parentRgVar,
+        });
+
+        // ── Write NS record-set into the parent zone ──────────────────────────
+        // `dns record-set ns create` is idempotent (overwrites existing record-set).
+        // The record-set name is the relative label of the child zone within the parent,
+        // e.g. for child "chuang.staging.thebrainly.dev" and parent "thebrainly.dev"
+        // the relative label is "chuang.staging".
+        const relativeLabel = dnsName; // dnsName is already the part before parentName
+        commands.push({
+            command: 'az',
+            args: [
+                'network', 'dns', 'record-set', 'ns', 'create',
+                '--zone-name', parentName,
+                '--resource-group', `$${parentRgVar}`,
+                '--name', relativeLabel,
+                '--ttl', '3600',
+            ],
+        });
+
+        // Add each captured nameserver as an NS record entry
+        for (const nsVar of [ns1Var, ns2Var, ns3Var, ns4Var]) {
+            commands.push({
+                command: 'az',
+                args: [
+                    'network', 'dns', 'record-set', 'ns', 'add-record',
+                    '--zone-name', parentName,
+                    '--resource-group', `$${parentRgVar}`,
+                    '--record-set-name', relativeLabel,
+                    '--nsdname', `$${nsVar}`,
+                ],
+            });
+        }
+
+        return commands;
     }
 
     renderUpdate(resource: AzureDnsZoneResource): Command[] {

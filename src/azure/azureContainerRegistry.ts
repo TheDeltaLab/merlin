@@ -297,6 +297,7 @@ export class AzureContainerRegistryRender extends AzureResourceRender {
                             '--name', registryName,
                             '--source', image.source,
                             '--image', `${image.name}:${tag}`,
+                            '--force',
                         ]
                     });
                 }

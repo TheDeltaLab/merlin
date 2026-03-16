@@ -1,12 +1,201 @@
-import { AuthProvider, Command, Dependency, Resource } from "../common/resource.js";
+import { AuthProvider, Command, Dependency, Resource, getRender } from "../common/resource.js";
+import { AzureResourceRender } from "./render.js";
+import { execSync } from "child_process";
 
+/**
+ * Supported role assignment scopes.
+ *
+ * - "resource": the role is assigned on the provider resource itself
+ *               (e.g. AcrPull on a specific ACR)
+ * - "resourceGroup": the role is assigned on the provider's resource group
+ * - "subscription": the role is assigned at the subscription level
+ */
+export type RoleAssignmentScope = 'resource' | 'resourceGroup' | 'subscription';
+
+/**
+ * AzureManagedIdentityAuthProvider
+ *
+ * Grants a role on the *provider* resource to the managed identity of the *requestor* resource.
+ *
+ * Expected args (from YAML authProvider config):
+ *   - role  (required): the Azure built-in or custom role name/id, e.g. "AcrPull"
+ *   - scope (optional): "resource" | "resourceGroup" | "subscription" (default: "resource")
+ *
+ * At deploy time the commands:
+ *   1. Fetch the requestor's system-assigned principal ID at runtime via envCapture.
+ *   2. Fetch the provider's resource scope (ARM resource ID or RG) at runtime via envCapture.
+ *   3. Run `az role assignment create` using both captured values.
+ *
+ * All lookups are deferred to shell commands so dry-run works even when
+ * resources don't exist yet.
+ */
 export class AzureManagedIdentityAuthProvider implements AuthProvider {
     name: string = 'AzureManagedIdentity';
 
     dependencies: Dependency[] = [];
 
     async apply(requestor: Resource, provider: Resource, args: Record<string, string>): Promise<Command[]> {
-        throw new Error(`not implemented yet`);
+        const role = args['role'];
+        if (!role) {
+            throw new Error(
+                `AzureManagedIdentityAuthProvider: 'role' is required in authProvider args ` +
+                `(requestor: ${requestor.type}.${requestor.name}, provider: ${provider.type}.${provider.name})`
+            );
+        }
+
+        const scopeMode: RoleAssignmentScope = (args['scope'] as RoleAssignmentScope) ?? 'resource';
+
+        const requestorRender = getRender(requestor.type) as AzureResourceRender;
+        const providerRender  = getRender(provider.type)  as AzureResourceRender;
+
+        // Shell variable name slug helper (uppercase, non-alphanumeric → underscore)
+        const slug = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '_');
+
+        const requestorSlug = slug(requestorRender.getResourceName(requestor));
+        const providerSlug  = slug(providerRender.getResourceName(provider));
+        const roleSlug      = slug(role);
+
+        const principalVar = `MERLIN_MI_${requestorSlug}_PRINCIPAL_ID`;
+        const scopeVar     = `MERLIN_MI_${providerSlug}_${roleSlug}_SCOPE`;
+
+        const commands: Command[] = [];
+
+        // ── Step 1: capture the requestor's managed identity principal ID ──────
+        commands.push(
+            ...this.buildPrincipalIdCapture(requestor, requestorRender, principalVar)
+        );
+
+        // ── Step 2: capture the provider resource's ARM scope ─────────────────
+        commands.push(
+            ...this.buildScopeCapture(provider, providerRender, scopeMode, scopeVar)
+        );
+
+        // ── Step 3: create the role assignment (idempotent) ───────────────────
+        // --assignee-object-id + --assignee-principal-type avoids AAD graph lookups
+        // and is more reliable in automation contexts.
+        commands.push({
+            command: 'az',
+            args: [
+                'role', 'assignment', 'create',
+                '--assignee-object-id', `$${principalVar}`,
+                '--assignee-principal-type', 'ServicePrincipal',
+                '--role', role,
+                '--scope', `$${scopeVar}`,
+            ],
+        });
+
+        return commands;
+    }
+
+    // ── Private helpers ───────────────────────────────────────────────────────
+
+    /**
+     * Returns commands to capture the system-assigned managed identity principal ID
+     * of the requestor resource into `varName`.
+     *
+     * Strategy: use `az resource show` with a JMESPath query that works across
+     * resource types by fetching `identity.principalId`.  This is more reliable
+     * than `az ad sp list --filter` because:
+     *   - It requires no AAD Graph read permission.
+     *   - It directly returns the object ID without a name-based search.
+     *
+     * If the resource type has a dedicated `show` command registered via a
+     * known mapping we use that; otherwise we fall back to `az resource show`.
+     */
+    private buildPrincipalIdCapture(
+        requestor: Resource,
+        render: AzureResourceRender,
+        varName: string,
+    ): Command[] {
+        const resourceName  = render.getResourceName(requestor);
+        const resourceGroup = render.getResourceGroupName(requestor);
+
+        const showArgs = this.buildShowArgs(requestor.type, resourceName, resourceGroup);
+
+        return [{
+            command: 'az',
+            args: [...showArgs, '--query', 'identity.principalId', '-o', 'tsv'],
+            envCapture: varName,
+        }];
+    }
+
+    /**
+     * Returns commands to capture the ARM scope string for the provider resource
+     * into `varName`.  The scope depends on `scopeMode`:
+     *
+     * - "resource":      the full ARM resource ID of the provider
+     * - "resourceGroup": the resource group ARM ID (/subscriptions/.../resourceGroups/...)
+     * - "subscription":  the subscription ARM ID (/subscriptions/...)
+     */
+    private buildScopeCapture(
+        provider: Resource,
+        render: AzureResourceRender,
+        scopeMode: RoleAssignmentScope,
+        varName: string,
+    ): Command[] {
+        const resourceName  = render.getResourceName(provider);
+        const resourceGroup = render.getResourceGroupName(provider);
+
+        switch (scopeMode) {
+            case 'resource': {
+                // Full ARM resource ID via az <resource> show --query id
+                const showArgs = this.buildShowArgs(provider.type, resourceName, resourceGroup);
+                return [{
+                    command: 'az',
+                    args: [...showArgs, '--query', 'id', '-o', 'tsv'],
+                    envCapture: varName,
+                }];
+            }
+
+            case 'resourceGroup': {
+                // Resource group ARM ID
+                return [{
+                    command: 'az',
+                    args: [
+                        'group', 'show',
+                        '--name', resourceGroup,
+                        '--query', 'id',
+                        '-o', 'tsv',
+                    ],
+                    envCapture: varName,
+                }];
+            }
+
+            case 'subscription': {
+                // Subscription ARM ID
+                return [{
+                    command: 'az',
+                    args: [
+                        'account', 'show',
+                        '--query', 'id',
+                        '-o', 'tsv',
+                    ],
+                    envCapture: varName,
+                }];
+            }
+        }
+    }
+
+    /**
+     * Returns the `az` sub-command args (without --query/-o) for showing a
+     * resource of the given type.  Falls back to `az resource show` for unknown
+     * types so the auth provider works with any future resource type.
+     */
+    private buildShowArgs(resourceType: string, resourceName: string, resourceGroup: string): string[] {
+        const SHOW_COMMAND_MAP: Record<string, string[]> = {
+            'AzureContainerApp':         ['containerapp', 'show', '--name', resourceName, '--resource-group', resourceGroup],
+            'AzureContainerRegistry':    ['acr', 'show', '--name', resourceName, '--resource-group', resourceGroup],
+            'AzureContainerAppEnvironment': ['containerapp', 'env', 'show', '--name', resourceName, '--resource-group', resourceGroup],
+            'AzureLogAnalyticsWorkspace': ['monitor', 'log-analytics', 'workspace', 'show', '--name', resourceName, '--resource-group', resourceGroup],
+            'AzureBlobStorage':          ['storage', 'account', 'show', '--name', resourceName, '--resource-group', resourceGroup],
+        };
+
+        return SHOW_COMMAND_MAP[resourceType] ?? [
+            'resource', 'show',
+            '--name', resourceName,
+            '--resource-group', resourceGroup,
+            '--resource-type', resourceType,
+        ];
     }
 }
 

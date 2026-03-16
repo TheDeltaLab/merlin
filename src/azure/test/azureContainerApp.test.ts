@@ -822,7 +822,8 @@ describe('AzureContainerAppRender', () => {
             const commands = await render.render(resource as unknown as Resource);
 
             const createIdx = commands.findIndex(c => c.args[0] === 'containerapp' && c.args[1] === 'create');
-            const bindIdx   = commands.findIndex(c => c.args[0] === 'containerapp' && c.args[1] === 'hostname');
+            // hostname bind is now emitted as: bash -c 'az containerapp hostname bind ...'
+            const bindIdx   = commands.findIndex(c => c.command === 'bash' && c.args[1]?.includes('hostname bind'));
             expect(createIdx).not.toBe(-1);
             expect(bindIdx).not.toBe(-1);
             expect(bindIdx).toBeGreaterThan(createIdx);
@@ -839,7 +840,8 @@ describe('AzureContainerAppRender', () => {
             const commands = await render.render(resource as unknown as Resource);
 
             const updateIdx = commands.findIndex(c => c.args[0] === 'containerapp' && c.args[1] === 'update');
-            const bindIdx   = commands.findIndex(c => c.args[0] === 'containerapp' && c.args[1] === 'hostname');
+            // hostname bind is now emitted as: bash -c 'az containerapp hostname bind ...'
+            const bindIdx   = commands.findIndex(c => c.command === 'bash' && c.args[1]?.includes('hostname bind'));
             expect(updateIdx).not.toBe(-1);
             expect(bindIdx).not.toBe(-1);
             expect(bindIdx).toBeGreaterThan(updateIdx);
@@ -971,19 +973,18 @@ describe('AzureContainerAppRender', () => {
             const resource = makeResourceWithDns('example.com', 'myapp');
             const commands = await render.render(resource as unknown as Resource);
 
+            // hostname bind is emitted as: bash -c 'az containerapp hostname bind --hostname ... --validation-method CNAME || true'
             const cmd = commands.find(c =>
-                c.command === 'az' &&
-                c.args[0] === 'containerapp' &&
-                c.args[1] === 'hostname' &&
-                c.args[2] === 'bind'
+                c.command === 'bash' &&
+                c.args[1]?.includes('hostname bind')
             );
             expect(cmd).toBeDefined();
-            expect(hasParam(cmd!.args, '--hostname', 'myapp.example.com')).toBe(true);
-            expect(hasParam(cmd!.args, '--resource-group', 'myproject-rg-stg-eus')).toBe(true);
-            expect(hasParam(cmd!.args, '--name', 'myproject-myapp-stg-eus-aca')).toBe(true);
-            expect(hasParam(cmd!.args, '--environment', `$${ENV_NAME_VAR}`)).toBe(true);
-            expect(hasParam(cmd!.args, '--validation-method', 'CNAME')).toBe(true);
-            expect(cmd!.envCapture).toBeUndefined();
+            const script = cmd!.args[1];
+            expect(script).toContain('--hostname myapp.example.com');
+            expect(script).toContain('--resource-group myproject-rg-stg-eus');
+            expect(script).toContain('--name myproject-myapp-stg-eus-aca');
+            expect(script).toContain(`--environment $${ENV_NAME_VAR}`);
+            expect(script).toContain('--validation-method CNAME');
         });
 
         it('DNS bind steps are emitted in order: 0a→0b→0c→1→2→3→4→5', async () => {
@@ -994,11 +995,13 @@ describe('AzureContainerAppRender', () => {
             const idx0a = commands.findIndex(c => c.command === 'az' && c.args[2] === 'zone' && c.args[3] === 'list');
             const idx0b = commands.findIndex(c => c.command === 'az' && c.args.includes('properties.managedEnvironmentId'));
             const idx0c = commands.findIndex(c => c.command === 'bash' && c.envCapture === ENV_NAME_VAR);
-            const idx1  = commands.findIndex(c => c.command === 'az' && c.args.includes('properties.configuration.ingress.fqdn'));
+            // step 1: hostname add (bash -c '...')
+            const idx1  = commands.findIndex(c => c.command === 'bash' && c.args[1]?.includes('hostname add'));
             const idx2  = commands.findIndex(c => c.command === 'az' && c.args.includes('cname'));
             const idx3  = commands.findIndex(c => c.command === 'az' && c.args.includes('properties.customDomainVerificationId'));
             const idx4  = commands.findIndex(c => c.command === 'az' && c.args.includes('txt') && c.args.includes('add-record'));
-            const idx5  = commands.findIndex(c => c.command === 'az' && c.args[1] === 'hostname' && c.args[2] === 'bind');
+            // step 6 (renamed from 5): hostname bind (bash -c '...')
+            const idx5  = commands.findIndex(c => c.command === 'bash' && c.args[1]?.includes('hostname bind'));
 
             expect(idx0a).not.toBe(-1);
             expect(idx0b).toBeGreaterThan(idx0a);
@@ -1056,9 +1059,10 @@ describe('AzureContainerAppRender', () => {
             expect(txtCmd).toBeDefined();
             expect(hasParam(txtCmd!.args, '--record-set-name', 'asuid.foo.bar')).toBe(true);
 
-            const bindCmd = commands.find(c => c.command === 'az' && c.args[1] === 'hostname' && c.args[2] === 'bind');
+            // hostname bind is now emitted as: bash -c 'az containerapp hostname bind --hostname ...'
+            const bindCmd = commands.find(c => c.command === 'bash' && c.args[1]?.includes('hostname bind'));
             expect(bindCmd).toBeDefined();
-            expect(hasParam(bindCmd!.args, '--hostname', 'foo.bar.example.com')).toBe(true);
+            expect(bindCmd!.args[1]).toContain('--hostname foo.bar.example.com');
         });
 
         it('dnsZone value is correctly used in --zone-name for all DNS commands', async () => {

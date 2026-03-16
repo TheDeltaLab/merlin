@@ -159,6 +159,18 @@ export interface Command {
      *   subsequent commands' args where `$VARNAME` appears.
      */
     envCapture?: string;
+    /**
+     * If set, this content will be written to a temporary file before the command
+     * is executed. Any occurrence of `__MERLIN_YAML_FILE__` in args will be replaced
+     * with the path to that temporary file.
+     *
+     * - In execute mode: written to a temp file (deleted after command completes).
+     *   $VARNAME references in the content are expanded via expandVars() before writing.
+     * - In print mode: content is shown as comments before the command line.
+     * - In write-to-file mode: emitted as a heredoc block in the shell script,
+     *   with $VARNAME references expanded by the shell at runtime.
+     */
+    fileContent?: string;
 }
 
 /**

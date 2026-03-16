@@ -51,6 +51,13 @@ export interface AzureADAppResource extends Resource<AzureADAppConfig> {}
 export class AzureADAppRender extends AzureResourceRender {
     supportConnectorInResourceName: boolean = true;
 
+    /**
+     * Azure AD Apps are tenant-scoped global resources — they have no region.
+     * Setting isGlobalResource = true allows region-aware resources (e.g. ACAs)
+     * to resolve an AD App dependency by ring only, ignoring region.
+     */
+    override isGlobalResource: boolean = true;
+
     override getShortResourceTypeName(): string {
         return 'aad';
     }

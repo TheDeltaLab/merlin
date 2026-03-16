@@ -246,6 +246,11 @@ export class AzureContainerAppEnvironmentRender extends AzureResourceRender {
         this.addSimpleParams(args, config, AzureContainerAppEnvironmentRender.SIMPLE_PARAM_MAP);
         this.addBooleanFlags(args, config, AzureContainerAppEnvironmentRender.BOOLEAN_FLAG_MAP);
 
+        // Azure CLI requires --logs-destination log-analytics when --logs-workspace-id/key are provided on update
+        if (config.logsWorkspaceId && !config.logsDestination) {
+            args.push('--logs-destination', 'log-analytics');
+        }
+
         if (config.noWait === true) {
             args.push('--no-wait');
         }
