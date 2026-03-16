@@ -45,6 +45,7 @@ import {
     AzureLogAnalyticsWorkspaceCustomerIdGetter,
     AzureLogAnalyticsWorkspaceSharedKeyGetter,
     AzureDnsZoneNameGetter,
+    AzureADAppClientIdGetter,
 } from './azure/proprietyGetter.js';
 
 // Register all auth providers
@@ -69,6 +70,7 @@ registerProprietyGetter(new AzureContainerAppFqdnGetter());
 registerProprietyGetter(new AzureLogAnalyticsWorkspaceCustomerIdGetter());
 registerProprietyGetter(new AzureLogAnalyticsWorkspaceSharedKeyGetter());
 registerProprietyGetter(new AzureDnsZoneNameGetter());
+registerProprietyGetter(new AzureADAppClientIdGetter());
 
 export function initializeMerlin(): void {
     // Initialization happens during module load

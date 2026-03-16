@@ -7,7 +7,6 @@ import { Deployer } from '../deployer.js';
 import * as registry from '../common/registry.js';
 import * as resource from '../common/resource.js';
 import type { Resource, Render, Command } from '../common/resource.js';
-
 describe('Deployer', () => {
   let deployer: Deployer;
   let consoleLogSpy: ReturnType<typeof vi.spyOn>;
@@ -387,6 +386,137 @@ describe('Deployer', () => {
         mockResources[0],
         { skipResourceGroup: true }
       );
+    });
+  });
+
+  describe('authProvider integration', () => {
+    it('appends role-assignment commands from authProvider.apply() to the requestor resource', async () => {
+      const authApply = vi.fn().mockResolvedValue([
+        { command: 'az', args: ['role', 'assignment', 'create', '--role', 'AcrPull'] } as Command,
+      ]);
+
+      const providerResource = makeResource('acr', [], {
+        type: 'AzureContainerRegistry',
+        authProvider: {
+          provider: { name: 'AzureManagedIdentity', apply: authApply, dependencies: [] },
+          args: { role: 'AcrPull' },
+        },
+      });
+
+      const requestorResource = makeResource('aca', ['AzureContainerRegistry.acr'], {
+        type: 'AzureContainerApp',
+      });
+
+      const mockRender: Render = {
+        render: vi.fn().mockResolvedValue([
+          { command: 'az', args: ['containerapp', 'create'] } as Command,
+        ]),
+      };
+
+      vi.spyOn(registry, 'getAllResources').mockReturnValue([providerResource, requestorResource]);
+      vi.spyOn(resource, 'getRender').mockReturnValue(mockRender);
+      vi.spyOn(registry, 'getResource').mockReturnValue(providerResource);
+
+      const allCommands: Command[] = [];
+      (mockRender.render as any).mockImplementation(async (r: Resource) => {
+        const cmds: Command[] = [{ command: 'az', args: [r.name] }];
+        return cmds;
+      });
+
+      // Capture rendered commands via printCommandLevels
+      const printSpy = vi.spyOn(deployer as any, 'printCommandLevels');
+
+      await deployer.deploy({ execute: false });
+
+      expect(authApply).toHaveBeenCalledTimes(1);
+      expect(authApply).toHaveBeenCalledWith(
+        requestorResource,
+        providerResource,
+        { role: 'AcrPull' },
+      );
+    });
+
+    it('skips authProvider when dependency resource is not in registry', async () => {
+      const authApply = vi.fn().mockResolvedValue([]);
+
+      const requestorResource = makeResource('aca', ['AzureContainerRegistry.missing'], {
+        type: 'AzureContainerApp',
+      });
+
+      const mockRender: Render = {
+        render: vi.fn().mockResolvedValue([{ command: 'az', args: [] } as Command]),
+      };
+
+      vi.spyOn(registry, 'getAllResources').mockReturnValue([requestorResource]);
+      vi.spyOn(resource, 'getRender').mockReturnValue(mockRender);
+      // Registry returns undefined for the missing provider
+      vi.spyOn(registry, 'getResource').mockReturnValue(undefined);
+
+      await deployer.deploy({ execute: false });
+
+      // authApply must not be called because the provider resource was not found
+      expect(authApply).not.toHaveBeenCalled();
+    });
+
+    it('skips silently when dependency has no authProvider', async () => {
+      const providerResource = makeResource('acr', [], {
+        type: 'AzureContainerRegistry',
+        authProvider: undefined, // no authProvider
+      });
+
+      const requestorResource = makeResource('aca', ['AzureContainerRegistry.acr'], {
+        type: 'AzureContainerApp',
+      });
+
+      const mockRender: Render = {
+        render: vi.fn().mockResolvedValue([{ command: 'az', args: [] } as Command]),
+      };
+
+      vi.spyOn(registry, 'getAllResources').mockReturnValue([providerResource, requestorResource]);
+      vi.spyOn(resource, 'getRender').mockReturnValue(mockRender);
+      vi.spyOn(registry, 'getResource').mockReturnValue(providerResource);
+
+      // Should not throw
+      await expect(deployer.deploy({ execute: false })).resolves.not.toThrow();
+    });
+
+    it('uses the dependency-level authProvider override when provided', async () => {
+      const defaultApply  = vi.fn().mockResolvedValue([]);
+      const overrideApply = vi.fn().mockResolvedValue([
+        { command: 'az', args: ['role', 'assignment', 'create', '--role', 'Reader'] } as Command,
+      ]);
+
+      const providerResource = makeResource('acr', [], {
+        type: 'AzureContainerRegistry',
+        authProvider: {
+          provider: { name: 'AzureManagedIdentity', apply: defaultApply, dependencies: [] },
+          args: { role: 'AcrPull' },
+        },
+      });
+
+      const overrideProvider = { name: 'Override', apply: overrideApply, dependencies: [] };
+
+      const requestorResource: Resource = {
+        ...makeResource('aca', [], { type: 'AzureContainerApp' }),
+        dependencies: [{
+          resource: 'AzureContainerRegistry.acr',
+          authProvider: overrideProvider,
+        }],
+      };
+
+      const mockRender: Render = {
+        render: vi.fn().mockResolvedValue([{ command: 'az', args: [] } as Command]),
+      };
+
+      vi.spyOn(registry, 'getAllResources').mockReturnValue([providerResource, requestorResource]);
+      vi.spyOn(resource, 'getRender').mockReturnValue(mockRender);
+      vi.spyOn(registry, 'getResource').mockReturnValue(providerResource);
+
+      await deployer.deploy({ execute: false });
+
+      // The override should be used, not the default
+      expect(overrideApply).toHaveBeenCalledTimes(1);
+      expect(defaultApply).not.toHaveBeenCalled();
     });
   });
 

@@ -141,6 +141,23 @@ Merlin uses registries (global Maps) for runtime lookup:
 
 All registrations happen in `src/init.ts` and are imported by generated code via `import 'merlin/init.js'`.
 
+### ProprietyGetter Implementations (`src/azure/proprietyGetter.ts`)
+
+ProprietyGetters produce the Azure CLI command that resolves a resource export at deploy time. Available getters:
+
+| Getter name | Returns |
+|-------------|---------|
+| `AzureResourceManagedIdentity` | Object ID of the resource's managed identity |
+| `AzureResourceName` | The Azure resource name (via `getResourceName()`) |
+| `AzureContainerRegistryServer` | ACR login server URL (e.g. `myacr.azurecr.io`) |
+| `AzureContainerAppFqdn` | Container App default ingress FQDN |
+| `AzureLogAnalyticsWorkspaceCustomerId` | LAW customer ID |
+| `AzureLogAnalyticsWorkspaceSharedKey` | LAW primary shared key |
+| `AzureADAppClientId` | AD App `appId` (client ID), looked up by display name |
+| `AzureDnsZoneName` | Full DNS zone name (e.g. `chuang.staging.thebrainly.dev`) |
+
+**Important — `AzureADAppClientId`**: The AD App's `displayName` config field may contain `${ }` parameter expressions (e.g. `merlintest-alluneed-${ this.ring }`). These are stored as `ParamValue` objects at registration time and must be resolved before use. The getter calls `resolveConfig()` first, then `render.getDisplayName(resolved)` to get the correct string. `getDisplayName()` uses the **full** ring name (`staging`, not `stg`) — do not use `getResourceName()` which uses the short ring form.
+
 ### Dependency Resolution
 
 Dependencies are declared in YAML (`dependencies[].resource`). Each dependency can specify:
@@ -172,6 +189,46 @@ Azure resources follow a consistent naming pattern (see `src/azure/render.ts`):
   - Some resources don't support hyphens (set `supportConnectorInResourceName: false`)
 
 Regions are abbreviated using `REGION_SHORT_NAME_MAP`: `eastasia` → `eas`, `koreacentral` → `krc`, etc.
+
+## Azure-Specific Features
+
+### DNS Zone NS Delegation (`src/azure/azureDnsZone.ts`)
+
+When a DNS Zone resource has `parentName` set in its config, `renderCreate()` automatically appends 10 additional commands after the zone creation command (11 total):
+
+1. Capture NS server 1–4 from the new zone (`az network dns zone show --query nameServers[0..3]`)
+2. Capture the parent zone's resource group (`az network dns zone list`)
+3. Create the NS record-set in the parent zone (`az network dns record-set ns create --ttl 3600`)
+4. Add all 4 NS records to the record-set (`az network dns record-set ns add-record` × 4)
+
+This wires up the child zone's delegation in the parent zone automatically on first create. On `renderUpdate()` NS delegation is **not** re-emitted (it is a one-time setup).
+
+The relative label for the NS record-set is the `dnsName` field (e.g. `chuang.staging`); the target zone is `parentName` (e.g. `thebrainly.dev`).
+
+### Container App DNS Binding (`src/azure/azureContainerApp.ts`)
+
+When `bindDnsZone: { dnsZone, subDomain }` is set in the ACA config, `renderBindDnsZone()` appends these steps after the container app create/update command:
+
+| Step | Command | Notes |
+|------|---------|-------|
+| 0a | `az network dns zone list` | Capture DNS Zone RG into `$MERLIN_..._DNS_ZONE_RG` |
+| 0b | `az containerapp show --query managedEnvironmentId` | Capture env ARM ID |
+| 0c | `bash -c "echo $VAR \| sed 's\|.*/\|\|'"` | Extract env name from ARM ID |
+| 1 | `bash -c "az containerapp hostname add ... \|\| true"` | Register hostname (idempotent) |
+| 2 | `az containerapp show --query ingress.fqdn` | Capture default FQDN |
+| 3 | `az network dns record-set cname set-record` | Create CNAME pointing to default FQDN |
+| 4 | `az containerapp show --query customDomainVerificationId` | Capture verification ID |
+| 5 | `az network dns record-set txt add-record` (name: `asuid.<subDomain>`) | TXT verification record |
+| — | `bash -c "sleep 30"` | Wait for DNS propagation |
+| 6 | `bash -c "az containerapp hostname bind --validation-method CNAME \|\| true"` | Bind + request managed cert (idempotent) |
+
+**Azure ordering requirement**: `hostname add` (Step 1) must run before `hostname bind` (Step 6). Azure rejects cert requests for hostnames not yet registered on the container app.
+
+**Idempotency**: Steps 1 and 6 use `bash -c '... || true'` to swallow the "already exists" error on re-runs.
+
+### Global Resources (`isGlobalResource`)
+
+Some Azure resources are tenant-scoped and have no region (e.g. `AzureADApp`). Setting `isGlobalResource = true` on the Render implementation allows region-aware resources to resolve them by ring only, ignoring region. The registry lookup falls back to ring-only match when an exact ring+region match is not found for a global resource.
 
 ## Adding New Resource Types
 
@@ -254,3 +311,8 @@ When `ring` and `region` are arrays, Merlin generates a cartesian product (e.g.,
 - **Deep merge semantics** - objects merge recursively, arrays/primitives replace
 - **Resource keys are unique** - `name:ring:region` must be unique across all resources
 - **Test isolation** - use `clearRegistry()` in test teardown to reset global state
+- **`resolveConfig()` in ProprietyGetters** - config fields may be unresolved `ParamValue` objects at getter call time; always call `resolveConfig()` before reading config values that might contain `${ }` expressions
+- **`getDisplayName()` vs `getResourceName()`** - for AD Apps (and any resource with a configurable display name), use `getDisplayName()` which returns the full ring name; `getResourceName()` uses the short ring form (`stg`, `tst`) suitable for Azure resource names but not for AD App lookups
+- **`bash -c '... || true'` pattern** - use this for idempotent Azure CLI steps that fail with "already exists" on re-runs (e.g. `hostname add`, `hostname bind`)
+- **NS delegation is create-only** - `renderNsDelegation()` is called from `renderCreate()` only; if a zone was created outside Merlin, manually run the NS delegation commands against the parent zone
+- **After `pnpm build` in merlin root, also rebuild `.merlin/`** - the `.merlin/` project bundles merlin's `dist/init.js` at build time; run `merlin compile` (or `pnpm build` inside `.merlin/`) to pick up merlin source changes

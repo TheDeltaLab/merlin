@@ -9,11 +9,13 @@
  */
 
 import { Resource, Command, RenderContext } from './common/resource.js';
-import { getAllResources } from './common/registry.js';
+import { getAllResources, getResource } from './common/registry.js';
 import { getRender } from './common/resource.js';
 import { AzureResourceGroupRender } from './azure/resourceGroup.js';
 import { execa } from 'execa';
 import * as fs from 'fs/promises';
+import * as os from 'os';
+import * as path from 'path';
 
 /** Default concurrency limit for parallel resource deployment */
 const DEFAULT_CONCURRENCY = 4;
@@ -88,6 +90,11 @@ export class Deployer {
         try {
           const render = getRender(resource.type);
           const commands = await render.render(resource, renderContext);
+
+          // Append role-assignment commands for each dependency that declares an authProvider
+          const authCommands = await this.renderAuthProviderCommands(resource);
+          commands.push(...authCommands);
+
           levelCommands.push({ resource, commands });
         } catch (error) {
           console.error(`Failed to render ${resource.type}.${resource.name}:`, error);
@@ -203,6 +210,63 @@ export class Deployer {
   }
 
   /**
+   * Generates role-assignment commands for all dependencies of `resource` that
+   * declare an authProvider.
+   *
+   * For each dependency:
+   *   1. Resolve the provider resource from the filtered set (same ring/region).
+   *   2. Determine which authProvider to use: the dependency's override takes
+   *      precedence, otherwise fall back to the provider resource's own authProvider.
+   *   3. Call authProvider.apply(requestor=resource, provider=depResource, args).
+   *
+   * Commands are appended after the resource's own deployment commands so that
+   * the requestor's managed identity already exists before the role is assigned.
+   *
+   * Dependencies without an authProvider (e.g. structural ordering-only deps) are
+   * silently skipped.
+   */
+  private async renderAuthProviderCommands(resource: Resource): Promise<Command[]> {
+    const commands: Command[] = [];
+
+    for (const dep of resource.dependencies) {
+      // Parse "Type.name" dependency reference
+      const dotIdx = dep.resource.indexOf('.');
+      if (dotIdx === -1) continue;
+      const depType = dep.resource.slice(0, dotIdx);
+      const depName = dep.resource.slice(dotIdx + 1);
+
+      // Look up the provider resource (same ring; ignore region for global resources)
+      const depResource = getResource(depType, depName, resource.ring, resource.region);
+      if (!depResource) continue;
+
+      // Determine auth provider: dep override → provider's own authProvider
+      const authProviderDef = dep.authProvider
+        ? { provider: dep.authProvider, args: {} }
+        : depResource.authProvider;
+
+      if (!authProviderDef) continue;
+
+      try {
+        const authCommands = await authProviderDef.provider.apply(
+          resource,
+          depResource,
+          authProviderDef.args,
+        );
+        commands.push(...authCommands);
+      } catch (error) {
+        // Log but don't fail the whole deploy — some auth providers may not be
+        // applicable to certain resource type combinations
+        console.warn(
+          `Warning: authProvider.apply() failed for ` +
+          `${resource.type}.${resource.name} → ${dep.resource}: ${error}`
+        );
+      }
+    }
+
+    return commands;
+  }
+
+  /**
    * Collect all unique resource groups needed by the resources,
    * render their creation commands (deduplicated), and return as a single level.
    */
@@ -217,19 +281,24 @@ export class Deployer {
 
       const rgName = rgRender.getResourceGroupName(r);
       if (!seen.has(rgName)) {
-        const commands = await rgRender.render(r);
+        // Build a minimal synthetic resource with only the fields RG render needs.
+        // Passing the original resource `r` would cause resolveConfig() to generate
+        // capture commands for r's dependencies (e.g. LAW customerId for ACEnv),
+        // which would incorrectly appear in the RG level.
+        // config is intentionally empty — tags are not critical for RG creation
+        // and may contain ParamValues that trigger unwanted capture commands.
+        const rgResource: Resource = {
+          name: `rg:${rgName}`,
+          type: 'AzureResourceGroup',
+          ring: r.ring,
+          region: r.region,
+          project: r.project,
+          dependencies: [],
+          config: {},
+          exports: {},
+        };
+        const commands = await rgRender.render(rgResource);
         if (commands.length > 0) {
-          // Create a synthetic resource entry for the RG
-          const rgResource: Resource = {
-            name: `rg:${rgName}`,
-            type: 'AzureResourceGroup',
-            ring: r.ring,
-            region: r.region,
-            project: r.project,
-            dependencies: [],
-            config: {},
-            exports: {},
-          };
           seen.set(rgName, { resource: rgResource, commands });
         }
       }
@@ -256,10 +325,15 @@ export class Deployer {
   /**
    * Formats a single command as a shell line.
    * - If the command has envCapture, emits: VARNAME=$(command args)
+   * - If the command has fileContent, the __MERLIN_YAML_FILE__ placeholder in
+   *   args is replaced with a fixed tmp path for display purposes.
    * - Otherwise emits: command args
    */
   private commandToShellLine(command: Command): string {
-    const cmdStr = `${command.command} ${command.args.join(' ')}`;
+    const resolvedArgs = command.args.map(a =>
+      a === '__MERLIN_YAML_FILE__' ? '/tmp/merlin_aca_$$.yml' : a
+    );
+    const cmdStr = `${command.command} ${resolvedArgs.join(' ')}`;
     if (command.envCapture) {
       return `${command.envCapture}=$(${cmdStr})`;
     }
@@ -312,28 +386,44 @@ export class Deployer {
       const commandStr = this.commandToShellLine(command);
       console.log(`> ${commandStr}`);
 
+      let tmpFile: string | undefined;
+
       try {
+        // If the command carries inline file content, write it to a temp file
+        // and substitute the placeholder in args with the real path.
+        let resolvedArgs = command.args.map(arg => expandVars(arg, captureVars));
+
+        if (command.fileContent) {
+          const expandedContent = expandVars(command.fileContent, captureVars);
+          tmpFile = path.join(
+            os.tmpdir(),
+            `merlin_aca_${Date.now()}_${Math.random().toString(36).slice(2)}.yml`
+          );
+          await fs.writeFile(tmpFile, expandedContent, 'utf-8');
+          resolvedArgs = resolvedArgs.map(a =>
+            a === '__MERLIN_YAML_FILE__' ? tmpFile! : a
+          );
+        }
+
         if (command.envCapture) {
           // Capture command: run it and store stdout in map
-          const expandedArgs = command.args.map(arg => expandVars(arg, captureVars));
-          const { stdout } = await execa(command.command, expandedArgs);
+          const { stdout } = await execa(command.command, resolvedArgs);
           captureVars.set(command.envCapture, stdout.trim());
         } else {
-          // Regular command: expand any $VARNAME references in args first
-          const expandedArgs = command.args.map(arg => expandVars(arg, captureVars));
-          const { stdout, stderr } = await execa(command.command, expandedArgs);
-
-          if (stdout) {
-            console.log(stdout);
-          }
-          if (stderr) {
-            console.error(stderr);
-          }
+          // Regular command
+          const { stdout, stderr } = await execa(command.command, resolvedArgs);
+          if (stdout) console.log(stdout);
+          if (stderr) console.error(stderr);
         }
       } catch (error) {
         console.error(`✗ Failed to execute: ${commandStr}`);
         console.error(error);
         throw error;
+      } finally {
+        // Always clean up the temp file
+        if (tmpFile) {
+          await fs.unlink(tmpFile).catch(() => {});
+        }
       }
     }
 
@@ -385,6 +475,7 @@ export class Deployer {
   /**
    * Print commands grouped by level without executing.
    * Capture commands are shown as VARNAME=$(command args).
+   * Commands with fileContent show the YAML content as comments first.
    */
   private printCommandLevels(levels: ExecutionLevel[]): void {
     console.log('\nGenerated deployment commands (dry-run mode):\n');
@@ -396,6 +487,13 @@ export class Deployer {
       for (const { resource, commands } of level) {
         console.log(`# ${resource.type}.${resource.name} (${resource.ring}${resource.region ? `/${resource.region}` : ''})`);
         for (const command of commands) {
+          if (command.fileContent) {
+            console.log('# --- inline YAML (written to temp file at --yaml) ---');
+            for (const line of command.fileContent.split('\n')) {
+              console.log(`# ${line}`);
+            }
+            console.log('# --- end of inline YAML ---');
+          }
           console.log(this.commandToShellLine(command));
         }
         console.log('');
@@ -409,6 +507,7 @@ export class Deployer {
   /**
    * Write commands grouped by level to shell script file.
    * Capture commands are emitted as VARNAME=$(command args).
+   * Commands with fileContent are emitted as a heredoc + command + cleanup.
    */
   private async writeCommandLevelsToFile(
     levels: ExecutionLevel[],
@@ -424,7 +523,26 @@ export class Deployer {
       for (const { resource, commands } of level) {
         lines.push(`# ${resource.type}.${resource.name} (${resource.ring}${resource.region ? `/${resource.region}` : ''})`);
         for (const command of commands) {
-          lines.push(this.commandToShellLine(command));
+          if (command.fileContent) {
+            // Write a heredoc block + command that references the temp file
+            const tmpVar = `MERLIN_TMP_YAML_$$`;
+            lines.push(`${tmpVar}=$(mktemp /tmp/merlin_aca_XXXXXX.yml)`);
+            // Use unquoted heredoc delimiter so $VARNAME is expanded by shell
+            lines.push(`cat > "$${tmpVar}" <<MERLIN_YAML_EOF`);
+            lines.push(command.fileContent);
+            lines.push('MERLIN_YAML_EOF');
+            // Replace placeholder with the variable holding the temp file path
+            const cmdLine = this.commandToShellLine({
+              ...command,
+              args: command.args.map(a =>
+                a === '__MERLIN_YAML_FILE__' ? `"$${tmpVar}"` : a
+              ),
+            });
+            lines.push(cmdLine);
+            lines.push(`rm -f "$${tmpVar}"`);
+          } else {
+            lines.push(this.commandToShellLine(command));
+          }
           totalCommands++;
         }
         lines.push('');

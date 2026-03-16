@@ -18,6 +18,8 @@ dependencies:
     isHardDependency: true
   - resource: AzureDnsZone.chuangdns
     isHardDependency: false
+  - resource: AzureADApp.alluneed
+    isHardDependency: true
 
 defaultConfig:
   # ── Container / Image ─────────────────────────────────────────────
@@ -36,10 +38,38 @@ defaultConfig:
     - DEBUG_MODE=False
     - LOG_LEVEL=INFO
 
+  # ── Health probes ──────────────────────────────────────────────────────────
+  probes:
+    - type: Liveness
+      httpGet:
+        path: /
+        port: 8000
+        scheme: HTTP
+      periodSeconds: 60
+      timeoutSeconds: 30
+      failureThreshold: 30
+    - type: Readiness
+      httpGet:
+        path: /
+        port: 8000
+        scheme: HTTP
+      periodSeconds: 10
+      timeoutSeconds: 30
+      failureThreshold: 30
+    - type: Startup
+      httpGet:
+        path: /
+        port: 8000
+        scheme: HTTP
+      initialDelaySeconds: 1
+      periodSeconds: 10
+      timeoutSeconds: 30
+      failureThreshold: 30
+
 
   # ── Ingress (CREATE ONLY) ──────────────────────────────────────────
   ingress: external
-  targetPort: 8080
+  targetPort: 8000
   transport: auto
   allowInsecure: false
 
@@ -62,6 +92,17 @@ defaultConfig:
 
   # ── Misc ──────────────────────────────────────────────────────────
   noWait: false
+
+  # ── EasyAuth (Built-in Authentication) ────────────────────────────
+  # Merlin will automatically:
+  #   1. Generate a client secret on the AD App (az ad app credential reset --append)
+  #   2. Store the secret in an ACA secret (microsoft-provider-authentication-secret)
+  #   3. Update the AD App's webRedirectUris with the ACA callback URL
+  #   4. Enable EasyAuth and configure the Microsoft identity provider
+  auth:
+    clientId: ${ AzureADApp.alluneed.clientId }
+    issuer: https://sts.windows.net/2c10b0b9-d9c1-4c81-85ee-6a2297ed77f4/v2.0
+    unauthenticatedClientAction: RedirectToLoginPage
 
   bindDnsZone:
       dnsZone: ${ AzureDnsZone.chuangdns.domainName }

@@ -207,9 +207,105 @@ describe('AzureDnsZoneRender', () => {
             expect(cmd.args).not.toContain('--tags');
         });
 
-        it('returns exactly one command', () => {
-            const resource = makeResource();
+        it('returns exactly one command when parentName is absent', () => {
+            const resource = makeResource({ parentName: undefined });
             expect(render.renderCreate(resource)).toHaveLength(1);
+        });
+
+        it('returns 11 commands when parentName is set (1 create + 5 captures + 1 ns create + 4 ns add-record)', () => {
+            // 1 create + 4 NS captures + 1 parent RG capture + 1 NS record-set create + 4 NS add-record = 11
+            const resource = makeResource({ parentName: 'example.com' });
+            expect(render.renderCreate(resource)).toHaveLength(11);
+        });
+    });
+
+    // ── 4b. renderNsDelegation ────────────────────────────────────────────────
+
+    describe('renderNsDelegation (via renderCreate)', () => {
+        it('captures 4 nameservers into distinct env vars', () => {
+            const resource = makeResource({ dnsName: 'child', parentName: 'example.com' });
+            const cmds = render.renderCreate(resource);
+            const captures = cmds.filter(c => c.envCapture?.includes('_NS'));
+            expect(captures).toHaveLength(4);
+            const varNames = captures.map(c => c.envCapture!);
+            expect(new Set(varNames).size).toBe(4); // all distinct
+        });
+
+        it('NS capture commands query nameServers[0..3] via JMESPath', () => {
+            const resource = makeResource({ dnsName: 'child', parentName: 'example.com' });
+            const cmds = render.renderCreate(resource);
+            const captures = cmds.filter(c => c.envCapture?.includes('_NS'));
+            const queries = captures.map(c => c.args[c.args.indexOf('--query') + 1]);
+            expect(queries).toEqual(['nameServers[0]', 'nameServers[1]', 'nameServers[2]', 'nameServers[3]']);
+        });
+
+        it('captures parent resource group into a PARENT_RG env var', () => {
+            const resource = makeResource({ dnsName: 'child', parentName: 'example.com' });
+            const cmds = render.renderCreate(resource);
+            const parentRgCapture = cmds.find(c => c.envCapture?.includes('PARENT_RG'));
+            expect(parentRgCapture).toBeDefined();
+        });
+
+        it('parent RG capture uses dns zone list with JMESPath filter for parent name', () => {
+            const resource = makeResource({ dnsName: 'child', parentName: 'example.com' });
+            const cmds = render.renderCreate(resource);
+            const parentRgCapture = cmds.find(c => c.envCapture?.includes('PARENT_RG'));
+            expect(parentRgCapture!.args).toContain('--query');
+            const query = parentRgCapture!.args[parentRgCapture!.args.indexOf('--query') + 1];
+            expect(query).toContain('example.com');
+            expect(query).toContain('resourceGroup');
+        });
+
+        it('creates NS record-set in parent zone with --ttl 3600', () => {
+            const resource = makeResource({ dnsName: 'child', parentName: 'example.com' });
+            const cmds = render.renderCreate(resource);
+            const nsCreate = cmds.find(c =>
+                c.args.includes('record-set') && c.args.includes('ns') && c.args.includes('create')
+            );
+            expect(nsCreate).toBeDefined();
+            expect(hasParam(nsCreate!.args, '--zone-name', 'example.com')).toBe(true);
+            expect(hasParam(nsCreate!.args, '--name', 'child')).toBe(true);
+            expect(hasParam(nsCreate!.args, '--ttl', '3600')).toBe(true);
+        });
+
+        it('adds 4 NS add-record commands referencing captured NS vars', () => {
+            const resource = makeResource({ dnsName: 'child', parentName: 'example.com' });
+            const cmds = render.renderCreate(resource);
+            const addRecords = cmds.filter(c =>
+                c.args.includes('record-set') && c.args.includes('ns') && c.args.includes('add-record')
+            );
+            expect(addRecords).toHaveLength(4);
+            // Each should reference a captured NS var via $VAR syntax
+            addRecords.forEach(c => {
+                const nsdname = c.args[c.args.indexOf('--nsdname') + 1];
+                expect(nsdname).toMatch(/^\$/);
+            });
+        });
+
+        it('uses dnsName as the relative label in parent zone (not the full zone name)', () => {
+            const resource = makeResource({ dnsName: 'chuang', parentName: 'thebrainly.dev' });
+            const cmds = render.renderCreate(resource);
+            const nsCreate = cmds.find(c =>
+                c.args.includes('record-set') && c.args.includes('ns') && c.args.includes('create')
+            );
+            expect(hasParam(nsCreate!.args, '--name', 'chuang')).toBe(true);
+        });
+
+        it('NS delegation commands target the parent zone, not child zone', () => {
+            const resource = makeResource({ dnsName: 'child', parentName: 'example.com' });
+            const cmds = render.renderCreate(resource);
+            const addRecords = cmds.filter(c =>
+                c.args.includes('record-set') && c.args.includes('ns') && c.args.includes('add-record')
+            );
+            addRecords.forEach(c => {
+                expect(hasParam(c.args, '--zone-name', 'example.com')).toBe(true);
+            });
+        });
+
+        it('returns no delegation commands when parentName is absent', () => {
+            const resource = makeResource({ parentName: undefined });
+            const cmds = render.renderCreate(resource);
+            expect(cmds.filter(c => c.args.includes('record-set'))).toHaveLength(0);
         });
     });
 

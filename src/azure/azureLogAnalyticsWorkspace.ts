@@ -168,7 +168,6 @@ export class AzureLogAnalyticsWorkspaceRender extends AzureResourceRender {
      * Parameters valid on both create and update
      */
     private static readonly SIMPLE_PARAM_MAP: Record<string, string> = {
-        'location':                  '--location',
         'retentionInDays':           '--retention-time',
         'dailyQuotaGb':              '--quota',
         'capacityReservationLevel':  '--capacity-reservation-level',
@@ -179,10 +178,11 @@ export class AzureLogAnalyticsWorkspaceRender extends AzureResourceRender {
     };
 
     /**
-     * Parameters valid on CREATE only — --sku is immutable after creation
+     * Parameters valid on CREATE only — --sku and --location are immutable after creation
      */
     private static readonly CREATE_ONLY_SIMPLE_PARAM_MAP: Record<string, string> = {
-        'sku': '--sku',
+        'sku':      '--sku',
+        'location': '--location',
     };
 
     /**

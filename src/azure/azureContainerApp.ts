@@ -2,6 +2,7 @@ import { AzureResource } from './resource.js';
 import { Resource, ResourceSchema, Command, RenderContext } from '../common/resource.js';
 import { AzureResourceRender } from './render.js';
 import { execSync } from 'child_process';
+import { dump as yamlDump } from 'js-yaml';
 
 export const AZURE_CONTAINER_APP_TYPE = 'AzureContainerApp';
 
@@ -21,6 +22,35 @@ export type DaprProtocol = 'grpc' | 'http';
 
 // Dapr log level
 export type DaprLogLevel = 'debug' | 'error' | 'info' | 'warn';
+
+// ── Health probe types ────────────────────────────────────────────────────────
+
+export type ProbeType = 'Liveness' | 'Readiness' | 'Startup';
+export type ProbeScheme = 'HTTP' | 'HTTPS';
+
+export interface HttpProbeConfig {
+    path: string;
+    port: number;
+    scheme?: ProbeScheme;
+    httpHeaders?: Array<{ name: string; value: string }>;
+}
+
+export interface TcpProbeConfig {
+    port: number;
+}
+
+export interface ContainerProbe {
+    type: ProbeType;
+    /** Specify exactly one of httpGet or tcpSocket */
+    httpGet?: HttpProbeConfig;
+    tcpSocket?: TcpProbeConfig;
+    initialDelaySeconds?: number;
+    periodSeconds?: number;
+    timeoutSeconds?: number;
+    failureThreshold?: number;
+    successThreshold?: number;
+}
+
 
 export interface AzureContainerAppConfig extends ResourceSchema {
     // ── Container / image ─────────────────────────────────────────────────────
@@ -110,6 +140,47 @@ export interface AzureContainerAppConfig extends ResourceSchema {
         /** 子域名前缀（例如 "myapp" 对应 "myapp.example.com"） */
         subDomain: string;
     };
+
+    // ── Health probes ──────────────────────────────────────────────────────────
+    /**
+     * Container health probe configuration.
+     * When set, renderCreate/renderUpdate will use --yaml mode because
+     * az containerapp create/update does not support probes via CLI flags.
+     * Supports Liveness, Readiness, and Startup probe types with either
+     * httpGet or tcpSocket checks.
+     */
+    probes?: ContainerProbe[];
+
+    // ── EasyAuth (Built-in Authentication) ────────────────────────────────────
+    /**
+     * Azure Container Apps built-in authentication (EasyAuth) configuration.
+     *
+     * Merlin will automatically:
+     *   1. Generate (or rotate) a client secret on the AD App via
+     *      `az ad app credential reset --append`
+     *   2. Store the secret value in an ACA secret named
+     *      `microsoft-provider-authentication-secret`
+     *   3. Update the AD App's webRedirectUris with the ACA callback URL
+     *   4. Enable EasyAuth on the Container App
+     *   5. Configure the Microsoft (AAD) identity provider
+     *
+     * The clientId is typically a ${ AzureADApp.<name>.clientId } expression
+     * resolved at deploy time.
+     */
+    auth?: {
+        /** Azure AD Application (client) ID. */
+        clientId: string;
+        /**
+         * OpenID Connect issuer URI.
+         * Default: https://sts.windows.net/<tenantId>/v2.0
+         */
+        issuer?: string;
+        /**
+         * Action for unauthenticated clients.
+         * Default: RedirectToLoginPage
+         */
+        unauthenticatedClientAction?: 'AllowAnonymous' | 'RedirectToLoginPage' | 'Return401' | 'Return403';
+    };
 }
 
 export interface AzureContainerAppResource extends AzureResource<AzureContainerAppConfig> {}
@@ -190,6 +261,9 @@ export class AzureContainerAppRender extends AzureResourceRender {
 
         // Post-deployment: bind custom DNS zone if configured
         ret.push(...this.renderBindDnsZone(resource as AzureContainerAppResource));
+
+        // Post-deployment: configure EasyAuth if configured
+        ret.push(...this.renderAuth(resource as AzureContainerAppResource));
 
         return ret;
     }
@@ -283,6 +357,30 @@ export class AzureContainerAppRender extends AzureResourceRender {
                 tags: d.tags,
 
                 // secrets: intentionally omitted — values are redacted in show output
+
+                // Probes
+                probes: Array.isArray(container?.probes)
+                    ? container.probes.map((p: Record<string, unknown>) => {
+                        const probe: ContainerProbe = { type: p.type as ProbeType };
+                        const httpGet = p.httpGet as Record<string, unknown> | undefined;
+                        const tcpSocket = p.tcpSocket as Record<string, unknown> | undefined;
+                        if (httpGet) {
+                            probe.httpGet = {
+                                path: httpGet.path as string,
+                                port: httpGet.port as number,
+                                scheme: httpGet.scheme as ProbeScheme | undefined,
+                            };
+                        } else if (tcpSocket) {
+                            probe.tcpSocket = { port: tcpSocket.port as number };
+                        }
+                        if (p.initialDelaySeconds !== undefined) probe.initialDelaySeconds = p.initialDelaySeconds as number;
+                        if (p.periodSeconds !== undefined) probe.periodSeconds = p.periodSeconds as number;
+                        if (p.timeoutSeconds !== undefined) probe.timeoutSeconds = p.timeoutSeconds as number;
+                        if (p.failureThreshold !== undefined) probe.failureThreshold = p.failureThreshold as number;
+                        if (p.successThreshold !== undefined) probe.successThreshold = p.successThreshold as number;
+                        return probe;
+                    })
+                    : undefined,
             };
 
             // Remove undefined values
@@ -325,15 +423,10 @@ export class AzureContainerAppRender extends AzureResourceRender {
         'minReplicas': '--min-replicas',
         'maxReplicas': '--max-replicas',
         'revisionSuffix': '--revision-suffix',
-        'revisionsMode': '--revisions-mode',
         'scaleRuleName': '--scale-rule-name',
         'scaleRuleType': '--scale-rule-type',
         'scaleRuleHttpConcurrency': '--scale-rule-http-concurrency',
         'secretVolumeMount': '--secret-volume-mount',
-        'registryServer': '--registry-server',
-        'registryUsername': '--registry-username',
-        'registryPassword': '--registry-password',
-        'registryIdentity': '--registry-identity',
         'daprAppId': '--dapr-app-id',
         'daprAppPort': '--dapr-app-port',
         'daprAppProtocol': '--dapr-app-protocol',
@@ -353,6 +446,12 @@ export class AzureContainerAppRender extends AzureResourceRender {
         'targetPort': '--target-port',
         'transport': '--transport',
         'exposedPort': '--exposed-port',
+        // Registry and revision mode are not supported by `az containerapp update`
+        'revisionsMode': '--revisions-mode',
+        'registryServer': '--registry-server',
+        'registryUsername': '--registry-username',
+        'registryPassword': '--registry-password',
+        'registryIdentity': '--registry-identity',
     };
 
     /**
@@ -375,7 +474,6 @@ export class AzureContainerAppRender extends AzureResourceRender {
      * Array params (space-joined) supported on BOTH create and update
      */
     private static readonly ARRAY_PARAM_MAP: Record<string, string> = {
-        'envVars': '--env-vars',
         'secrets': '--secrets',
         'scaleRuleMetadata': '--scale-rule-metadata',
         'scaleRuleAuth': '--scale-rule-auth',
@@ -388,13 +486,16 @@ export class AzureContainerAppRender extends AzureResourceRender {
         'args': '--args',
         'command': '--command',
         'userAssigned': '--user-assigned',
+        // --env-vars is not supported by `az containerapp update`
+        'envVars': '--env-vars',
     };
 
     // ── Render methods ────────────────────────────────────────────────────────
 
     renderCreate(resource: AzureContainerAppResource): Command[] {
-        const args: string[] = [];
         const config = resource.config;
+
+        const args: string[] = [];
 
         args.push('containerapp', 'create');
         args.push('--name', this.getResourceName(resource));
@@ -419,19 +520,29 @@ export class AzureContainerAppRender extends AzureResourceRender {
 
         this.addTags(args, config.tags);
 
-        return [{ command: 'az', args }];
+        const createCmd: Command = { command: 'az', args };
+
+        // When probes are configured, az containerapp create does not support probes via CLI flags.
+        // az containerapp create --yaml also cannot set probes reliably (managedEnvironmentId lookup
+        // issues). The solution: create with CLI flags first, then immediately update via --yaml to
+        // apply the probes. This is always safe because the update runs right after create.
+        if (config.probes && config.probes.length > 0) {
+            return [createCmd, ...this.renderUpdateViaYaml(resource)];
+        }
+
+        return [createCmd];
     }
 
     /**
-     * 生成 DNS Zone 绑定所需的命令序列。
-     * 若未配置 bindDnsZone 则返回空数组。
+     * Generates the command sequence for binding a custom DNS zone to a container app.
+     * Returns an empty array if bindDnsZone is not configured.
      *
-     * 所有动态参数（DNS Zone RG、Environment 名称、FQDN、验证 ID）均通过
-     * envCapture 机制在部署执行时捕获，render 阶段不执行任何 execSync 查询。
+     * All dynamic values (DNS Zone RG, Environment name, FQDN, verification ID) are
+     * captured at deploy time via envCapture — no execSync calls during render.
      *
-     * 注意：DNS 记录命令不是完全幂等的——
-     *   cname set-record 会覆盖已有 CNAME 值；
-     *   txt add-record 重复执行可能产生重复 TXT 记录。
+     * Note: DNS record commands are not fully idempotent:
+     *   cname set-record overwrites any existing CNAME value;
+     *   txt add-record may create duplicate TXT records on repeated runs.
      */
     private renderBindDnsZone(resource: AzureContainerAppResource): Command[] {
         const { bindDnsZone } = resource.config;
@@ -452,7 +563,7 @@ export class AzureContainerAppRender extends AzureResourceRender {
 
         const commands: Command[] = [];
 
-        // ── 步骤 0a：查询 DNS Zone 所在 Resource Group ──────────────────────
+        // ── Step 0a: Look up the DNS Zone resource group ─────────────────────
         commands.push({
             command: 'az',
             args: [
@@ -463,7 +574,7 @@ export class AzureContainerAppRender extends AzureResourceRender {
             envCapture: dnsZoneRgVar,
         });
 
-        // ── 步骤 0b：查询 Container Environment 的完整 ARM resource ID ──────
+        // ── Step 0b: Look up the Container Environment ARM resource ID ────────
         commands.push({
             command: 'az',
             args: [
@@ -476,16 +587,29 @@ export class AzureContainerAppRender extends AzureResourceRender {
             envCapture: envArmIdVar,
         });
 
-        // ── 步骤 0c：从 ARM ID 提取 Environment 名称（最后一段）─────────────
-        // ARM ID 格式：.../providers/Microsoft.App/managedEnvironments/<env-name>
-        // Merlin 只支持简单 $VARNAME 替换，不支持 bash 参数展开，故用独立 bash 命令处理
+        // ── Step 0c: Extract environment name from ARM ID (last path segment) ─
+        // ARM ID format: .../providers/Microsoft.App/managedEnvironments/<env-name>
+        // Merlin only supports simple $VARNAME substitution, not bash parameter expansion,
+        // so we use a separate bash command to extract the last segment.
         commands.push({
             command: 'bash',
             args: ['-c', `echo $${envArmIdVar} | sed 's|.*/||'`],
             envCapture: envNameVar,
         });
 
-        // ── 步骤 1：获取容器应用默认域名（FQDN）────────────────────────────
+        // ── Step 1: Register the hostname on the container app (no certificate yet) ─
+        // Azure requires the hostname to be added to the container app before a managed
+        // certificate can be requested. This step does not need any DNS records.
+        // Use bash to swallow the "already exists" error — idempotent on re-runs.
+        commands.push({
+            command: 'bash',
+            args: [
+                '-c',
+                `az containerapp hostname add --hostname ${subDomain}.${dnsZone} --name ${resourceName} --resource-group ${resourceGroup} || true`,
+            ],
+        });
+
+        // ── Step 2: Capture the container app's default ingress FQDN ─────────
         commands.push({
             command: 'az',
             args: [
@@ -498,7 +622,7 @@ export class AzureContainerAppRender extends AzureResourceRender {
             envCapture: fqdnVar,
         });
 
-        // ── 步骤 2：在 DNS Zone 中创建 CNAME 记录 ───────────────────────────
+        // ── Step 3: Create CNAME record in the DNS zone ───────────────────────
         commands.push({
             command: 'az',
             args: [
@@ -510,7 +634,7 @@ export class AzureContainerAppRender extends AzureResourceRender {
             ],
         });
 
-        // ── 步骤 3：获取自定义域名验证 ID ───────────────────────────────────
+        // ── Step 4: Capture the custom domain verification ID ─────────────────
         commands.push({
             command: 'az',
             args: [
@@ -523,7 +647,7 @@ export class AzureContainerAppRender extends AzureResourceRender {
             envCapture: verificationVar,
         });
 
-        // ── 步骤 4：创建 TXT 验证记录（asuid.<subDomain>）───────────────────
+        // ── Step 5: Create TXT verification record (asuid.<subDomain>) ────────
         commands.push({
             command: 'az',
             args: [
@@ -535,24 +659,22 @@ export class AzureContainerAppRender extends AzureResourceRender {
             ],
         });
 
-        // ── 等待 DNS 传播 ─────────────────────────────────────────────────────
-        // Azure DNS 控制平面返回 "Succeeded" 后，权威 DNS 服务器之间的同步
-        // 仍需数秒到数十秒，必须等待传播完成后再执行 hostname bind 验证。
+        // ── Wait for DNS propagation ──────────────────────────────────────────
+        // After Azure DNS returns "Succeeded", authoritative name servers need
+        // a few seconds to sync. Wait before running hostname bind validation.
         commands.push({
             command: 'bash',
             args: ['-c', 'sleep 30'],
         });
 
-        // ── 步骤 5：将自定义域名绑定到容器应用 ──────────────────────────────
+        // ── Step 6: Bind the hostname and request a managed certificate ────────
+        // Use || true to make this idempotent — if the hostname is already bound
+        // (certificate already issued), Azure returns an error we can safely ignore.
         commands.push({
-            command: 'az',
+            command: 'bash',
             args: [
-                'containerapp', 'hostname', 'bind',
-                '--hostname',          `${subDomain}.${dnsZone}`,
-                '--resource-group',    resourceGroup,
-                '--name',              resourceName,
-                '--environment',       `$${envNameVar}`,
-                '--validation-method', 'CNAME',
+                '-c',
+                `az containerapp hostname bind --hostname ${subDomain}.${dnsZone} --resource-group ${resourceGroup} --name ${resourceName} --environment $${envNameVar} --validation-method CNAME || true`,
             ],
         });
 
@@ -560,8 +682,14 @@ export class AzureContainerAppRender extends AzureResourceRender {
     }
 
     renderUpdate(resource: AzureContainerAppResource): Command[] {
-        const args: string[] = [];
         const config = resource.config;
+
+        // When probes are configured, use --yaml mode (CLI doesn't support probes directly)
+        if (config.probes && config.probes.length > 0) {
+            return this.renderUpdateViaYaml(resource);
+        }
+
+        const args: string[] = [];
 
         args.push('containerapp', 'update');
         args.push('--name', this.getResourceName(resource));
@@ -580,4 +708,242 @@ export class AzureContainerAppRender extends AzureResourceRender {
 
         return [{ command: 'az', args }];
     }
+
+    // ── EasyAuth render ───────────────────────────────────────────────────────
+
+    /**
+     * Renders EasyAuth (built-in authentication) commands.
+     *
+     * Steps emitted:
+     *   1. Generate (or rotate) a client secret on the AD App and capture the value
+     *   2. Store the secret value as an ACA secret
+     *   3. Update the AD App's webRedirectUris with the ACA callback URL
+     *   4. az containerapp auth update  — enable auth + set unauthenticated action
+     *   5. az containerapp auth microsoft update  — configure AAD identity provider
+     *
+     * All dynamic values (FQDN, client secret) are resolved at deploy time via
+     * envCapture, so this is safe to re-run on both create and update paths.
+     */
+    private renderAuth(resource: AzureContainerAppResource): Command[] {
+        const { auth } = resource.config;
+        if (!auth) return [];
+
+        const resourceName  = this.getResourceName(resource);
+        const resourceGroup = this.getResourceGroupName(resource);
+        const action = auth.unauthenticatedClientAction ?? 'RedirectToLoginPage';
+        const secretName = 'microsoft-provider-authentication-secret';
+
+        const slug = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '_');
+        const appSlug      = slug(resourceName);
+        const fqdnVar      = `MERLIN_${appSlug}_AUTH_FQDN`;
+        const secretValVar = `MERLIN_${appSlug}_AUTH_SECRET`;
+
+        return [
+            // Step 1: generate (append) a new client secret on the AD App
+            {
+                command: 'az',
+                args: [
+                    'ad', 'app', 'credential', 'reset',
+                    '--id',          auth.clientId,
+                    '--append',
+                    '--display-name', `merlin-easyauth-${resourceName}`,
+                    '--query',        'password',
+                    '-o',             'tsv',
+                ],
+                envCapture: secretValVar,
+            },
+            // Step 2: store the secret value in the ACA
+            {
+                command: 'az',
+                args: [
+                    'containerapp', 'secret', 'set',
+                    '--name',           resourceName,
+                    '--resource-group', resourceGroup,
+                    '--secrets',        `${secretName}=$${secretValVar}`,
+                ],
+            },
+            // Step 3: get the ACA FQDN for the redirect URI
+            {
+                command: 'az',
+                args: [
+                    'containerapp', 'show',
+                    '--name',           resourceName,
+                    '--resource-group', resourceGroup,
+                    '--query',          'properties.configuration.ingress.fqdn',
+                    '-o',               'tsv',
+                ],
+                envCapture: fqdnVar,
+            },
+            // Step 4: update the AD App's webRedirectUris
+            {
+                command: 'az',
+                args: [
+                    'ad', 'app', 'update',
+                    '--id',               auth.clientId,
+                    '--web-redirect-uris', `https://$${fqdnVar}/.auth/login/aad/callback`,
+                ],
+            },
+            // Step 5: enable auth platform + set unauthenticated action
+            {
+                command: 'az',
+                args: [
+                    'containerapp', 'auth', 'update',
+                    '--name',           resourceName,
+                    '--resource-group', resourceGroup,
+                    '--enabled',        'true',
+                    '--action',         action,
+                ],
+            },
+            // Step 6: configure Microsoft (AAD) identity provider
+            {
+                command: 'az',
+                args: [
+                    'containerapp', 'auth', 'microsoft', 'update',
+                    '--name',               resourceName,
+                    '--resource-group',     resourceGroup,
+                    '--client-id',          auth.clientId,
+                    '--client-secret-name', secretName,
+                    ...(auth.issuer ? ['--issuer', auth.issuer] : []),
+                ],
+            },
+        ];
+    }
+
+    // ── YAML-based render (for probe support) ────────────────────────────────
+
+    /**
+     * Renders an `az containerapp update --yaml` command.
+     * Used when probes are configured.
+     */
+    private renderUpdateViaYaml(resource: AzureContainerAppResource): Command[] {
+        const fileContent = this.buildContainerAppYaml(resource);
+        return [{
+            command: 'az',
+            args: [
+                'containerapp', 'update',
+                '--name',           this.getResourceName(resource),
+                '--resource-group', this.getResourceGroupName(resource),
+                '--yaml',           '__MERLIN_YAML_FILE__',
+                ...(resource.config.noWait ? ['--no-wait'] : []),
+            ],
+            fileContent,
+        }];
+    }
+
+    /**
+     * Serializes the resource config to the YAML format expected by
+     * `az containerapp update --yaml`.
+     *
+     * Only includes fields relevant to update: container template (image, resources,
+     * env vars, probes) and scale. Ingress, registry, and identity are create-only
+     * and handled via CLI flags in renderCreate().
+     */
+    private buildContainerAppYaml(resource: AzureContainerAppResource): string {
+        const config = resource.config;
+        const resourceName = this.getResourceName(resource);
+
+        // ── containers[0] ──
+        const container: Record<string, unknown> = {
+            name: config.containerName ?? resourceName,
+        };
+
+        if (config.image !== undefined) container.image = config.image;
+
+        if (config.cpu !== undefined) {
+            container.resources = { cpu: config.cpu, memory: config.memory };
+        }
+
+        if (config.envVars && config.envVars.length > 0) {
+            container.env = config.envVars.map((ev: string) => {
+                const sepIdx = ev.indexOf('=');
+                const name = ev.slice(0, sepIdx);
+                const rawValue = ev.slice(sepIdx + 1);
+                if (rawValue.startsWith('secretref:')) {
+                    return { name, secretRef: rawValue.slice('secretref:'.length) };
+                }
+                return { name, value: rawValue };
+            });
+        }
+
+        if (config.probes && config.probes.length > 0) {
+            container.probes = config.probes.map(p => this.buildProbeYaml(p));
+        }
+
+        // ── template ──
+        const template: Record<string, unknown> = { containers: [container] };
+
+        if (config.minReplicas !== undefined || config.maxReplicas !== undefined) {
+            template.scale = {
+                ...(config.minReplicas !== undefined && { minReplicas: config.minReplicas }),
+                ...(config.maxReplicas !== undefined && { maxReplicas: config.maxReplicas }),
+            };
+        }
+
+        if (config.terminationGracePeriod !== undefined) {
+            template.terminationGracePeriodSeconds = config.terminationGracePeriod;
+        }
+
+        // ── configuration (revision mode only for update) ──
+        const configuration: Record<string, unknown> = {};
+
+        if (config.revisionsMode) {
+            configuration.activeRevisionsMode =
+                config.revisionsMode === 'single' ? 'Single' : 'Multiple';
+        }
+
+        if (config.secrets && config.secrets.length > 0) {
+            configuration.secrets = config.secrets.map((s: string) => {
+                const eqIdx = s.indexOf('=');
+                return { name: s.slice(0, eqIdx), value: s.slice(eqIdx + 1) };
+            });
+        }
+
+        if (config.enableDapr !== undefined) {
+            configuration.dapr = {
+                enabled: config.enableDapr,
+                ...(config.daprAppId && { appId: config.daprAppId }),
+                ...(config.daprAppPort !== undefined && { appPort: config.daprAppPort }),
+                ...(config.daprAppProtocol && { appProtocol: config.daprAppProtocol }),
+            };
+        }
+
+        // ── top-level document ──
+        const properties: Record<string, unknown> = {
+            ...(Object.keys(configuration).length > 0 && { configuration }),
+            template,
+        };
+
+        const doc: Record<string, unknown> = { properties };
+
+        if (config.tags && Object.keys(config.tags).length > 0) {
+            doc.tags = config.tags;
+        }
+
+        return yamlDump(doc, { lineWidth: -1, noRefs: true });
+    }
+
+    /** Serializes a single ContainerProbe to the Azure ARM YAML format. */
+    private buildProbeYaml(probe: ContainerProbe): Record<string, unknown> {
+        const result: Record<string, unknown> = { type: probe.type };
+
+        if (probe.httpGet) {
+            result.httpGet = {
+                path: probe.httpGet.path,
+                port: probe.httpGet.port,
+                scheme: probe.httpGet.scheme ?? 'HTTP',
+                ...(probe.httpGet.httpHeaders && { httpHeaders: probe.httpGet.httpHeaders }),
+            };
+        } else if (probe.tcpSocket) {
+            result.tcpSocket = { port: probe.tcpSocket.port };
+        }
+
+        if (probe.initialDelaySeconds !== undefined) result.initialDelaySeconds = probe.initialDelaySeconds;
+        if (probe.periodSeconds       !== undefined) result.periodSeconds       = probe.periodSeconds;
+        if (probe.timeoutSeconds      !== undefined) result.timeoutSeconds      = probe.timeoutSeconds;
+        if (probe.failureThreshold    !== undefined) result.failureThreshold    = probe.failureThreshold;
+        if (probe.successThreshold    !== undefined) result.successThreshold    = probe.successThreshold;
+
+        return result;
+    }
+
 }
