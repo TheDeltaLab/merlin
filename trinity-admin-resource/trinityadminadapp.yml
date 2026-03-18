@@ -1,0 +1,24 @@
+name: admin
+type: AzureADApp
+project: merlin
+ring:
+  - test
+  - staging
+
+authProvider:
+  name: AzureEntraID
+
+dependencies: []
+
+defaultConfig:
+  signInAudience: AzureADMyOrg
+  enableIdTokenIssuance: true
+
+specificConfig:
+  - ring: test
+    displayName: merlin-admin-tst
+  - ring: staging
+    displayName: merlin-admin-stg
+
+exports:
+  clientId: AzureADAppClientId

@@ -105,7 +105,9 @@ export abstract class AzureResourceRender implements Render {
     }
 
     /**
-     * Add array-type parameters to args array
+     * Add array-type parameters to args array.
+     * Azure CLI expects array values as a single space-joined string argument,
+     * e.g. --env-vars "KEY1=VAL1 KEY2=VAL2" rather than separate positional args.
      * @param args - The args array to append to
      * @param config - The configuration object
      * @param arrayParamMap - Map of config keys to CLI flags (e.g., { 'bypass': '--bypass' })
@@ -115,9 +117,7 @@ export abstract class AzureResourceRender implements Render {
             const value = config[configKey];
             if (Array.isArray(value) && value.length > 0) {
                 args.push(cliFlag);
-                for (const item of value) {
-                    args.push(String(item));
-                }
+                args.push(value.map(String).join(' '));
             }
         }
     }

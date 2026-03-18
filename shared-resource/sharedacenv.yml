@@ -1,0 +1,27 @@
+name: shared
+type: AzureContainerAppEnvironment
+project: merlin
+ring:
+  - test
+  - staging
+region:
+  - koreacentral
+  - eastasia
+
+dependencies:
+  - resource: AzureLogAnalyticsWorkspace.shared
+    isHardDependency: true
+
+defaultConfig:
+  location: ${ this.region }
+  logsWorkspaceId: ${ AzureLogAnalyticsWorkspace.shared.customerId }
+  logsWorkspaceKey: ${ AzureLogAnalyticsWorkspace.shared.sharedKey }
+
+  tags:
+    merlin: "true"
+    env: ${ this.ring }
+
+specificConfig: []
+
+exports:
+  name: AzureResourceName

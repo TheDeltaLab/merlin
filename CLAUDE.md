@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Merlin is a declarative Infrastructure as Code (IaC) tool that compiles YAML resource definitions into TypeScript, then executes deployment commands. It follows a compile-time + runtime architecture where YAML files are compiled to TypeScript, which are then executed to generate Azure CLI commands for infrastructure deployment.
+Merlin is a declarative Infrastructure as Code (IaC) tool that compiles YAML resource definitions into TypeScript, then executes deployment commands. It follows a compile-time + runtime architecture where YAML files are compiled to TypeScript, which are then executed to generate cloud CLI commands for infrastructure deployment.
+
+Merlin supports multiple cloud providers via the `MERLIN_CLOUD` environment variable (default: `azure`). YAML resources can use cloud-agnostic type names (e.g. `ContainerApp`) or Azure-specific names (e.g. `AzureContainerApp`) — both are fully supported.
 
 ## Common Commands
 
@@ -59,6 +61,10 @@ merlin deploy --execute
 # Deploy to specific ring and region
 merlin deploy --ring production --region eastus
 
+# Deploy targeting a specific cloud provider
+merlin deploy --cloud azure   # default
+merlin deploy --cloud alibaba # throws "not yet implemented" (Phase 2)
+
 # Save generated commands to a file
 merlin deploy --output-file commands.sh
 
@@ -97,7 +103,7 @@ Merlin uses a **compile-time + runtime** architecture:
 2. **Runtime** (TypeScript → Commands):
    - Load generated TypeScript resources
    - Resolve dependencies via runtime registry
-   - Render resources to deployment commands (Azure CLI)
+   - Render resources to deployment commands (Azure CLI or other cloud CLI)
    - Execute or output commands
 
 ### Key Directories
@@ -105,9 +111,11 @@ Merlin uses a **compile-time + runtime** architecture:
 - **`src/merlin.ts`**: CLI entry point with Commander.js commands
 - **`src/compiler/`**: Compile-time logic (parser, validator, transformer, generator)
 - **`src/common/`**: Shared types and resource registry
+  - **`src/common/cloudTypes.ts`**: Cloud-agnostic resource type name constants
 - **`src/azure/`**: Azure-specific resource types, renders, and auth providers
+- **`src/alibaba/`**: Alibaba Cloud placeholder (Phase 2, not yet implemented)
 - **`src/runtime.ts`**: Public API for generated code
-- **`src/init.ts`**: Registers all providers (auth, render, propriety getters)
+- **`src/init.ts`**: Registers all providers (auth, render, propriety getters); branches on `MERLIN_CLOUD`
 - **`resources/`**: YAML resource definitions (user input)
 - **`.merlin/`**: Generated TypeScript project (output, not in git)
 
@@ -140,6 +148,43 @@ Merlin uses registries (global Maps) for runtime lookup:
 - **Propriety Getter Registry**: Maps `getterName` → `ProprietyGetter` implementation
 
 All registrations happen in `src/init.ts` and are imported by generated code via `import 'merlin/init.js'`.
+
+### Multi-Cloud Architecture
+
+Merlin supports multiple cloud providers via the `MERLIN_CLOUD` environment variable. `src/init.ts` reads this at startup and registers the appropriate render implementations.
+
+**Cloud-agnostic type constants** (`src/common/cloudTypes.ts`):
+
+| Constant | YAML `type:` value | Azure implementation |
+|---|---|---|
+| `CONTAINER_APP_TYPE` | `ContainerApp` | `AzureContainerAppRender` |
+| `CONTAINER_REGISTRY_TYPE` | `ContainerRegistry` | `AzureContainerRegistryRender` |
+| `CONTAINER_APP_ENVIRONMENT_TYPE` | `ContainerAppEnvironment` | `AzureContainerAppEnvironmentRender` |
+| `OBJECT_STORAGE_TYPE` | `ObjectStorage` | `AzureBlobStorageRender` |
+| `LOG_SINK_TYPE` | `LogSink` | `AzureLogAnalyticsWorkspaceRender` |
+| `DNS_ZONE_TYPE` | `DnsZone` | `AzureDnsZoneRender` |
+| `SERVICE_PRINCIPAL_TYPE` | `ServicePrincipal` | `AzureServicePrincipalRender` |
+| `APP_REGISTRATION_TYPE` | `AppRegistration` | `AzureADAppRender` |
+
+**`init.ts` registration logic**:
+```
+MERLIN_CLOUD=azure (default)
+  ① Cloud-agnostic types (ContainerApp, etc.) → Azure implementations
+  ② Azure-specific types (AzureContainerApp, etc.) → same Azure implementations (backwards compat)
+
+MERLIN_CLOUD=alibaba → throws Error("Alibaba Cloud provider is not yet implemented")
+MERLIN_CLOUD=<other> → throws Error("Unknown cloud provider")
+```
+
+**Supported regions** (`src/common/resource.ts` `Region` type):
+- Azure: `eastus`, `westus`, `eastasia`, `koreacentral`, `koreasouth`
+- Alibaba Cloud (Phase 2): `cn-hangzhou`, `cn-shanghai`, `cn-beijing`, `ap-southeast-1`
+
+Alibaba Cloud region short names: `hzh`, `sha`, `bej`, `sg1`.
+
+**CLI `--cloud` option**: `merlin deploy --cloud <azure|alibaba>` sets `MERLIN_CLOUD` env variable when invoking the deploy subprocess.
+
+**Phase 2 placeholder**: `src/alibaba/index.ts` documents the planned Alibaba render mapping (SAE, ACR, OSS, Tair, RDS/PolarDB, KMS, SLS, Alidns).
 
 ### ProprietyGetter Implementations (`src/azure/proprietyGetter.ts`)
 
@@ -230,6 +275,18 @@ When `bindDnsZone: { dnsZone, subDomain }` is set in the ACA config, `renderBind
 
 Some Azure resources are tenant-scoped and have no region (e.g. `AzureADApp`). Setting `isGlobalResource = true` on the Render implementation allows region-aware resources to resolve them by ring only, ignoring region. The registry lookup falls back to ring-only match when an exact ring+region match is not found for a global resource.
 
+### AzureServicePrincipal (`src/azure/azureServicePrincipal.ts`)
+
+`AzureServicePrincipalRender` is a global resource (`isGlobalResource: true`) that manages:
+1. **AD App creation** (`az ad app create`)
+2. **Service Principal creation** (`az ad sp create --id <appId>`)
+3. **Federated Credentials** (OIDC, `az ad app federated-credential create`) — one per entry in `config.federatedCredentials[]`
+4. **Role Assignments** (`az role assignment create`) — one per entry in `config.roleAssignments[]`
+
+**`{subscriptionId}` placeholder**: Role assignment scope strings use the literal `{subscriptionId}` (not `${ subscriptionId }`) to avoid Merlin's `${ }` expression parser. At deploy time, `renderRoleAssignments()` captures the real subscription ID via `az account show --query id` and replaces all `{subscriptionId}` occurrences with a shell variable reference.
+
+**Why not `${ this.subscriptionId }`**: Merlin's `parseExpression` would try to evaluate it at compile time and fail since `subscriptionId` is not a valid resource property.
+
 ## Adding New Resource Types
 
 To add support for a new Azure resource type:
@@ -270,7 +327,7 @@ Key fields in resource YAML files:
 - **`type`** (required): Resource type (e.g., `AzureBlobStorage`, `AzureContainerApp`)
 - **`project`** (optional): Project name (omit for shared resources)
 - **`ring`** (required): Single value or array - `test`, `staging`, `production`
-- **`region`** (optional): Single value or array - `eastus`, `westus`, `eastasia`, `koreacentral`, `koreasouth`
+- **`region`** (optional): Single value or array - Azure: `eastus`, `westus`, `eastasia`, `koreacentral`, `koreasouth`; Alibaba: `cn-hangzhou`, `cn-shanghai`, `cn-beijing`, `ap-southeast-1`
 - **`parent`** (optional): Parent resource name (e.g., container apps need container environment)
 - **`authProvider`** (required): Auth provider name or `{name, ...args}`
 - **`dependencies`** (required): Array of `{resource, isHardDependency?, authProvider?}`
@@ -316,3 +373,6 @@ When `ring` and `region` are arrays, Merlin generates a cartesian product (e.g.,
 - **`bash -c '... || true'` pattern** - use this for idempotent Azure CLI steps that fail with "already exists" on re-runs (e.g. `hostname add`, `hostname bind`)
 - **NS delegation is create-only** - `renderNsDelegation()` is called from `renderCreate()` only; if a zone was created outside Merlin, manually run the NS delegation commands against the parent zone
 - **After `pnpm build` in merlin root, also rebuild `.merlin/`** - the `.merlin/` project bundles merlin's `dist/init.js` at build time; run `merlin compile` (or `pnpm build` inside `.merlin/`) to pick up merlin source changes
+- **`addArrayParams` space-joins values** - Azure CLI expects array parameters as a single space-separated string argument (e.g. `--env-vars "KEY1=VAL1 KEY2=VAL2"`), not multiple positional args. `AzureResourceRender.addArrayParams()` in `render.ts` handles this by calling `.join(' ')`. Do NOT push each element separately.
+- **`envVars` is supported on update** - `az containerapp update` does accept `--env-vars`. It is in the shared `ARRAY_PARAM_MAP` (not `CREATE_ONLY_ARRAY_PARAM_MAP`) in `azureContainerApp.ts`.
+- **`MERLIN_CLOUD` env variable** - set by `merlin deploy --cloud <provider>`; read in `src/init.ts` to select which render implementations to register. Default: `azure`. Unknown values throw immediately on startup.

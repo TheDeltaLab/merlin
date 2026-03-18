@@ -10,20 +10,31 @@ export const RING_SHORT_NAME_MAP: Record<Ring, string> = {
     'production': 'prd'
 };
 
-export type Region = 
-    | 'eastus' 
-    | 'westus' 
+export type Region =
+    | 'eastus'
+    | 'westus'
     | 'eastasia'
     | 'koreacentral'
     | 'koreasouth'
+    // Alibaba Cloud regions
+    | 'cn-hangzhou'
+    | 'cn-shanghai'
+    | 'cn-beijing'
+    | 'ap-southeast-1'
     ;
 
 export const REGION_SHORT_NAME_MAP: Record<Region, string> = {
+    // Azure
     'eastus': 'eus',
     'westus': 'wus',
     'eastasia': 'eas',
     'koreacentral': 'krc',
     'koreasouth': 'krs',
+    // Alibaba Cloud
+    'cn-hangzhou': 'hzh',
+    'cn-shanghai': 'sha',
+    'cn-beijing': 'bej',
+    'ap-southeast-1': 'sg1',
 };
 
 /**

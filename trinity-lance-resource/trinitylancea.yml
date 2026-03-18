@@ -1,0 +1,99 @@
+name: lance
+type: AzureContainerApp
+project: merlin
+ring:
+  - test
+  - staging
+region:
+  - koreacentral
+  - eastasia
+
+authProvider:
+  name: AzureEntraID
+
+dependencies:
+  - resource: AzureContainerRegistry.shared
+    isHardDependency: true
+  - resource: AzureContainerAppEnvironment.shared
+    isHardDependency: true
+  - resource: AzureBlobStorage.shared
+    isHardDependency: false
+    authProvider:
+      name: AzureManagedIdentity
+      role: Storage Blob Data Contributor
+  - resource: AzureKeyVault.shared
+    isHardDependency: false
+    authProvider:
+      name: AzureManagedIdentity
+      role: Key Vault Secrets User
+  - resource: AzureRedisEnterprise.shared
+    isHardDependency: false
+
+defaultConfig:
+  image: ${ AzureContainerRegistry.shared.server }/trinity/lance:nightly
+  containerName: lance
+  cpu: 0.5
+  memory: 1Gi
+
+  envVars:
+    - NODE_ENV=${ this.ring }
+    - REDIS_URL=${ AzureRedisEnterprise.shared.redisUrl }
+
+  probes:
+    - type: Liveness
+      httpGet:
+        path: /health
+        port: 3000
+        scheme: HTTP
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 3
+    - type: Readiness
+      httpGet:
+        path: /health
+        port: 3000
+        scheme: HTTP
+      periodSeconds: 5
+      timeoutSeconds: 5
+      failureThreshold: 48
+    - type: Startup
+      httpGet:
+        path: /health
+        port: 3000
+        scheme: HTTP
+      initialDelaySeconds: 1
+      periodSeconds: 1
+      timeoutSeconds: 3
+      failureThreshold: 240
+
+  ingress: internal
+  targetPort: 3000
+  transport: auto
+  allowInsecure: false
+
+  minReplicas: 1
+  maxReplicas: 10
+  scaleRuleName: http-scaler
+  scaleRuleType: http
+  scaleRuleHttpConcurrency: 10
+
+  revisionsMode: single
+
+  registryServer: ${ AzureContainerRegistry.shared.server }
+  registryIdentity: system
+
+  systemAssigned: true
+
+  environment: ${ AzureContainerAppEnvironment.shared.name }
+
+  noWait: false
+
+  tags:
+    merlin: "true"
+    env: ${ this.ring }
+
+specificConfig: []
+
+exports:
+  identity: AzureResourceManagedIdentity
+  url: AzureContainerAppFqdn

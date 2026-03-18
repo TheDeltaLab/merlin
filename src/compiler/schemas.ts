@@ -12,7 +12,12 @@ export const RingSchema = z.enum(['test', 'staging', 'production']);
 /**
  * Region enum schema
  */
-export const RegionSchema = z.enum(['eastus', 'westus', 'eastasia', 'koreacentral', 'koreasouth']);
+export const RegionSchema = z.enum([
+    // Azure
+    'eastus', 'westus', 'eastasia', 'koreacentral', 'koreasouth',
+    // Alibaba Cloud
+    'cn-hangzhou', 'cn-shanghai', 'cn-beijing', 'ap-southeast-1',
+]);
 
 /**
  * AuthProvider YAML schema (object format)

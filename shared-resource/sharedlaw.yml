@@ -1,42 +1,32 @@
-name: chuanglaw
+name: shared
 type: AzureLogAnalyticsWorkspace
-project: merlintest
+project: merlin
 ring:
-  - staging
   - test
+  - staging
 region:
-  - eastasia
   - koreacentral
-
-authProvider:
-  name: AzureManagedIdentity
-  role: contributor
-  scope: resource
+  - eastasia
 
 dependencies: []
 
 defaultConfig:
   sku: PerGB2018
-  location: eastasia
+  location: ${ this.region }
   retentionInDays: 30
   dailyQuotaGb: -1
-
-  # Access control
   ingestionAccess: Enabled
   queryAccess: Enabled
 
   tags:
     merlin: "true"
+    env: ${ this.ring }
 
 specificConfig:
-  - ring: staging
-    retentionInDays: 30
-    tags:
-      env: staging
   - ring: test
     retentionInDays: 7
     dailyQuotaGb: 1
-    tags:
-      env: test
 
-exports: {}
+exports:
+  customerId: AzureLogAnalyticsWorkspaceCustomerId
+  sharedKey: AzureLogAnalyticsWorkspaceSharedKey

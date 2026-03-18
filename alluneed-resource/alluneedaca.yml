@@ -12,7 +12,7 @@ authProvider:
   name: AzureEntraID
 
 dependencies:
-  - resource: AzureContainerRegistry.alluneed
+  - resource: AzureContainerRegistry.shared
     isHardDependency: true
   - resource: AzureContainerAppEnvironment.alluneed
     isHardDependency: true
@@ -23,7 +23,7 @@ dependencies:
 
 defaultConfig:
   # ── Container / Image ─────────────────────────────────────────────
-  image: ${ AzureContainerRegistry.alluneed.server }/alluneed:latest
+  image: ${ AzureContainerRegistry.shared.server }/alluneed:latest
   containerName: alluneed
   cpu: 4
   memory: 8.0Gi
@@ -81,7 +81,7 @@ defaultConfig:
   revisionsMode: single
 
   # ── Registry ──────────────────────────────────────────────────────
-  registryServer: ${ AzureContainerRegistry.alluneed.server }
+  registryServer: ${ AzureContainerRegistry.shared.server }
   registryIdentity: system
 
   # ── Managed Identity (CREATE ONLY) ────────────────────────────────

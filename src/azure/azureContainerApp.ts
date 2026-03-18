@@ -477,6 +477,7 @@ export class AzureContainerAppRender extends AzureResourceRender {
         'secrets': '--secrets',
         'scaleRuleMetadata': '--scale-rule-metadata',
         'scaleRuleAuth': '--scale-rule-auth',
+        'envVars': '--env-vars',
     };
 
     /**
@@ -486,8 +487,6 @@ export class AzureContainerAppRender extends AzureResourceRender {
         'args': '--args',
         'command': '--command',
         'userAssigned': '--user-assigned',
-        // --env-vars is not supported by `az containerapp update`
-        'envVars': '--env-vars',
     };
 
     // ── Render methods ────────────────────────────────────────────────────────

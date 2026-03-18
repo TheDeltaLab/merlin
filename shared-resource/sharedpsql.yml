@@ -1,0 +1,30 @@
+name: shared
+type: AzurePostgreSQLFlexible
+project: merlin
+ring:
+  - test
+  - staging
+region:
+  - koreacentral
+  - eastasia
+
+dependencies: []
+
+defaultConfig:
+  location: ${ this.region }
+  skuName: Standard_D2ds_v4
+  tier: GeneralPurpose
+  storageSizeGb: 32
+  version: "16"
+
+  tags:
+    merlin: "true"
+    env: ${ this.ring }
+
+specificConfig:
+  - ring: test
+    skuName: Standard_B2ms
+    tier: Burstable
+    storageSizeGb: 32
+
+exports: {}

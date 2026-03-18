@@ -1,0 +1,29 @@
+name: shared
+type: AzureKeyVault
+project: merlin
+ring:
+  - test
+  - staging
+region:
+  - koreacentral
+  - eastasia
+
+authProvider:
+  name: AzureManagedIdentity
+  role: Key Vault Secrets User
+  scope: resource
+
+defaultConfig:
+  sku: standard
+  enableRbacAuthorization: true
+  enableSoftDelete: true
+  softDeleteRetentionInDays: 7
+
+  tags:
+    merlin: "true"
+    env: ${ this.ring }
+
+specificConfig: []
+
+exports:
+  url: AzureKeyVaultUrl

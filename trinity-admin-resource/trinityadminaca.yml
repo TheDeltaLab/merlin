@@ -1,0 +1,122 @@
+name: admin
+type: AzureContainerApp
+project: merlin
+ring:
+  - test
+  - staging
+region:
+  - koreacentral
+  - eastasia
+
+authProvider:
+  name: AzureEntraID
+
+dependencies:
+  - resource: AzureContainerRegistry.shared
+    isHardDependency: true
+  - resource: AzureContainerAppEnvironment.shared
+    isHardDependency: true
+  - resource: AzureADApp.admin
+    isHardDependency: true
+  - resource: AzureDnsZone.admindns
+    isHardDependency: true
+  - resource: AzureBlobStorage.shared
+    isHardDependency: false
+    authProvider:
+      name: AzureManagedIdentity
+      role: Storage Blob Data Contributor
+  - resource: AzureKeyVault.shared
+    isHardDependency: false
+    authProvider:
+      name: AzureManagedIdentity
+      role: Key Vault Secrets User
+  - resource: AzureRedisEnterprise.shared
+    isHardDependency: false
+
+defaultConfig:
+  image: ${ AzureContainerRegistry.shared.server }/trinity/admin:nightly
+  containerName: admin
+  cpu: 0.5
+  memory: 1Gi
+
+  envVars:
+    - ADMIN_SERVER_SCOPE=api://312331ad-04a5-496b-aa10-45a0f922d2c6/.default
+    - ADMIN_SERVER_URL=https://app.admin.test.thebrainly.dev/
+    - ALI_KEY_ENDPOINT=${ AzureKeyVault.shared.url }
+    - ALI_KEY_NAME=alibaba-key
+    - ALLUNEED_SCOPE=api://4cdb0cdf-94d8-4c20-88de-e7683d81cf1f/.default
+    - ALLUNEED_TENANT_ID=2c10b0b9-d9c1-4c81-85ee-6a2297ed77f4
+    - ALLUNEED_URL=https://alluneed-docker-test.proudisland-0054130f.koreacentral.azurecontainerapps.io
+    - AZURE_STORAGE_ACCOUNT_NAME=${ AzureBlobStorage.shared.name }
+    - AZURE_STORAGE_CONTAINER_NAME=conversations
+    - DATABASE_URL=secretref:database-url
+    - DATABASE_URL_ADMIN=secretref:database-url-admin
+    - REDIS_URL=${ AzureRedisEnterprise.shared.redisUrl }
+    - REDIS_USER=secretref:redis-user-admin
+    - TURING_API_SCOPE=api://0e373360-ee71-4bbf-b141-2e0b8d27d9da/.default
+    - TURING_URL=https://turing-test-a2hyb7hjcjfbdbb3.koreacentral-01.azurewebsites.net
+    - SEARCH_API_ENDPOINT=https://trinity-search-test.search.windows.net
+    - NOTUSEDENV=USED_TO_REFRESH_SERVER
+
+  probes:
+    - type: Liveness
+      tcpSocket:
+        port: 3000
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 3
+    - type: Readiness
+      tcpSocket:
+        port: 3000
+      periodSeconds: 5
+      timeoutSeconds: 5
+      failureThreshold: 48
+    - type: Startup
+      tcpSocket:
+        port: 3000
+      initialDelaySeconds: 1
+      periodSeconds: 1
+      timeoutSeconds: 3
+      failureThreshold: 240
+
+  ingress: external
+  targetPort: 3000
+  transport: auto
+  allowInsecure: false
+
+  minReplicas: 1
+  maxReplicas: 10
+  scaleRuleName: http-scaler
+  scaleRuleType: http
+  scaleRuleHttpConcurrency: 10
+
+  revisionsMode: single
+
+  registryServer: ${ AzureContainerRegistry.shared.server }
+  registryIdentity: system
+
+  systemAssigned: true
+
+  environment: ${ AzureContainerAppEnvironment.shared.name }
+
+  noWait: false
+
+  auth:
+    clientId: ${ AzureADApp.admin.clientId }
+    issuer: https://sts.windows.net/2c10b0b9-d9c1-4c81-85ee-6a2297ed77f4/v2.0
+    unauthenticatedClientAction: RedirectToLoginPage
+
+  bindDnsZone:
+    dnsZone: ${ AzureDnsZone.admindns.domainName }
+    subDomain: app-merlin
+
+  tags:
+    merlin: "true"
+    env: ${ this.ring }
+
+specificConfig: []
+
+exports:
+  identity: AzureResourceManagedIdentity
+  url: AzureContainerAppFqdn
+  apiScope: getResourceApiScope

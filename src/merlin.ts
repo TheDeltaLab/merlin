@@ -90,6 +90,7 @@ program
     .option('--dir <path>', 'Compiled output directory', '.merlin')
     .option('-o, --output-file <file>', 'Write generated commands to file')
     .option('-c, --concurrency <number>', 'Max parallel resource deployments per level (default: 4)', '4')
+    .option('--cloud <cloud>', 'Cloud provider: azure (default) | alibaba', 'azure')
     .action(async (argPath, options) => {
         const resourcePath = options.input ?? argPath;
         const outputPath = options.dir;
@@ -149,14 +150,16 @@ program
                 console.log('🚀 Executing deployment...\n');
                 await execaCommand('pnpm run execute ' + args.join(' '), {
                     cwd: outputPath,
-                    stdio: 'inherit'
+                    stdio: 'inherit',
+                    env: { ...process.env, MERLIN_CLOUD: options.cloud }
                 });
             } else {
                 // Use pnpm deploy (dry-run mode)
                 console.log('📋 Generating deployment commands (dry-run mode)...\n');
                 await execaCommand('pnpm run deploy ' + args.join(' '), {
                     cwd: outputPath,
-                    stdio: 'inherit'
+                    stdio: 'inherit',
+                    env: { ...process.env, MERLIN_CLOUD: options.cloud }
                 });
             }
         } catch (error) {
