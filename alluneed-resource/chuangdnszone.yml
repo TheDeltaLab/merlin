@@ -1,6 +1,6 @@
 name: chuangdns
 type: AzureDnsZone
-project: merlintest
+project: merlin
 ring:
   - staging
   - test

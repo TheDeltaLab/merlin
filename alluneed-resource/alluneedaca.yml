@@ -1,6 +1,6 @@
 name: alluneed
 type: AzureContainerApp
-project: merlintest
+project: merlin
 ring:
   - staging
   - test
@@ -12,10 +12,10 @@ authProvider:
   name: AzureEntraID
 
 dependencies:
-  - resource: AzureContainerRegistry.shared
-    isHardDependency: true
   - resource: AzureContainerAppEnvironment.alluneed
     isHardDependency: true
+  - resource: AzureContainerRegistry.shared
+    isHardDependency: false
   - resource: AzureDnsZone.chuangdns
     isHardDependency: false
   - resource: AzureADApp.alluneed

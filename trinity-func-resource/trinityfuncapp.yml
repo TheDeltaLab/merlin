@@ -13,7 +13,7 @@ authProvider:
 
 dependencies:
   - resource: AzureContainerRegistry.shared
-    isHardDependency: true
+    isHardDependency: false
   - resource: AzureBlobStorage.shared
     isHardDependency: false
     authProvider:

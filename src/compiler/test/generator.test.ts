@@ -92,7 +92,7 @@ describe('Generator', () => {
                 });
                 const result = generate('/test/a.yml', [resource]);
 
-                expect(result.content).toContain('TestType_my-resource_test');
+                expect(result.content).toContain('TestType_my_resource_test');
             });
         });
 

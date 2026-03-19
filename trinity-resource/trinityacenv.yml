@@ -1,4 +1,4 @@
-name: shared
+name: trinity
 type: AzureContainerAppEnvironment
 project: merlin
 ring:
@@ -9,13 +9,13 @@ region:
   - eastasia
 
 dependencies:
-  - resource: AzureLogAnalyticsWorkspace.shared
+  - resource: AzureLogAnalyticsWorkspace.trinity
     isHardDependency: true
 
 defaultConfig:
   location: ${ this.region }
-  logsWorkspaceId: ${ AzureLogAnalyticsWorkspace.shared.customerId }
-  logsWorkspaceKey: ${ AzureLogAnalyticsWorkspace.shared.sharedKey }
+  logsWorkspaceId: ${ AzureLogAnalyticsWorkspace.trinity.customerId }
+  logsWorkspaceKey: ${ AzureLogAnalyticsWorkspace.trinity.sharedKey }
 
   tags:
     merlin: "true"

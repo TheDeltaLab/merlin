@@ -52,6 +52,12 @@ import {
     AzureServicePrincipalRender
 } from './azure/azureServicePrincipal.js';
 import {
+    AZURE_KEY_VAULT_RESOURCE_TYPE, AzureKeyVaultRender,
+    AZURE_REDIS_ENTERPRISE_RESOURCE_TYPE, AzureRedisEnterpriseRender,
+    AZURE_POSTGRESQL_RESOURCE_TYPE, AzurePostgreSQLFlexibleRender,
+    AZURE_FUNCTION_APP_RESOURCE_TYPE, AzureFunctionAppRender,
+} from './azure/azureStubs.js';
+import {
     AzureResourceManagedIdentityGetter,
     AzureResourceNameGetter,
     AzureContainerRegistryServerGetter,
@@ -60,6 +66,10 @@ import {
     AzureLogAnalyticsWorkspaceSharedKeyGetter,
     AzureDnsZoneNameGetter,
     AzureADAppClientIdGetter,
+    AzureKeyVaultUrlGetter,
+    AzureServicePrincipalClientIdGetter,
+    AzureRedisEnterpriseUrlGetter,
+    AzureResourceApiScopeGetter,
 } from './azure/proprietyGetter.js';
 import {
     CONTAINER_APP_TYPE,
@@ -99,6 +109,10 @@ if (cloud === 'azure') {
     registerRender(AZURE_LOG_ANALYTICS_WORKSPACE_RESOURCE_TYPE, new AzureLogAnalyticsWorkspaceRender());
     registerRender(AZURE_CONTAINER_APP_ENVIRONMENT_TYPE,        new AzureContainerAppEnvironmentRender());
     registerRender(AZURE_SERVICE_PRINCIPAL_RESOURCE_TYPE,       new AzureServicePrincipalRender());
+    registerRender(AZURE_KEY_VAULT_RESOURCE_TYPE,               new AzureKeyVaultRender());
+    registerRender(AZURE_REDIS_ENTERPRISE_RESOURCE_TYPE,        new AzureRedisEnterpriseRender());
+    registerRender(AZURE_POSTGRESQL_RESOURCE_TYPE,              new AzurePostgreSQLFlexibleRender());
+    registerRender(AZURE_FUNCTION_APP_RESOURCE_TYPE,            new AzureFunctionAppRender());
 
 } else if (cloud === 'alibaba') {
     throw new Error(
@@ -129,6 +143,10 @@ registerProprietyGetter(new AzureLogAnalyticsWorkspaceCustomerIdGetter());
 registerProprietyGetter(new AzureLogAnalyticsWorkspaceSharedKeyGetter());
 registerProprietyGetter(new AzureDnsZoneNameGetter());
 registerProprietyGetter(new AzureADAppClientIdGetter());
+registerProprietyGetter(new AzureKeyVaultUrlGetter());
+registerProprietyGetter(new AzureServicePrincipalClientIdGetter());
+registerProprietyGetter(new AzureRedisEnterpriseUrlGetter());
+registerProprietyGetter(new AzureResourceApiScopeGetter());
 
 export function initializeMerlin(): void {
     // Initialization happens during module load via the side-effects above.

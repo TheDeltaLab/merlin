@@ -1,6 +1,6 @@
 name: alluneed
 type: AzureADApp
-project: merlintest
+project: merlin
 ring:
   - staging
   - test

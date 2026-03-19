@@ -123,6 +123,26 @@ export abstract class AzureResourceRender implements Render {
     }
 
     /**
+     * Add array-type parameters where each value is a separate CLI argument.
+     * Use this for CLI flags that accept multiple space-separated values as distinct
+     * arguments (e.g. `--encryption-services blob file` rather than `--encryption-services "blob file"`).
+     * @param args - The args array to append to
+     * @param config - The configuration object
+     * @param arrayParamMap - Map of config keys to CLI flags
+     */
+    protected addMultiValueParams(args: string[], config: Record<string, any>, arrayParamMap: Record<string, string>): void {
+        for (const [configKey, cliFlag] of Object.entries(arrayParamMap)) {
+            const value = config[configKey];
+            if (Array.isArray(value) && value.length > 0) {
+                args.push(cliFlag);
+                for (const item of value) {
+                    args.push(String(item));
+                }
+            }
+        }
+    }
+
+    /**
      * Add tags to args array
      * @param args - The args array to append to
      * @param tags - Tags object with key-value pairs

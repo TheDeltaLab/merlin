@@ -191,15 +191,16 @@ merlin/
 │   └── alibaba/
 │       └── index.ts                 # Alibaba Cloud provider (Phase 2 placeholder)
 │
-├── shared-resource/                 # Shared infrastructure (project: merlin)
-│   ├── sharedacr.yml                # Container Registry — all projects share this
-│   ├── sharedacenv.yml              # Container App Environment (for Trinity)
-│   ├── sharedlaw.yml                # Log Analytics Workspace (for Trinity)
+├── shared-resource/                 # Cross-project shared infrastructure (project: merlin)
 │   ├── sharedredis.yml              # Redis Enterprise
 │   ├── sharedpsql.yml               # PostgreSQL Flexible
 │   ├── sharedabs.yml                # Blob Storage
 │   ├── sharedakv.yml                # Key Vault
 │   └── sharedgithubsp.yml           # GitHub Actions SP (trinity + alluneed OIDC)
+│
+├── trinity-resource/                # Trinity shared infrastructure (project: merlin)
+│   ├── trinitylaw.yml               # Log Analytics Workspace (for all trinity services)
+│   └── trinityacenv.yml             # Container App Environment (for all trinity services)
 │
 ├── trinity-web-resource/            # Trinity Web frontend
 ├── trinity-worker-resource/         # Trinity Worker + AD App
@@ -210,7 +211,7 @@ merlin/
 ├── trinity-func-resource/           # Trinity Azure Functions
 │
 ├── alluneed-resource/               # Alluneed AI inference service
-│   ├── alluneedaca.yml              # Container App (uses shared ACR, own ACAE)
+│   ├── alluneedaca.yml              # Container App (uses GHCR, own ACAE)
 │   ├── alluneedacenv.yml            # Dedicated Container App Environment
 │   ├── alluneedlaw.yml              # Dedicated Log Analytics Workspace
 │   ├── alluneedadapp.yml            # AD App for EasyAuth
@@ -221,15 +222,15 @@ merlin/
 └── .merlin/                         # Generated TypeScript project (git-ignored)
 ```
 
-### Why alluneed has its own ACAE + LAW
+### Why each project has its own ACAE + LAW
 
 Alluneed is an AI inference service that consumes 4 CPU / 8 Gi per replica. Sharing a Container App Environment with Trinity would create resource competition (shared CPU/memory quota, shared egress IP, shared maintenance windows). Each project therefore has its own environment:
 
 | Resource | Trinity | Alluneed |
 |----------|---------|---------|
-| ACR | `AzureContainerRegistry.shared` | `AzureContainerRegistry.shared` (shared) |
-| ACAE | `AzureContainerAppEnvironment.shared` | `AzureContainerAppEnvironment.alluneed` |
-| LAW | `AzureLogAnalyticsWorkspace.shared` | `AzureLogAnalyticsWorkspace.alluneed` |
+| Container Registry | `ghcr.io/thedeltalab/trinity/*` (GHCR) | `ghcr.io/thedeltalab/alluneed` (GHCR) |
+| ACAE | `AzureContainerAppEnvironment.trinity` | `AzureContainerAppEnvironment.alluneed` |
+| LAW | `AzureLogAnalyticsWorkspace.trinity` | `AzureLogAnalyticsWorkspace.alluneed` |
 
 ## Deploying
 

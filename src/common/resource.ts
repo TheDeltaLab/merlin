@@ -65,7 +65,10 @@ export interface Dependency {
      * if given, will use given auth provider
      * otherwise, will use the default auth provider of the resource
      */
-    authProvider?: AuthProvider;
+    authProvider?: {
+        provider: AuthProvider;
+        args: Record<string, string>;
+    };
 }
 
 

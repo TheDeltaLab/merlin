@@ -1,6 +1,6 @@
 name: alluneed
 type: AzureContainerAppEnvironment
-project: merlintest
+project: merlin
 ring:
   - staging
   - test

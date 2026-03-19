@@ -186,3 +186,102 @@ export class AzureDnsZoneNameGetter implements ProprietyGetter {
         }];
     }
 }
+
+/**
+ * ProprietyGetter for Azure Key Vault vault URI.
+ * Returns the vaultUri (e.g. "https://mykeyvault.vault.azure.net/") of the Key Vault.
+ */
+export class AzureKeyVaultUrlGetter implements ProprietyGetter {
+    name: string = 'AzureKeyVaultUrl';
+
+    dependencies: Dependency[] = [];
+
+    async get(resource: Resource, _args: Record<string, string>): Promise<Command[]> {
+        const render = getRender(resource.type) as AzureResourceRender;
+        const resourceGroup = render.getResourceGroupName(resource);
+        const resourceName = render.getResourceName(resource);
+
+        return [{
+            command: 'az',
+            args: [
+                'keyvault', 'show',
+                '-g', resourceGroup,
+                '-n', resourceName,
+                '-o', 'tsv',
+                '--query', 'properties.vaultUri'
+            ]
+        }];
+    }
+}
+
+/**
+ * ProprietyGetter for Azure Service Principal client ID (appId).
+ * Returns the appId of the AD App backing the Service Principal, looked up by display name.
+ */
+export class AzureServicePrincipalClientIdGetter implements ProprietyGetter {
+    name: string = 'AzureServicePrincipalClientId';
+
+    dependencies: Dependency[] = [];
+
+    async get(resource: Resource, _args: Record<string, string>): Promise<Command[]> {
+        const render = getRender(resource.type) as AzureServicePrincipalRender;
+        const displayName = render.getDisplayName(resource as AzureServicePrincipalResource);
+
+        return [{
+            command: 'az',
+            args: [
+                'ad', 'app', 'list',
+                '--filter', `displayName eq '${displayName}'`,
+                '-o', 'tsv',
+                '--query', '[0].appId'
+            ]
+        }];
+    }
+}
+
+/**
+ * ProprietyGetter for Azure Redis Enterprise connection URL.
+ * Returns the Redis connection URL (rediss://<hostname>:10000) for the Redis Enterprise cluster.
+ */
+export class AzureRedisEnterpriseUrlGetter implements ProprietyGetter {
+    name: string = 'AzureRedisEnterpriseUrl';
+
+    dependencies: Dependency[] = [];
+
+    async get(resource: Resource, _args: Record<string, string>): Promise<Command[]> {
+        const render = getRender(resource.type) as AzureResourceRender;
+        const resourceGroup = render.getResourceGroupName(resource);
+        const resourceName = render.getResourceName(resource);
+
+        return [{
+            command: 'az',
+            args: [
+                'redisenterprise', 'show',
+                '-g', resourceGroup,
+                '-n', resourceName,
+                '-o', 'tsv',
+                '--query', "join('', ['rediss://', hostName, ':10000'])"
+            ]
+        }];
+    }
+}
+
+/**
+ * ProprietyGetter for Azure resource API scope.
+ * Returns the API scope string (api://<resourceName>/.default) for the resource.
+ */
+export class AzureResourceApiScopeGetter implements ProprietyGetter {
+    name: string = 'getResourceApiScope';
+
+    dependencies: Dependency[] = [];
+
+    async get(resource: Resource, _args: Record<string, string>): Promise<Command[]> {
+        const render = getRender(resource.type) as AzureResourceRender;
+        const resourceName = render.getResourceName(resource);
+
+        return [{
+            command: 'echo',
+            args: [`api://${resourceName}/.default`]
+        }];
+    }
+}

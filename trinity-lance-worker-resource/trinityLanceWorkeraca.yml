@@ -12,22 +12,18 @@ authProvider:
   name: AzureEntraID
 
 dependencies:
+  - resource: AzureContainerAppEnvironment.trinity
+    isHardDependency: true
   - resource: AzureContainerRegistry.shared
-    isHardDependency: true
-  - resource: AzureContainerAppEnvironment.shared
-    isHardDependency: true
+    isHardDependency: false
   - resource: AzureBlobStorage.shared
     isHardDependency: false
     authProvider:
       name: AzureManagedIdentity
       role: Storage Blob Data Contributor
-  - resource: AzureKeyVault.shared
-    isHardDependency: false
     authProvider:
       name: AzureManagedIdentity
       role: Key Vault Secrets User
-  - resource: AzureRedisEnterprise.shared
-    isHardDependency: false
 
 defaultConfig:
   image: ${ AzureContainerRegistry.shared.server }/trinity/lance-worker:nightly
@@ -37,7 +33,7 @@ defaultConfig:
 
   envVars:
     - NODE_ENV=${ this.ring }
-    - REDIS_URL=${ AzureRedisEnterprise.shared.redisUrl }
+    - REDIS_URL=rediss://trinitytest.koreacentral.redis.azure.net:10000
 
   probes:
     - type: Liveness
@@ -84,7 +80,7 @@ defaultConfig:
 
   systemAssigned: true
 
-  environment: ${ AzureContainerAppEnvironment.shared.name }
+  environment: ${ AzureContainerAppEnvironment.trinity.name }
 
   noWait: false
 

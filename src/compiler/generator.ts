@@ -81,7 +81,7 @@ function generateResourceName(resource: ExpandedResource): string {
     if (resource.region) {
         parts.push(resource.region);
     }
-    return parts.join('_');
+    return parts.join('_').replace(/[^a-zA-Z0-9_]/g, '_');
 }
 
 /**
@@ -116,8 +116,25 @@ function generateResourceObject(resource: ExpandedResource): string {
         code += `  },\n`;
     }
 
-    // Dependencies
-    code += `  dependencies: ${JSON.stringify(resource.dependencies, null, 2)},\n`;
+    // Dependencies — dep.authProvider must be resolved via getAuthProvider() at runtime,
+    // not serialized as a plain JSON object (which would lack the .apply() method).
+    code += `  dependencies: [\n`;
+    for (const dep of resource.dependencies) {
+        code += `  {\n`;
+        code += `    resource: ${JSON.stringify(dep.resource)},\n`;
+        if (dep.isHardDependency !== undefined) {
+            code += `    isHardDependency: ${dep.isHardDependency},\n`;
+        }
+        if (dep.authProvider) {
+            const { name: apName, ...apArgs } = dep.authProvider;
+            code += `    authProvider: {\n`;
+            code += `      provider: getAuthProvider(${JSON.stringify(apName)}),\n`;
+            code += `      args: ${JSON.stringify(apArgs)}\n`;
+            code += `    },\n`;
+        }
+        code += `  },\n`;
+    }
+    code += `  ],\n`;
 
     // Config (merged from defaultConfig + specificConfig during compilation)
     code += `  config: ${formatJSON(resource.config, 2)},\n`;

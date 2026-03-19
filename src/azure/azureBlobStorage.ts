@@ -326,14 +326,11 @@ export class AzureBlobStorageRender extends AzureResourceRender {
     }
 
     /**
-     * Configuration mapping for simple key-value parameters
-     * Maps config property names to their corresponding CLI flags
+     * Configuration mapping for simple key-value parameters shared by create AND update
      */
     private static readonly SIMPLE_PARAM_MAP: Record<string, string> = {
         'accessTier': '--access-tier',
         'sku': '--sku',
-        'kind': '--kind',
-        'location': '--location',
         'minTlsVersion': '--min-tls-version',
         'publicNetworkAccess': '--public-network-access',
         'defaultAction': '--default-action',
@@ -361,10 +358,7 @@ export class AzureBlobStorageRender extends AzureResourceRender {
         'sasExpirationPeriod': '--sas-expiration-period',
         'sasExpirationAction': '--sas-policy',
         'routingChoice': '--routing-choice',
-        'dnsEndpointType': '--dns-endpoint-type',
         'customDomain': '--custom-domain',
-        'edgeZone': '--edge-zone',
-        'zonePlacementPolicy': '--zone-placement-policy',
         'keyVaultFederatedClientId': '--key-vault-federated-client-id',
         'keyVaultUserIdentityId': '--key-vault-user-assigned-identity-id',
         'subnet': '--subnet',
@@ -372,17 +366,24 @@ export class AzureBlobStorageRender extends AzureResourceRender {
     };
 
     /**
-     * Configuration mapping for boolean flags
-     * Maps config property names to their corresponding CLI flags
+     * Simple key-value parameters only valid for `az storage account create` (not update)
+     */
+    private static readonly CREATE_ONLY_SIMPLE_PARAM_MAP: Record<string, string> = {
+        'kind': '--kind',
+        'location': '--location',
+        'dnsEndpointType': '--dns-endpoint-type',
+        'edgeZone': '--edge-zone',
+        'zonePlacementPolicy': '--zone-placement-policy',
+    };
+
+    /**
+     * Configuration mapping for boolean flags shared by create AND update
      */
     private static readonly BOOLEAN_FLAG_MAP: Record<string, string> = {
         'httpsOnly': '--https-only',
         'allowBlobPublicAccess': '--allow-blob-public-access',
         'allowSharedKeyAccess': '--allow-shared-key-access',
         'allowCrossTenantReplication': '--allow-cross-tenant-replication',
-        'enableHierarchicalNamespace': '--enable-hierarchical-namespace',
-        'enableNfsV3': '--enable-nfs-v3',
-        'enableSftp': '--enable-sftp',
         'enableLargeFileShare': '--enable-large-file-share',
         'enableLocalUser': '--enable-local-user',
         'enableFilesAadds': '--enable-files-aadds',
@@ -396,17 +397,34 @@ export class AzureBlobStorageRender extends AzureResourceRender {
         'publishMicrosoftEndpoints': '--publish-microsoft-endpoints',
         'publishIpv6Endpoint': '--publish-ipv6-endpoint',
         'enableBlobGeoPriorityReplication': '--enable-blob-geo-priority-replication',
+    };
+
+    /**
+     * Boolean flags only valid for `az storage account create` (not update)
+     */
+    private static readonly CREATE_ONLY_BOOLEAN_FLAG_MAP: Record<string, string> = {
+        'enableHierarchicalNamespace': '--enable-hierarchical-namespace',
+        'enableNfsV3': '--enable-nfs-v3',
+        'enableSftp': '--enable-sftp',
         'requireInfrastructureEncryption': '--require-infrastructure-encryption',
     };
 
     /**
      * Configuration mapping for array parameters
      * Maps config property names to their corresponding CLI flags
+     * Values are joined as a single space-separated string (e.g. --bypass "AzureServices Logging")
      */
     private static readonly ARRAY_PARAM_MAP: Record<string, string> = {
         'bypass': '--bypass',
-        'encryptionServices': '--encryption-services',
         'zones': '--zones',
+    };
+
+    /**
+     * Configuration mapping for multi-value parameters where each value is a separate CLI arg
+     * (e.g. --encryption-services blob file  — NOT --encryption-services "blob file")
+     */
+    private static readonly MULTI_VALUE_PARAM_MAP: Record<string, string> = {
+        'encryptionServices': '--encryption-services',
     };
 
     renderCreate(resource: AzureBlobStorageResource): Command[] {
@@ -422,8 +440,11 @@ export class AzureBlobStorageRender extends AzureResourceRender {
 
         // Add all optional parameters using helper methods
         this.addSimpleParams(args, config, AzureBlobStorageRender.SIMPLE_PARAM_MAP);
+        this.addSimpleParams(args, config, AzureBlobStorageRender.CREATE_ONLY_SIMPLE_PARAM_MAP);
         this.addBooleanFlags(args, config, AzureBlobStorageRender.BOOLEAN_FLAG_MAP);
+        this.addBooleanFlags(args, config, AzureBlobStorageRender.CREATE_ONLY_BOOLEAN_FLAG_MAP);
         this.addArrayParams(args, config, AzureBlobStorageRender.ARRAY_PARAM_MAP);
+        this.addMultiValueParams(args, config, AzureBlobStorageRender.MULTI_VALUE_PARAM_MAP);
         this.addTags(args, config.tags);
 
         return [{
@@ -442,11 +463,13 @@ export class AzureBlobStorageRender extends AzureResourceRender {
         // Required parameters
         args.push('--name', this.getResourceName(resource));
         args.push('--resource-group', this.getResourceGroupName(resource));
+        args.push('--yes'); // suppress interactive confirmation prompts (no tty in automation)
 
         // Add all optional parameters using helper methods
         this.addSimpleParams(args, config, AzureBlobStorageRender.SIMPLE_PARAM_MAP);
         this.addBooleanFlags(args, config, AzureBlobStorageRender.BOOLEAN_FLAG_MAP);
         this.addArrayParams(args, config, AzureBlobStorageRender.ARRAY_PARAM_MAP);
+        this.addMultiValueParams(args, config, AzureBlobStorageRender.MULTI_VALUE_PARAM_MAP);
         this.addTags(args, config.tags);
 
         return [{

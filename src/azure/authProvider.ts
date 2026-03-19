@@ -188,6 +188,10 @@ export class AzureManagedIdentityAuthProvider implements AuthProvider {
             'AzureContainerAppEnvironment': ['containerapp', 'env', 'show', '--name', resourceName, '--resource-group', resourceGroup],
             'AzureLogAnalyticsWorkspace': ['monitor', 'log-analytics', 'workspace', 'show', '--name', resourceName, '--resource-group', resourceGroup],
             'AzureBlobStorage':          ['storage', 'account', 'show', '--name', resourceName, '--resource-group', resourceGroup],
+            'AzureFunctionApp':          ['functionapp', 'show', '--name', resourceName, '--resource-group', resourceGroup],
+            'AzureKeyVault':             ['keyvault', 'show', '--name', resourceName, '--resource-group', resourceGroup],
+            'AzureRedisEnterprise':      ['redisenterprise', 'show', '--name', resourceName, '--resource-group', resourceGroup],
+            'AzurePostgreSQLFlexible':   ['postgres', 'flexible-server', 'show', '--name', resourceName, '--resource-group', resourceGroup],
         };
 
         return SHOW_COMMAND_MAP[resourceType] ?? [

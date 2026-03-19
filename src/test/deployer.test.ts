@@ -500,7 +500,7 @@ describe('Deployer', () => {
         ...makeResource('aca', [], { type: 'AzureContainerApp' }),
         dependencies: [{
           resource: 'AzureContainerRegistry.acr',
-          authProvider: overrideProvider,
+          authProvider: { provider: overrideProvider, args: {} },
         }],
       };
 

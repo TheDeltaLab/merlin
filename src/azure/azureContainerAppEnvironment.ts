@@ -176,13 +176,13 @@ export class AzureContainerAppEnvironmentRender extends AzureResourceRender {
         'logsWorkspaceKey': '--logs-workspace-key',
         'daprConnectionString': '--dapr-connection-string',
         'storageAccount': '--storage-account',
-        'location': '--location',
     };
 
     /**
      * Simple key-value params supported on CREATE only
      */
     private static readonly CREATE_ONLY_SIMPLE_PARAM_MAP: Record<string, string> = {
+        'location': '--location',
         'infrastructureSubnetResourceId': '--infrastructure-subnet-resource-id',
         'infrastructureResourceGroup': '--infrastructure-resource-group',
         'platformReservedCidr': '--platform-reserved-cidr',

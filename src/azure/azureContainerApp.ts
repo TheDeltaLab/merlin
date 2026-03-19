@@ -139,7 +139,12 @@ export interface AzureContainerAppConfig extends ResourceSchema {
         dnsZone: string;
         /** 子域名前缀（例如 "myapp" 对应 "myapp.example.com"） */
         subDomain: string;
-    };
+    } | Array<{
+        /** Azure DNS Zone 名称（例如 "example.com"） */
+        dnsZone: string;
+        /** 子域名前缀（例如 "myapp" 对应 "myapp.example.com"） */
+        subDomain: string;
+    }>;
 
     // ── Health probes ──────────────────────────────────────────────────────────
     /**
@@ -547,13 +552,17 @@ export class AzureContainerAppRender extends AzureResourceRender {
         const { bindDnsZone } = resource.config;
         if (!bindDnsZone) return [];
 
-        const { dnsZone, subDomain } = bindDnsZone;
+        // Support both single object and array of DNS zone bindings
+        const entries = Array.isArray(bindDnsZone) ? bindDnsZone : [bindDnsZone];
+        const allCommands: Command[] = [];
+        for (const { dnsZone, subDomain } of entries) {
         const resourceName  = this.getResourceName(resource);
         const resourceGroup = this.getResourceGroupName(resource);
 
         // Slug: uppercase, non-alphanumeric → underscore (mirrors paramResolver.ts toVarName)
         const slug = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '_');
-        const appSlug         = slug(resourceName);
+        // Include dnsZone in slug so multiple bindDnsZone entries get distinct variable names
+        const appSlug         = `${slug(resourceName)}_${slug(dnsZone)}`;
         const dnsZoneRgVar    = `MERLIN_${appSlug}_DNS_ZONE_RG`;
         const envArmIdVar     = `MERLIN_${appSlug}_ENV_ARM_ID`;
         const envNameVar      = `MERLIN_${appSlug}_ENV_NAME`;
@@ -677,7 +686,9 @@ export class AzureContainerAppRender extends AzureResourceRender {
             ],
         });
 
-        return commands;
+        allCommands.push(...commands);
+        } // end for each bindDnsZone entry
+        return allCommands;
     }
 
     renderUpdate(resource: AzureContainerAppResource): Command[] {

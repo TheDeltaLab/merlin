@@ -26,12 +26,6 @@ specificConfig:
       - name: alluneed-github-test
         subject: repo:TheDeltaLab/alluneed:environment:test
     roleAssignments:
-      # Shared ACR — koreacentral
-      - role: AcrPush
-        scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-tst-krc/providers/Microsoft.ContainerRegistry/registries/merlinsharedtstkrcacr
-      # Shared ACR — eastasia
-      - role: AcrPush
-        scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-tst-eas/providers/Microsoft.ContainerRegistry/registries/merlinsharedtsteasacr
       # Trinity RG — koreacentral (Container Apps Contributor)
       - role: Container Apps Contributor
         scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-tst-krc
@@ -40,10 +34,16 @@ specificConfig:
         scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-tst-eas
       # Alluneed RG — koreacentral
       - role: Container Apps Contributor
-        scope: /subscriptions/{subscriptionId}/resourceGroups/merlintest-rg-tst-krc
+        scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-tst-krc
       # Alluneed RG — eastasia
       - role: Container Apps Contributor
-        scope: /subscriptions/{subscriptionId}/resourceGroups/merlintest-rg-tst-eas
+        scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-tst-eas
+      # ACR — koreacentral
+      - role: AcrPush
+        scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-tst-krc/providers/Microsoft.ContainerRegistry/registries/merlin-shared-tst-krc-acr
+      # ACR — eastasia
+      - role: AcrPush
+        scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-tst-eas/providers/Microsoft.ContainerRegistry/registries/merlin-shared-tst-eas-acr
 
   - ring: staging
     displayName: merlin-github-stg
@@ -53,12 +53,6 @@ specificConfig:
       - name: alluneed-github-staging
         subject: repo:TheDeltaLab/alluneed:environment:staging
     roleAssignments:
-      # Shared ACR — koreacentral
-      - role: AcrPush
-        scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-stg-krc/providers/Microsoft.ContainerRegistry/registries/merlinsharedstgkrcacr
-      # Shared ACR — eastasia
-      - role: AcrPush
-        scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-stg-eas/providers/Microsoft.ContainerRegistry/registries/merlinsharedstgeasacr
       # Trinity RG — koreacentral
       - role: Container Apps Contributor
         scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-stg-krc
@@ -67,10 +61,16 @@ specificConfig:
         scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-stg-eas
       # Alluneed RG — koreacentral
       - role: Container Apps Contributor
-        scope: /subscriptions/{subscriptionId}/resourceGroups/merlintest-rg-stg-krc
+        scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-stg-krc
       # Alluneed RG — eastasia
       - role: Container Apps Contributor
-        scope: /subscriptions/{subscriptionId}/resourceGroups/merlintest-rg-stg-eas
+        scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-stg-eas
+      # ACR — koreacentral
+      - role: AcrPush
+        scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-stg-krc/providers/Microsoft.ContainerRegistry/registries/merlin-shared-stg-krc-acr
+      # ACR — eastasia
+      - role: AcrPush
+        scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-stg-eas/providers/Microsoft.ContainerRegistry/registries/merlin-shared-stg-eas-acr
 
 exports:
   clientId: AzureServicePrincipalClientId

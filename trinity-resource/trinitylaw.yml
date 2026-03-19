@@ -1,4 +1,4 @@
-name: shared
+name: trinity
 type: AzureLogAnalyticsWorkspace
 project: merlin
 ring:
@@ -24,7 +24,7 @@ defaultConfig:
 
 specificConfig:
   - ring: test
-    retentionInDays: 7
+    retentionInDays: 30
     dailyQuotaGb: 1
 
 exports:

@@ -55,21 +55,15 @@ echo "  AZURE_CLIENT_ID       = ${CLIENT_ID}"
 echo "  AZURE_TENANT_ID       = ${TENANT_ID}"
 echo "  AZURE_SUBSCRIPTION_ID = ${SUBSCRIPTION_ID}"
 echo ""
-echo "── GitHub Variables (per environment) ───────────────────────────────────"
+echo "── Notes ─────────────────────────────────────────────────────────────────"
 echo ""
-
-for REGION in koreacentral eastasia; do
-  case "$REGION" in
-    koreacentral) REGION_SHORT="krc" ;;
-    eastasia)     REGION_SHORT="eas" ;;
-  esac
-
-  echo "  Environment: ${RING}-${REGION_SHORT}"
-  echo ""
-
-  # Shared ACR (project: merlin)
-  ACR_NAME="merlinshared${RING_SHORT}${REGION_SHORT}acr"
-  ACR_SERVER="${ACR_NAME}.azurecr.io"
-  echo "  REGISTRY_SERVER = ${ACR_SERVER}"
-  echo ""
-done
+echo "  Container images are stored in Azure Container Registry (ACR)."
+echo "  GitHub Actions uses OIDC (AcrPush role) to push images — no registry secrets needed."
+echo ""
+echo "  ACR login server (${RING} / koreacentral):"
+echo "    merlin-shared-${RING_SHORT}-krc-acr.azurecr.io"
+echo ""
+echo "  Image paths:"
+echo "    merlin-shared-${RING_SHORT}-krc-acr.azurecr.io/trinity/<app>:nightly"
+echo "    merlin-shared-${RING_SHORT}-krc-acr.azurecr.io/alluneed:latest"
+echo ""

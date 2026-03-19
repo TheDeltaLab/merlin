@@ -792,11 +792,12 @@ describe('AzureContainerAppRender', () => {
     describe('renderBindDnsZone()', () => {
         // Resource name = 'myproject-myapp-stg-eus-aca'
         // slug = 'MYPROJECT_MYAPP_STG_EUS_ACA'
-        const DNS_ZONE_RG_VAR    = 'MERLIN_MYPROJECT_MYAPP_STG_EUS_ACA_DNS_ZONE_RG';
-        const ENV_ARM_ID_VAR     = 'MERLIN_MYPROJECT_MYAPP_STG_EUS_ACA_ENV_ARM_ID';
-        const ENV_NAME_VAR       = 'MERLIN_MYPROJECT_MYAPP_STG_EUS_ACA_ENV_NAME';
-        const FQDN_VAR           = 'MERLIN_MYPROJECT_MYAPP_STG_EUS_ACA_FQDN';
-        const VERIFICATION_VAR   = 'MERLIN_MYPROJECT_MYAPP_STG_EUS_ACA_VERIFICATION_ID';
+        // slug now includes dnsZone: 'MYPROJECT_MYAPP_STG_EUS_ACA' + '_' + 'EXAMPLE_COM'
+        const DNS_ZONE_RG_VAR    = 'MERLIN_MYPROJECT_MYAPP_STG_EUS_ACA_EXAMPLE_COM_DNS_ZONE_RG';
+        const ENV_ARM_ID_VAR     = 'MERLIN_MYPROJECT_MYAPP_STG_EUS_ACA_EXAMPLE_COM_ENV_ARM_ID';
+        const ENV_NAME_VAR       = 'MERLIN_MYPROJECT_MYAPP_STG_EUS_ACA_EXAMPLE_COM_ENV_NAME';
+        const FQDN_VAR           = 'MERLIN_MYPROJECT_MYAPP_STG_EUS_ACA_EXAMPLE_COM_FQDN';
+        const VERIFICATION_VAR   = 'MERLIN_MYPROJECT_MYAPP_STG_EUS_ACA_EXAMPLE_COM_VERIFICATION_ID';
 
         function makeResourceWithDns(
             dnsZone = 'example.com',
@@ -1042,7 +1043,8 @@ describe('AzureContainerAppRender', () => {
             const resource = makeResourceWithDns();
             const commands = await render.render(resource as unknown as Resource);
 
-            // resourceName = 'myproject-myapp-stg-eus-aca' → slug = 'MYPROJECT_MYAPP_STG_EUS_ACA'
+            // resourceName = 'myproject-myapp-stg-eus-aca', dnsZone = 'example.com'
+        // slug = 'MYPROJECT_MYAPP_STG_EUS_ACA_EXAMPLE_COM'
             expect(commands.some(c => c.envCapture === FQDN_VAR)).toBe(true);
             expect(commands.some(c => c.envCapture === VERIFICATION_VAR)).toBe(true);
             expect(commands.some(c => c.envCapture === DNS_ZONE_RG_VAR)).toBe(true);

@@ -10,59 +10,20 @@ region:
 
 authProvider:
   name: AzureManagedIdentity
-  role: acrpull
+  role: AcrPull
   scope: resource
 
+dependencies: []
+
 defaultConfig:
-  sku: Standard
-  adminEnabled: false
-  publicNetworkEnabled: true
-  allowTrustedServices: true
-  allowExports: true
+  sku: Basic
+  adminUserEnabled: false
 
   tags:
     merlin: "true"
     env: ${ this.ring }
 
-  images:
-    # Trinity images
-    - name: trinity/web
-      tags:
-        - nightly
-      source: mcr.microsoft.com/mcr/hello-world
-    - name: trinity/worker
-      tags:
-        - nightly
-      source: mcr.microsoft.com/mcr/hello-world
-    - name: trinity/admin
-      tags:
-        - nightly
-      source: mcr.microsoft.com/mcr/hello-world
-    - name: trinity/lance
-      tags:
-        - nightly
-      source: mcr.microsoft.com/mcr/hello-world
-    - name: trinity/lance-worker
-      tags:
-        - nightly
-      source: mcr.microsoft.com/mcr/hello-world
-    - name: trinity/home
-      tags:
-        - nightly
-      source: mcr.microsoft.com/mcr/hello-world
-    # Alluneed images
-    - name: alluneed
-      tags:
-        - latest
-      source: brainlytest-c4cscpe6b9b5f8fq.azurecr.io/alluneed:latest
-    - name: alluneed-basic
-      tags:
-        - latest
-      source: brainlytest-c4cscpe6b9b5f8fq.azurecr.io/alluneed-basic:latest
-
-specificConfig:
-  - ring: test
-    sku: Basic
+specificConfig: []
 
 exports:
   server: AzureContainerRegistryServer

@@ -1,6 +1,6 @@
 name: alluneed
 type: AzureLogAnalyticsWorkspace
-project: merlintest
+project: merlin
 ring:
   - staging
   - test

@@ -116,7 +116,10 @@ Merlin uses a **compile-time + runtime** architecture:
 - **`src/alibaba/`**: Alibaba Cloud placeholder (Phase 2, not yet implemented)
 - **`src/runtime.ts`**: Public API for generated code
 - **`src/init.ts`**: Registers all providers (auth, render, propriety getters); branches on `MERLIN_CLOUD`
-- **`resources/`**: YAML resource definitions (user input)
+- **`shared-resource/`**: Cross-project shared infrastructure — ACR, Redis, Postgres, ABS, AKV, GitHub SP (`project: merlin`)
+- **`trinity-resource/`**: Trinity-specific shared infrastructure — LAW + ACAE (`project: merlin`)
+- **`trinity-*-resource/`**: Individual Trinity service resources (web, worker, admin, lance, lance-worker, home, func)
+- **`alluneed-resource/`**: Alluneed AI inference service resources (own ACAE + LAW, `project: merlin`)
 - **`.merlin/`**: Generated TypeScript project (output, not in git)
 
 ### Compiler Pipeline

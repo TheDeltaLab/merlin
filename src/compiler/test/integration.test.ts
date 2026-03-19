@@ -40,7 +40,7 @@ describe('Integration Tests', () => {
             expect(generatedFile).toBeDefined();
 
             const generatedCode = await readFile(generatedFile!, 'utf-8');
-            expect(generatedCode).toContain('SimpleType_simple-resource_test');
+            expect(generatedCode).toContain('SimpleType_simple_resource_test');
             expect(generatedCode).toContain('name: "simple-resource"');
             expect(generatedCode).toContain('ring: "test"');
         });
@@ -61,9 +61,9 @@ describe('Integration Tests', () => {
             const generatedCode = await readFile(generatedFile!, 'utf-8');
 
             // Should generate 3 resources (test, staging, production)
-            expect(generatedCode).toContain('TestType_multi-ring_test');
-            expect(generatedCode).toContain('TestType_multi-ring_staging');
-            expect(generatedCode).toContain('TestType_multi-ring_production');
+            expect(generatedCode).toContain('TestType_multi_ring_test');
+            expect(generatedCode).toContain('TestType_multi_ring_staging');
+            expect(generatedCode).toContain('TestType_multi_ring_production');
         });
 
         test('should compile multi-region resource', async () => {
@@ -82,10 +82,10 @@ describe('Integration Tests', () => {
             const generatedCode = await readFile(generatedFile!, 'utf-8');
 
             // Should generate 4 resources (2 rings × 2 regions)
-            expect(generatedCode).toContain('TestType_multi-region_staging_eastus');
-            expect(generatedCode).toContain('TestType_multi-region_staging_westus');
-            expect(generatedCode).toContain('TestType_multi-region_production_eastus');
-            expect(generatedCode).toContain('TestType_multi-region_production_westus');
+            expect(generatedCode).toContain('TestType_multi_region_staging_eastus');
+            expect(generatedCode).toContain('TestType_multi_region_staging_westus');
+            expect(generatedCode).toContain('TestType_multi_region_production_eastus');
+            expect(generatedCode).toContain('TestType_multi_region_production_westus');
         });
 
         test('should compile complex resource with all features', async () => {
@@ -135,8 +135,8 @@ describe('Integration Tests', () => {
             const generatedFile = result.generatedFiles.find(f => f.endsWith('complex.ts'));
             const generatedCode = await readFile(generatedFile!, 'utf-8');
 
-            expect(generatedCode).toContain('"resource": "DepType1.dependency1"');
-            expect(generatedCode).toContain('"isHardDependency": true');
+            expect(generatedCode).toContain('resource: "DepType1.dependency1"');
+            expect(generatedCode).toContain('isHardDependency: true');
         });
 
         test('should compile resource with exports', async () => {
@@ -199,7 +199,7 @@ describe('Integration Tests', () => {
             const generatedCode = await readFile(generatedFile!, 'utf-8');
 
             // Variable names should follow pattern: type_name_ring_region
-            expect(generatedCode).toMatch(/export const \w+_multi-region_\w+_\w+: Resource/);
+            expect(generatedCode).toMatch(/export const \w+_multi_region_\w+_\w+: Resource/);
         });
 
         test('config merging should produce expected values', async () => {
@@ -218,7 +218,7 @@ describe('Integration Tests', () => {
             const generatedCode = await readFile(generatedFile!, 'utf-8');
 
             // Staging resources should have premium tier
-            const stagingResource = generatedCode.match(/TestType_with-specific-config_staging_eastus[\s\S]*?registerResource/);
+            const stagingResource = generatedCode.match(/TestType_with_specific_config_staging_eastus[\s\S]*?registerResource/);
             expect(stagingResource).toBeDefined();
             expect(stagingResource![0]).toContain('"tier": "premium"');
         });
@@ -239,12 +239,12 @@ describe('Integration Tests', () => {
             const generatedCode = await readFile(generatedFile!, 'utf-8');
 
             // Production + eastus should have premium tier
-            const productionEastus = generatedCode.match(/TestType_multi-region_production_eastus[\s\S]*?registerResource/);
+            const productionEastus = generatedCode.match(/TestType_multi_region_production_eastus[\s\S]*?registerResource/);
             expect(productionEastus).toBeDefined();
             expect(productionEastus![0]).toContain('"tier": "premium"');
 
             // Other resources should have basic tier
-            const stagingWestus = generatedCode.match(/TestType_multi-region_staging_westus[\s\S]*?registerResource/);
+            const stagingWestus = generatedCode.match(/TestType_multi_region_staging_westus[\s\S]*?registerResource/);
             expect(stagingWestus).toBeDefined();
             expect(stagingWestus![0]).toContain('"tier": "basic"');
         });
