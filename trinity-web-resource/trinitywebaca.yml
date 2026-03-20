@@ -24,6 +24,11 @@ dependencies:
     authProvider:
       name: AzureManagedIdentity
       role: Storage Blob Data Contributor
+  - resource: AzureADApp.admin
+    isHardDependency: true
+    authProvider:
+      name: AzureEntraID
+      role: Admin.Access
 
 defaultConfig:
   image: ${ AzureContainerRegistry.shared.server }/trinity/web:nightly
@@ -33,6 +38,7 @@ defaultConfig:
 
   envVars:
     - NODE_ENV=${ this.ring }
+    - ADMIN_SERVER_SCOPE=api://${ AzureADApp.admin.clientId }/.default
     - AZURE_STORAGE_ACCOUNT_NAME=${ AzureBlobStorage.shared.name }
     - REDIS_URL=rediss://trinitytest.koreacentral.redis.azure.net:10000
 

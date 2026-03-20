@@ -1,6 +1,6 @@
 import { AuthProvider, Command, Dependency, Resource, getRender } from "../common/resource.js";
 import { AzureResourceRender } from "./render.js";
-import { execSync } from "child_process";
+import { AzureADAppRender, AzureADAppResource } from "./azureADApp.js";
 
 /**
  * Supported role assignment scopes.
@@ -209,7 +209,87 @@ export class AzureEntraIDAuthProvider implements AuthProvider {
 
     dependencies: Dependency[] = [];
 
+    /**
+     * Grants the requestor's managed identity an AAD App Role on the provider AAD App.
+     *
+     * Required args:
+     *   - role: the app role value string (e.g. "Admin.Access")
+     *
+     * Generates:
+     *   1. Capture the requestor's managed identity principal ID (service principal object ID)
+     *   2. Capture the provider AAD App's appId
+     *   3. Capture the provider AAD App's service principal object ID
+     *   4. Capture the app role ID from the SP's appRoles
+     *   5. POST to Graph API via az rest to create the app role assignment (idempotent via || true)
+     */
     async apply(requestor: Resource, provider: Resource, args: Record<string, string>): Promise<Command[]> {
-        throw new Error(`not implemented yet`);
+        const role = args['role'];
+        if (!role) {
+            throw new Error(
+                `AzureEntraIDAuthProvider: 'role' is required in authProvider args ` +
+                `(requestor: ${requestor.type}.${requestor.name}, provider: ${provider.type}.${provider.name})`
+            );
+        }
+
+        const requestorRender = getRender(requestor.type) as AzureResourceRender;
+        const providerRender  = getRender(provider.type)  as AzureADAppRender;
+
+        const slug = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '_');
+
+        const requestorSlug = slug(requestorRender.getResourceName(requestor));
+        const providerSlug  = slug(providerRender.getResourceName(provider));
+        const roleSlug      = slug(role);
+
+        // Shell variable names
+        const principalIdVar = `MERLIN_MI_${requestorSlug}_PRINCIPAL_ID`;
+        const appIdVar       = `MERLIN_AAD_${providerSlug}_${roleSlug}_APPID`;
+        const spObjectIdVar  = `MERLIN_AAD_${providerSlug}_${roleSlug}_SPOID`;
+        const roleIdVar      = `MERLIN_AAD_${providerSlug}_${roleSlug}_ROLEID`;
+
+        const commands: Command[] = [];
+
+        // Step 1: capture requestor managed identity principal ID
+        const requestorName = requestorRender.getResourceName(requestor);
+        const requestorRg   = requestorRender.getResourceGroupName(requestor);
+        commands.push({
+            command: 'az',
+            args: ['containerapp', 'show', '--name', requestorName, '--resource-group', requestorRg, '--query', 'identity.principalId', '-o', 'tsv'],
+            envCapture: principalIdVar,
+        });
+
+        // Step 2: capture provider AAD App's appId
+        const displayName = providerRender.getDisplayName(provider as AzureADAppResource);
+        commands.push({
+            command: 'az',
+            args: ['ad', 'app', 'list', '--filter', `displayName eq '${displayName}'`, '--query', '[0].appId', '-o', 'tsv'],
+            envCapture: appIdVar,
+        });
+
+        // Step 3: capture provider AAD App's service principal object ID
+        commands.push({
+            command: 'az',
+            args: ['ad', 'sp', 'show', '--id', `$${appIdVar}`, '--query', 'id', '-o', 'tsv'],
+            envCapture: spObjectIdVar,
+        });
+
+        // Step 4: capture the app role ID by role value
+        commands.push({
+            command: 'az',
+            args: ['ad', 'sp', 'show', '--id', `$${appIdVar}`, '--query', `appRoles[?value=='${role}'].id | [0]`, '-o', 'tsv'],
+            envCapture: roleIdVar,
+        });
+
+        // Step 5: assign the app role via Graph API (az rest) — idempotent via || true
+        // az ad app role-assignment does not exist; the correct approach is Graph API POST
+        const body = `{"principalId":"$${principalIdVar}","resourceId":"$${spObjectIdVar}","appRoleId":"$${roleIdVar}"}`;
+        commands.push({
+            command: 'bash',
+            args: [
+                '-c',
+                `az rest --method POST --uri "https://graph.microsoft.com/v1.0/servicePrincipals/$${spObjectIdVar}/appRoleAssignments" --headers "Content-Type=application/json" --body '${body}' || true`,
+            ],
+        });
+
+        return commands;
     }
 }

@@ -180,10 +180,15 @@ describe('AzureADAppRender', () => {
             expect(hasParam(cmd.args, '--is-fallback-public-client', 'true')).toBe(true);
         });
 
-        it('includes --identifier-uris when set', () => {
+        it('sets --identifier-uris via the update command (step 3), not the initial create', () => {
             const resource = makeResource({ identifierUris: ['api://merlintest-myapp-stg'] });
-            const [cmd] = render.renderCreate(resource);
-            expect(hasParam(cmd.args, '--identifier-uris', 'api://merlintest-myapp-stg')).toBe(true);
+            const cmds = render.renderCreate(resource);
+            // cmd[0]: az ad app create  — must NOT contain --identifier-uris
+            expect(hasParam(cmds[0].args, '--identifier-uris')).toBe(false);
+            // cmd[2]: az ad app update  — must contain --identifier-uris
+            const updateCmd = cmds.find(c => c.args.includes('update'));
+            expect(updateCmd).toBeDefined();
+            expect(hasParam(updateCmd!.args, '--identifier-uris', 'api://merlintest-myapp-stg')).toBe(true);
         });
 
         it('includes --web-redirect-uris as space-separated string', () => {
@@ -252,10 +257,36 @@ describe('AzureADAppRender', () => {
             expect(cmd.args).not.toContain('--location');
         });
 
-        it('returns exactly one command', () => {
+        it('returns exactly two commands (create + capture appId; no identifierUris, no sp create waits for appIdVar)', () => {
             const resource = makeResource();
             const cmds = render.renderCreate(resource);
-            expect(cmds).toHaveLength(1);
+            // cmd[0]: az ad app create
+            // cmd[1]: az ad app list (capture appId)
+            // cmd[2]: az ad sp create
+            expect(cmds).toHaveLength(3);
+        });
+
+        it('returns three commands when identifierUris are set (create + capture + update-uris + sp-create)', () => {
+            const resource = makeResource({ identifierUris: ['api://self'] });
+            const cmds = render.renderCreate(resource);
+            // cmd[0]: az ad app create
+            // cmd[1]: az ad app list (capture appId)
+            // cmd[2]: az ad app update --identifier-uris
+            // cmd[3]: az ad sp create
+            expect(cmds).toHaveLength(4);
+        });
+
+        it('last command is az ad sp create --id referencing the appId variable', () => {
+            const resource = makeResource();
+            const cmds = render.renderCreate(resource);
+            const spCmd = cmds[cmds.length - 1];
+            expect(spCmd.command).toBe('az');
+            expect(spCmd.args[0]).toBe('ad');
+            expect(spCmd.args[1]).toBe('sp');
+            expect(spCmd.args[2]).toBe('create');
+            expect(spCmd.args[3]).toBe('--id');
+            // value must be a shell variable reference (starts with $)
+            expect(spCmd.args[4]).toMatch(/^\$/);
         });
     });
 
@@ -323,7 +354,10 @@ describe('AzureADAppRender', () => {
             mockNotFound();
             const resource = makeResource();
             const cmds = await render.render(resource);
-            expect(cmds).toHaveLength(1);
+            // cmd[0]: az ad app create
+            // cmd[1]: az ad app list (capture appId)
+            // cmd[2]: az ad sp create
+            expect(cmds).toHaveLength(3);
             expect(cmds[0].args).toContain('create');
             expect(cmds[0].args).not.toContain('update');
         });

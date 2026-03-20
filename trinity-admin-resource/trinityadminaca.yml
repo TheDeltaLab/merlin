@@ -36,8 +36,8 @@ defaultConfig:
   memory: 1Gi
 
   envVars:
-    - ADMIN_SERVER_SCOPE=api://312331ad-04a5-496b-aa10-45a0f922d2c6/.default
-    - ADMIN_SERVER_URL=https://app.admin.test.thebrainly.dev/
+    - ADMIN_SERVER_SCOPE=api://${ AzureADApp.admin.clientId }/.default
+    - ADMIN_SERVER_URL=https://app-merlin.${ AzureDnsZone.admindns.domainName }/
     - ALI_KEY_ENDPOINT=https://delta-test-krc-akv.vault.azure.net/
     - ALI_KEY_NAME=alibaba-key
     - ALLUNEED_SCOPE=api://4cdb0cdf-94d8-4c20-88de-e7683d81cf1f/.default
@@ -56,20 +56,26 @@ defaultConfig:
 
   probes:
     - type: Liveness
-      tcpSocket:
+      httpGet:
+        path: /
         port: 3000
+        scheme: HTTP
       periodSeconds: 10
       timeoutSeconds: 5
       failureThreshold: 3
     - type: Readiness
-      tcpSocket:
+      httpGet:
+        path: /
         port: 3000
+        scheme: HTTP
       periodSeconds: 5
       timeoutSeconds: 5
       failureThreshold: 48
     - type: Startup
-      tcpSocket:
+      httpGet:
+        path: /
         port: 3000
+        scheme: HTTP
       initialDelaySeconds: 1
       periodSeconds: 1
       timeoutSeconds: 3

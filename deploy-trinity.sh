@@ -37,12 +37,6 @@ done
 echo "🔨 Building merlin..."
 (cd "$SCRIPT_DIR" && pnpm --silent build)
 
-# ── Ensure .merlin has the latest merlin dist ─────────────────────────────────
-if [[ -d "$SCRIPT_DIR/.merlin" ]]; then
-  echo "🔄 Syncing .merlin dependencies..."
-  (cd "$SCRIPT_DIR/.merlin" && pnpm install --silent && pnpm --silent build)
-fi
-
 # ── Staging directory ─────────────────────────────────────────────────────────
 STAGING_DIR="$(mktemp -d)"
 trap 'rm -rf "$STAGING_DIR"' EXIT
@@ -63,14 +57,13 @@ cp "$SCRIPT_DIR"/trinity-home-resource/*.yml          "$STAGING_DIR/"
 cp "$SCRIPT_DIR"/trinity-func-resource/*.yml          "$STAGING_DIR/"
 
 # Alluneed services
-# TODO: alluneed image not yet in ACR — skip until nightly CI is set up
-# cp "$SCRIPT_DIR"/alluneed-resource/*.yml              "$STAGING_DIR/"
+cp "$SCRIPT_DIR"/alluneed-resource/*.yml              "$STAGING_DIR/"
 
 echo ""
 echo "Resources staged in: $STAGING_DIR"
 echo ""
 
-# ── Compile + Deploy ──────────────────────────────────────────────────────────
+# ── Deploy (compile + build .merlin/ + execute are all handled by merlin deploy) ──
 if [[ "$ALL_MODE" == "true" ]]; then
   echo "=========================================="
   echo " Merlin Deploy: Trinity + Alluneed (ALL)"

@@ -171,38 +171,86 @@ export class AzureADAppRender extends AzureResourceRender {
     }
 
     renderCreate(resource: AzureADAppResource): Command[] {
-        const args: string[] = [];
         const config = resource.config;
 
-        args.push('ad', 'app', 'create');
-        args.push('--display-name', this.getDisplayName(resource));
+        // Step 1: create without identifierUris (may contain "api://self" placeholder
+        // which requires the appId — not known until after creation)
+        const createArgs: string[] = [];
+        createArgs.push('ad', 'app', 'create');
+        createArgs.push('--display-name', this.getDisplayName(resource));
+        this.addSimpleParams(createArgs, config, AzureADAppRender.SIMPLE_PARAM_MAP);
+        this.addBooleanFlags(createArgs, config, AzureADAppRender.BOOLEAN_FLAG_MAP);
+        const arrayParamsWithoutUris = Object.fromEntries(
+            Object.entries(AzureADAppRender.ARRAY_PARAM_MAP).filter(([k]) => k !== 'identifierUris')
+        );
+        this.addArrayParams(createArgs, config, arrayParamsWithoutUris);
 
-        this.addSimpleParams(args, config, AzureADAppRender.SIMPLE_PARAM_MAP);
-        this.addBooleanFlags(args, config, AzureADAppRender.BOOLEAN_FLAG_MAP);
-        this.addArrayParams(args, config, AzureADAppRender.ARRAY_PARAM_MAP);
+        const commands: Command[] = [{ command: 'az', args: createArgs }];
 
-        return [{
+        // Step 2: capture the newly created appId
+        const appIdVar = `MERLIN_AAD_NEW_${this.getDisplayName(resource).toUpperCase().replace(/-/g, '_')}_APPID`;
+        commands.push({
             command: 'az',
-            args,
-        }];
+            args: ['ad', 'app', 'list', '--filter', `displayName eq '${this.getDisplayName(resource)}'`, '--query', '[0].appId', '-o', 'tsv'],
+            envCapture: appIdVar,
+        });
+
+        // Step 3: set identifierUris now that appId is known
+        // "api://self" is a placeholder meaning "api://<this app's own clientId>"
+        if (config.identifierUris && (config.identifierUris as string[]).length > 0) {
+            const resolvedUris = (config.identifierUris as string[]).map(uri =>
+                uri.replace(/^api:\/\/self$/, `api://$${appIdVar}`)
+            );
+            commands.push({
+                command: 'az',
+                args: ['ad', 'app', 'update', '--id', `$${appIdVar}`, '--identifier-uris', ...resolvedUris],
+            });
+        }
+
+        // Step 4: create the Service Principal (enterprise app) for this AD App registration
+        commands.push({
+            command: 'az',
+            args: ['ad', 'sp', 'create', '--id', `$${appIdVar}`],
+        });
+
+        return commands;
     }
 
     renderUpdate(resource: AzureADAppResource, objectId: string): Command[] {
-        const args: string[] = [];
         const config = resource.config;
 
-        args.push('ad', 'app', 'update');
-        args.push('--id', objectId);
+        // Step 1: capture the existing appId (needed to resolve "api://self" in identifierUris)
+        const appIdVar = `MERLIN_AAD_UPD_${this.getDisplayName(resource).toUpperCase().replace(/-/g, '_')}_APPID`;
+        const commands: Command[] = [];
+
+        const hasApiSelf = (config.identifierUris as string[] | undefined)?.some(u => u === 'api://self');
+
+        if (hasApiSelf) {
+            commands.push({
+                command: 'az',
+                args: ['ad', 'app', 'list', '--filter', `displayName eq '${this.getDisplayName(resource)}'`, '--query', '[0].appId', '-o', 'tsv'],
+                envCapture: appIdVar,
+            });
+        }
+
+        const updateArgs: string[] = [];
+        updateArgs.push('ad', 'app', 'update');
+        updateArgs.push('--id', objectId);
 
         // --display-name is omitted in update: it is the lookup key and should not be changed
+        this.addSimpleParams(updateArgs, config, AzureADAppRender.SIMPLE_PARAM_MAP);
+        this.addBooleanFlags(updateArgs, config, AzureADAppRender.BOOLEAN_FLAG_MAP);
 
-        this.addSimpleParams(args, config, AzureADAppRender.SIMPLE_PARAM_MAP);
-        this.addBooleanFlags(args, config, AzureADAppRender.BOOLEAN_FLAG_MAP);
-        this.addArrayParams(args, config, AzureADAppRender.ARRAY_PARAM_MAP);
+        // Resolve "api://self" placeholder before passing to addArrayParams
+        const resolvedConfig = hasApiSelf ? {
+            ...config,
+            identifierUris: (config.identifierUris as string[]).map(u =>
+                u === 'api://self' ? `api://$${appIdVar}` : u
+            ),
+        } : config;
+        this.addArrayParams(updateArgs, resolvedConfig, AzureADAppRender.ARRAY_PARAM_MAP);
 
-        return [{
-            command: 'az',
-            args,
-        }];
+        commands.push({ command: 'az', args: updateArgs });
+        return commands;
     }
 }

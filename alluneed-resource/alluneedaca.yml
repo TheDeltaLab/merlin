@@ -16,6 +16,9 @@ dependencies:
     isHardDependency: true
   - resource: AzureContainerRegistry.shared
     isHardDependency: false
+    authProvider:
+      name: AzureManagedIdentity
+      role: AcrPull
   - resource: AzureDnsZone.chuangdns
     isHardDependency: false
   - resource: AzureADApp.alluneed
