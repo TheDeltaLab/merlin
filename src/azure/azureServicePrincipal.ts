@@ -187,20 +187,23 @@ export class AzureServicePrincipalRender extends AzureResourceRender {
 
     renderFederatedCredentials(resource: AzureServicePrincipalResource, appIdVar: string): Command[] {
         const creds = resource.config.federatedCredentials ?? [];
-        return creds.map(cred => ({
-            command: 'az',
-            args: [
-                'ad', 'app', 'federated-credential', 'create',
-                '--id', `$${appIdVar}`,
-                '--parameters', JSON.stringify({
-                    name: cred.name,
-                    issuer: cred.issuer ?? 'https://token.actions.githubusercontent.com',
-                    subject: cred.subject,
-                    description: cred.description ?? '',
-                    audiences: ['api://AzureADTokenExchange'],
-                }),
-            ],
-        }));
+        return creds.map(cred => {
+            const params = JSON.stringify({
+                name: cred.name,
+                issuer: cred.issuer ?? 'https://token.actions.githubusercontent.com',
+                subject: cred.subject,
+                description: cred.description ?? '',
+                audiences: ['api://AzureADTokenExchange'],
+            });
+            // Idempotent: try update first (credential exists), fall back to create
+            return {
+                command: 'bash',
+                args: [
+                    '-c',
+                    `az ad app federated-credential update --id $${appIdVar} --federated-credential-id ${cred.name} --parameters '${params}' || az ad app federated-credential create --id $${appIdVar} --parameters '${params}'`,
+                ],
+            };
+        });
     }
 
     // ── Role assignments ──────────────────────────────────────────────────────
@@ -227,12 +230,10 @@ export class AzureServicePrincipalRender extends AzureResourceRender {
             );
 
             commands.push({
-                command: 'az',
+                command: 'bash',
                 args: [
-                    'role', 'assignment', 'create',
-                    '--assignee', `$${appIdVar}`,
-                    '--role', ra.role,
-                    '--scope', scope,
+                    '-c',
+                    `az role assignment create --assignee $${appIdVar} --role '${ra.role}' --scope '${scope}' || true`,
                 ],
             });
         }

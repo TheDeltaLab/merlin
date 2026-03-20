@@ -16,14 +16,14 @@ dependencies:
     isHardDependency: true
   - resource: AzureContainerRegistry.shared
     isHardDependency: false
+    authProvider:
+      name: AzureManagedIdentity
+      role: AcrPull
   - resource: AzureBlobStorage.shared
     isHardDependency: false
     authProvider:
       name: AzureManagedIdentity
       role: Storage Blob Data Contributor
-    authProvider:
-      name: AzureManagedIdentity
-      role: Key Vault Secrets User
 
 defaultConfig:
   image: ${ AzureContainerRegistry.shared.server }/trinity/lance-worker:nightly

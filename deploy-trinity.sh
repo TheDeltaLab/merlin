@@ -33,10 +33,14 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# ── Build merlin from source ───────────────────────────────────────────────────
+echo "🔨 Building merlin..."
+(cd "$SCRIPT_DIR" && pnpm --silent build)
+
 # ── Ensure .merlin has the latest merlin dist ─────────────────────────────────
 if [[ -d "$SCRIPT_DIR/.merlin" ]]; then
   echo "🔄 Syncing .merlin dependencies..."
-  (cd "$SCRIPT_DIR/.merlin" && pnpm install --silent)
+  (cd "$SCRIPT_DIR/.merlin" && pnpm install --silent && pnpm --silent build)
 fi
 
 # ── Staging directory ─────────────────────────────────────────────────────────

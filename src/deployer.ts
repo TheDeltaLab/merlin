@@ -314,7 +314,9 @@ export class Deployer {
       if (options.ring && resource.ring !== options.ring) {
         return false;
       }
-      if (options.region && resource.region !== options.region) {
+      // Global resources (e.g. AzureADApp) have no region — never filter them out
+      // by region. They are shared across all regions in a ring.
+      if (options.region && resource.region !== undefined && resource.region !== options.region) {
         return false;
       }
       return true;

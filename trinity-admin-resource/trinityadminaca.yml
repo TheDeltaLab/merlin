@@ -16,6 +16,9 @@ dependencies:
     isHardDependency: true
   - resource: AzureContainerRegistry.shared
     isHardDependency: false
+    authProvider:
+      name: AzureManagedIdentity
+      role: AcrPull
   - resource: AzureADApp.admin
     isHardDependency: true
   - resource: AzureDnsZone.admindns
@@ -107,7 +110,12 @@ defaultConfig:
     merlin: "true"
     env: ${ this.ring }
 
-specificConfig: []
+specificConfig:
+  - ring: test
+    secrets:
+      - database-url=REPLACE_ME
+      - database-url-admin=REPLACE_ME
+      - redis-user-admin=REPLACE_ME
 
 exports:
   identity: AzureResourceManagedIdentity
