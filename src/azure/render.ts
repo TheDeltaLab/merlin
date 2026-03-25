@@ -86,7 +86,9 @@ export abstract class AzureResourceRender implements Render {
     }
 
     /**
-     * Add boolean flags to args array
+     * Add boolean flags to args array (value-accepting: `--flag true` / `--flag false`).
+     * Use this for Azure CLI commands that accept true/false as a value argument,
+     * e.g. `az storage account create --https-only true`, `az keyvault create --enable-rbac-authorization true`.
      * @param args - The args array to append to
      * @param config - The configuration object
      * @param flagMap - Map of config keys to CLI flags (e.g., { 'httpsOnly': '--https-only' })
@@ -100,6 +102,23 @@ export abstract class AzureResourceRender implements Render {
             } else if (value === false) {
                 args.push(cliFlag);
                 args.push('false');
+            }
+        }
+    }
+
+    /**
+     * Add presence-only boolean flags to args array (standalone: `--flag` with no value).
+     * Use this for Azure CLI commands where the flag is presence-only and does NOT accept
+     * true/false as a value, e.g. `az aks create --enable-managed-identity`.
+     * The flag is only emitted when the config value is `true`; when `false` it is omitted entirely.
+     * @param args - The args array to append to
+     * @param config - The configuration object
+     * @param flagMap - Map of config keys to CLI flags (e.g., { 'enableManagedIdentity': '--enable-managed-identity' })
+     */
+    protected addPresenceFlags(args: string[], config: Record<string, any>, flagMap: Record<string, string>): void {
+        for (const [configKey, cliFlag] of Object.entries(flagMap)) {
+            if (config[configKey] === true) {
+                args.push(cliFlag);
             }
         }
     }

@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { Compiler } from './common/compiler.js';
 import { execaCommand } from 'execa';
+import { execSync } from 'child_process';
 import * as path from 'path';
 
 const program = new Command();
@@ -15,17 +16,22 @@ program
     .description('Compile YAML resource definitions to TypeScript')
     .argument('[path]', 'Path to YAML file or directory', './resources')
     .option('-i, --input <path>', 'Path to YAML resource definitions directory (overrides [path] argument)')
+    .option('--also <paths>', 'Additional resource directories to compile alongside the main path (comma-separated)')
     .option('-o, --output <path>', 'Output directory', '.merlin')
     .option('-w, --watch', 'Watch for changes and recompile')
     .option('--validate-only', 'Validate without generating code')
     .option('--no-cache', 'Skip the compilation cache and always recompile')
     .action(async (argPath, options) => {
         const inputPath = options.input ?? argPath;
+        const extraPaths: string[] = options.also
+            ? options.also.split(',').map((p: string) => p.trim()).filter(Boolean)
+            : [];
         const compiler = new Compiler();
 
         try {
             const result = await compiler.compile({
                 inputPath: inputPath,
+                inputPaths: extraPaths.length > 0 ? extraPaths : undefined,
                 outputPath: options.output,
                 watch: options.watch,
                 validate: options.validateOnly,
@@ -84,6 +90,7 @@ program
     .description('Deploy infrastructure resources')
     .argument('[path]', 'Path to resource configuration file or directory', './resources')
     .option('-i, --input <path>', 'Path to YAML resource definitions directory (overrides [path] argument)')
+    .option('--also <paths>', 'Additional resource directories to compile alongside the main path (comma-separated)')
     .option('-e, --execute', 'Actually execute the deployment (default is dry-run)')
     .option('-r, --ring <ring>', 'Target ring (test, staging, production)')
     .option('--region <region>', 'Target region (eastus, westus, krc)')
@@ -94,6 +101,9 @@ program
     .action(async (argPath, options) => {
         const resourcePath = options.input ?? argPath;
         const outputPath = options.dir;
+        const extraPaths: string[] = options.also
+            ? options.also.split(',').map((p: string) => p.trim()).filter(Boolean)
+            : [];
 
         try {
             // Auto-compile before deployment
@@ -102,6 +112,7 @@ program
 
             const compileResult = await compiler.compile({
                 inputPath: resourcePath,
+                inputPaths: extraPaths.length > 0 ? extraPaths : undefined,
                 outputPath: outputPath
             });
 
@@ -178,8 +189,12 @@ program
     .description('Validate resource configuration files')
     .argument('[path]', 'Path to resource configuration file or directory', './resources')
     .option('-i, --input <path>', 'Path to YAML resource definitions directory (overrides [path] argument)')
+    .option('--also <paths>', 'Additional resource directories to validate alongside the main path (comma-separated)')
     .action(async (argPath, options) => {
         const inputPath = options.input ?? argPath;
+        const extraPaths: string[] = options.also
+            ? options.also.split(',').map((p: string) => p.trim()).filter(Boolean)
+            : [];
         // Auto-compile before validation (user preference)
         console.log('🔨 Compiling resources...');
         const compiler = new Compiler();
@@ -187,6 +202,7 @@ program
         try {
             const result = await compiler.compile({
                 inputPath: inputPath,
+                inputPaths: extraPaths.length > 0 ? extraPaths : undefined,
                 outputPath: '.merlin'
             });
 
@@ -214,6 +230,92 @@ program
             }
         } catch (error) {
             console.error('Fatal error:', error);
+            process.exit(1);
+        }
+    });
+
+program
+    .command('prerequisites')
+    .alias('prereqs')
+    .description('Check and install required CLI tools (az, helm, kubectl)')
+    .option('--install', 'Auto-install missing tools via Homebrew (macOS only)')
+    .action(async (options) => {
+        type Tool = {
+            name: string;
+            cmd: string;
+            versionArg: string;
+            installCmd?: string;
+            installDoc: string;
+        };
+
+        const tools: Tool[] = [
+            {
+                name: 'Azure CLI (az)',
+                cmd: 'az',
+                versionArg: 'version --query \'"azure-cli"\' -o tsv',
+                installCmd: 'brew install azure-cli',
+                installDoc: 'https://learn.microsoft.com/en-us/cli/azure/install-azure-cli',
+            },
+            {
+                name: 'Helm',
+                cmd: 'helm',
+                versionArg: 'version --short',
+                installCmd: 'brew install helm',
+                installDoc: 'https://helm.sh/docs/intro/install/',
+            },
+            {
+                name: 'kubectl',
+                cmd: 'kubectl',
+                versionArg: 'version --client --short',
+                installCmd: 'brew install kubectl',
+                installDoc: 'https://kubernetes.io/docs/tasks/tools/',
+            },
+        ];
+
+        let allOk = true;
+
+        console.log('Checking required tools...\n');
+
+        for (const tool of tools) {
+            try {
+                const version = execSync(`${tool.cmd} ${tool.versionArg} 2>/dev/null`, {
+                    encoding: 'utf-8',
+                }).trim().split('\n')[0];
+                console.log(`  ✅ ${tool.name}: ${version}`);
+            } catch {
+                allOk = false;
+                console.log(`  ❌ ${tool.name}: not found`);
+                console.log(`     Install: ${tool.installDoc}`);
+
+                if (options.install && tool.installCmd) {
+                    const isMac = process.platform === 'darwin';
+                    if (!isMac) {
+                        console.log(`     ⚠️  Auto-install only supported on macOS. Please install manually.`);
+                        continue;
+                    }
+                    try {
+                        console.log(`     🔧 Running: ${tool.installCmd}`);
+                        execSync(tool.installCmd, { stdio: 'inherit' });
+                        console.log(`     ✅ ${tool.name} installed successfully`);
+                        allOk = true;
+                    } catch {
+                        console.error(`     ❌ Auto-install failed. Please install manually.`);
+                    }
+                }
+            }
+        }
+
+        console.log('');
+
+        if (allOk) {
+            console.log('✅ All prerequisites satisfied.\n');
+            console.log('Next steps:');
+            console.log('  1. az login                                     # Authenticate with Azure');
+            console.log('  2. merlin deploy shared-k8s-resource --execute  # Create AKS cluster + NGINX + cert-manager');
+            console.log('  3. merlin deploy <project>-k8s-resource --execute  # Deploy application resources');
+        } else {
+            console.log('⚠️  Some tools are missing. Run with --install to auto-install on macOS.');
+            console.log('   merlin prerequisites --install');
             process.exit(1);
         }
     });

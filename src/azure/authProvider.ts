@@ -110,6 +110,26 @@ export class AzureManagedIdentityAuthProvider implements AuthProvider {
         const resourceName  = render.getResourceName(requestor);
         const resourceGroup = render.getResourceGroupName(requestor);
 
+        // Service Principals are AAD objects, not ARM resources.
+        // Their principal ID is the SP's object ID, looked up by display name.
+        if (requestor.type === 'AzureServicePrincipal') {
+            const displayName = resourceName;
+            return [{
+                command: 'az',
+                args: ['ad', 'sp', 'list', '--filter', `displayName eq '${displayName}'`, '--query', '[0].id', '-o', 'tsv'],
+                envCapture: varName,
+            }];
+        }
+
+        // For Function Apps, use `az functionapp show` which returns identity.principalId
+        if (requestor.type === 'AzureFunctionApp') {
+            return [{
+                command: 'az',
+                args: ['functionapp', 'show', '--name', resourceName, '--resource-group', resourceGroup, '--query', 'identity.principalId', '-o', 'tsv'],
+                envCapture: varName,
+            }];
+        }
+
         const showArgs = this.buildShowArgs(requestor.type, resourceName, resourceGroup);
 
         return [{
@@ -192,6 +212,8 @@ export class AzureManagedIdentityAuthProvider implements AuthProvider {
             'AzureKeyVault':             ['keyvault', 'show', '--name', resourceName, '--resource-group', resourceGroup],
             'AzureRedisEnterprise':      ['redisenterprise', 'show', '--name', resourceName, '--resource-group', resourceGroup],
             'AzurePostgreSQLFlexible':   ['postgres', 'flexible-server', 'show', '--name', resourceName, '--resource-group', resourceGroup],
+            'KubernetesCluster':         ['aks', 'show', '--name', resourceName, '--resource-group', resourceGroup],
+            'AzureAKSCluster':           ['aks', 'show', '--name', resourceName, '--resource-group', resourceGroup],
         };
 
         return SHOW_COMMAND_MAP[resourceType] ?? [

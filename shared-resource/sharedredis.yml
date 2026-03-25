@@ -13,6 +13,7 @@ dependencies: []
 defaultConfig:
   sku: Balanced_B1
   location: ${ this.region }
+  publicNetworkAccess: Enabled
 
   tags:
     merlin: "true"

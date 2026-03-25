@@ -1,0 +1,119 @@
+name: trinity-web
+type: KubernetesDeployment
+project: merlin
+ring:
+  - test
+  - staging
+region:
+  - koreacentral
+  - eastasia
+
+dependencies:
+  - resource: KubernetesCluster.aks
+    isHardDependency: true
+  - resource: KubernetesService.trinity-admin
+    isHardDependency: true
+  - resource: KubernetesService.trinity-lance
+    isHardDependency: true
+  - resource: KubernetesConfigMap.trinity-shared-config
+    isHardDependency: true
+  - resource: KubernetesManifest.trinity-secret-provider
+    isHardDependency: true
+  - resource: KubernetesServiceAccount.trinity-workload-sa
+    isHardDependency: true
+  - resource: AzureKeyVault.shared
+    isHardDependency: true
+
+defaultConfig:
+  namespace: trinity
+  replicas: 1
+  serviceAccountName: trinity-workload-sa
+  podLabels:
+    azure.workload.identity/use: "true"
+
+  volumes:
+    - name: secrets-store
+      csi:
+        driver: secrets-store.csi.k8s.io
+        readOnly: true
+        volumeAttributes:
+          secretProviderClass: trinity-secret-provider
+
+  containers:
+    - name: web
+      image: deltasharedtestkrcacr.azurecr.io/trinity/web:nightly
+      imagePullPolicy: IfNotPresent
+      port: 3000
+      cpuRequest: "250m"
+      memoryRequest: 512Mi
+      cpuLimit: "500m"
+      memoryLimit: 1Gi
+
+      envFrom:
+        - configMapRef: trinity-shared-config
+        - secretRef: trinity-shared-secrets
+
+      envVars:
+        # Per-service values (differ from admin/worker)
+        - REDIS_USER=1def9bf9-6cd1-4fe3-a596-e150c12995d3
+        # Key Vault URL for fetching Apple Sign-In key
+        - KEY_VAULT_URL=${ AzureKeyVault.shared.url }
+        # Apple Sign-In config
+        - APPLE_KEY_ID=8FJF5XY3Z6
+        - APPLE_SERVICE_ID=ai.thebrainly.web
+        - APPLE_SIGN_IN_SECRET_NAME=sign-in-with-apple
+        - APPLE_TEAM_ID=9SJ9N9W5F4
+        - NEXT_PUBLIC_APPLE_REDIRECT_URI=https://test.thebrainly.ai/api/auth/apple/callback
+        # Whitelisted users
+        - WHITELISTED_EMAIL_ADDRESSES=pljxs@qq.com,787663513@qq.com,sinianluoye@outlook.com,yuan8967@gmail.com,2393334636@qq.com,mr8p8pmgb9@privaterelay.appleid.com,xuehanyu@tju.edu.cn,627488078@qq.com,bqtjrhjn22@privaterelay.appleid.com,trevor@thebrainly.ai,zhangweiyao@126.com,t82h88pjvk@privaterelay.appleid.com,zhangweiyao@126.com,zetasq@gmail.com,zetasq@me.com,haitaide@foxmail.com,freshluna26@gmail.com,c5hbksgbbd@privaterelay.appleid.com
+        - WHITELISTED_EMAIL_DOMAINS=thebrainly.ai
+        # Lovelace (lance) internal URL
+        - LOVELACE_URL=http://trinity-lance.trinity.svc.cluster.local:3000
+        - LOVELACE_API_SCOPE=api://11cba72c-6647-4ed7-a4da-eb5dc5913f89/.default
+
+      volumeMounts:
+        - name: secrets-store
+          mountPath: /mnt/secrets-store
+          readOnly: true
+
+      livenessProbe:
+        httpGet:
+          path: /
+          port: 3000
+        periodSeconds: 10
+        timeoutSeconds: 5
+        failureThreshold: 3
+      readinessProbe:
+        httpGet:
+          path: /
+          port: 3000
+        periodSeconds: 5
+        timeoutSeconds: 5
+        failureThreshold: 48
+      startupProbe:
+        httpGet:
+          path: /
+          port: 3000
+        initialDelaySeconds: 1
+        periodSeconds: 1
+        timeoutSeconds: 3
+        failureThreshold: 240
+
+specificConfig:
+  - ring: staging
+    containers:
+      - name: web
+        envVars:
+          - REDIS_USER=1def9bf9-6cd1-4fe3-a596-e150c12995d3
+          - KEY_VAULT_URL=${ AzureKeyVault.shared.url }
+          - APPLE_KEY_ID=8FJF5XY3Z6
+          - APPLE_SERVICE_ID=ai.thebrainly.web
+          - APPLE_SIGN_IN_SECRET_NAME=sign-in-with-apple
+          - APPLE_TEAM_ID=9SJ9N9W5F4
+          - NEXT_PUBLIC_APPLE_REDIRECT_URI=https://staging.thebrainly.ai/api/auth/apple/callback
+          - WHITELISTED_EMAIL_ADDRESSES=pljxs@qq.com,787663513@qq.com,sinianluoye@outlook.com,yuan8967@gmail.com,2393334636@qq.com,mr8p8pmgb9@privaterelay.appleid.com,xuehanyu@tju.edu.cn,627488078@qq.com,bqtjrhjn22@privaterelay.appleid.com,trevor@thebrainly.ai,zhangweiyao@126.com,t82h88pjvk@privaterelay.appleid.com,zhangweiyao@126.com,zetasq@gmail.com,zetasq@me.com,haitaide@foxmail.com,freshluna26@gmail.com,c5hbksgbbd@privaterelay.appleid.com
+          - WHITELISTED_EMAIL_DOMAINS=thebrainly.ai
+          - LOVELACE_URL=http://trinity-lance.trinity.svc.cluster.local:3000
+          - LOVELACE_API_SCOPE=api://11cba72c-6647-4ed7-a4da-eb5dc5913f89/.default
+
+exports: {}

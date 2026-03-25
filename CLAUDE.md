@@ -8,6 +8,56 @@ Merlin is a declarative Infrastructure as Code (IaC) tool that compiles YAML res
 
 Merlin supports multiple cloud providers via the `MERLIN_CLOUD` environment variable (default: `azure`). YAML resources can use cloud-agnostic type names (e.g. `ContainerApp`) or Azure-specific names (e.g. `AzureContainerApp`) — both are fully supported.
 
+## Prerequisites
+
+Merlin deploys infrastructure using cloud CLI tools. The following tools must be installed on your machine (or CI/CD runner) before running `merlin deploy --execute`.
+
+### Required CLI Tools
+
+| Tool | Purpose | Install |
+|------|---------|---------|
+| `az` (Azure CLI) | Create Azure resources (AKS, ACR, DNS, etc.) | [docs](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli) |
+| `helm` | Install Kubernetes packages (NGINX Ingress, cert-manager) | [docs](https://helm.sh/docs/intro/install/) |
+| `kubectl` | Apply Kubernetes manifests (Deployments, Services, Ingress) | [docs](https://kubernetes.io/docs/tasks/tools/) |
+
+### Quick Install (macOS)
+
+```bash
+brew install azure-cli helm kubectl
+```
+
+### Check & Auto-install
+
+Merlin has a built-in prerequisites checker:
+
+```bash
+# Check which tools are installed
+merlin prerequisites
+
+# Check and auto-install missing tools via Homebrew (macOS only)
+merlin prerequisites --install
+```
+
+### Authentication
+
+```bash
+# Azure
+az login
+
+# Verify correct subscription is selected
+az account show
+az account set --subscription <subscription-id>  # if needed
+```
+
+### Kubernetes Deployment Flow
+
+```
+merlin deploy shared-k8s-resource --execute    # 1. AKS cluster + NGINX + cert-manager
+merlin deploy synapse-k8s-resource --execute   # 2. Application workloads
+```
+
+`az aks get-credentials` is called automatically during AKS cluster deployment, which configures `kubectl` and `helm` to point at the new cluster.
+
 ## Common Commands
 
 ### Building and Testing

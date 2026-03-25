@@ -54,7 +54,7 @@ describe('AzureManagedIdentityAuthProvider', () => {
         beforeEach(() => {
             vi.spyOn(resourceModule, 'getRender').mockImplementation((type: string) => {
                 if (type === 'AzureContainerApp') {
-                    return makeRender('merlintest-alluneed-stg-eas-aca', 'merlintest-rg-stg-eas') as any;
+                    return makeRender('merlintest-alluneed-stg-eas', 'merlintest-rg-stg-eas') as any;
                 }
                 return makeRender('merlintestalluneedstgeasacr', 'merlintest-rg-stg-eas') as any;
             });
@@ -134,7 +134,7 @@ describe('AzureManagedIdentityAuthProvider', () => {
         it('step 2 captures scope via az group show --query id', async () => {
             vi.spyOn(resourceModule, 'getRender').mockImplementation((type: string) => {
                 if (type === 'AzureContainerApp') {
-                    return makeRender('merlintest-alluneed-stg-eas-aca', 'merlintest-rg-stg-eas') as any;
+                    return makeRender('merlintest-alluneed-stg-eas', 'merlintest-rg-stg-eas') as any;
                 }
                 return makeRender('merlintestalluneedstgeasacr', 'merlintest-rg-stg-eas') as any;
             });
@@ -156,7 +156,7 @@ describe('AzureManagedIdentityAuthProvider', () => {
         it('step 2 captures scope via az account show --query id', async () => {
             vi.spyOn(resourceModule, 'getRender').mockImplementation((type: string) => {
                 if (type === 'AzureContainerApp') {
-                    return makeRender('merlintest-alluneed-stg-eas-aca', 'merlintest-rg-stg-eas') as any;
+                    return makeRender('merlintest-alluneed-stg-eas', 'merlintest-rg-stg-eas') as any;
                 }
                 return makeRender('merlintestalluneedstgeasacr', 'merlintest-rg-stg-eas') as any;
             });
@@ -198,8 +198,8 @@ describe('AzureManagedIdentityAuthProvider', () => {
 
     describe('principal variable naming is deterministic', () => {
         it('two different requestors produce different principal var names', async () => {
-            const mockRenderA = makeRender('merlintest-app-a-stg-eas-aca', 'merlintest-rg-stg-eas');
-            const mockRenderB = makeRender('merlintest-app-b-stg-eas-aca', 'merlintest-rg-stg-eas');
+            const mockRenderA = makeRender('merlintest-app-a-stg-eas', 'merlintest-rg-stg-eas');
+            const mockRenderB = makeRender('merlintest-app-b-stg-eas', 'merlintest-rg-stg-eas');
             const mockRenderAcr = makeRender('merlintestappastgeasacr', 'merlintest-rg-stg-eas');
 
             const requestorA = makeResource('AzureContainerApp', 'app-a');

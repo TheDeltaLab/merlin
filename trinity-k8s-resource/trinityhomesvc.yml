@@ -1,0 +1,25 @@
+name: trinity-home
+type: KubernetesService
+project: merlin
+ring:
+  - test
+  - staging
+region:
+  - koreacentral
+  - eastasia
+
+dependencies:
+  - resource: KubernetesDeployment.trinity-home
+    isHardDependency: true
+
+defaultConfig:
+  namespace: trinity
+  serviceType: ClusterIP
+  appName: trinity-home
+  ports:
+    - port: 3000
+      targetPort: 3000
+
+specificConfig: []
+
+exports: {}

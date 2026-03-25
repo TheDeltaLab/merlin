@@ -38,6 +38,9 @@ export function registerResource(resource: Resource): void {
  * Gets a resource by type, name, ring, and optional region.
  * If the resource is registered as a global resource (isGlobalResource = true),
  * the region is ignored and the lookup falls back to the ring-only key.
+ *
+ * When the caller has no region (e.g. a global SP referencing a regional AKS),
+ * falls back to any resource matching type:name:ring regardless of region.
  */
 export function getResource(
     type: string,
@@ -55,6 +58,16 @@ export function getResource(
         const globalKey = makeResourceKey(type, name, ring, undefined);
         const global = RESOURCE_REGISTRY.get(globalKey);
         if (global?.isGlobalResource) return global;
+    }
+
+    // If no region was provided (caller is a global resource), try to find
+    // any regional resource matching type:name:ring:* (pick the first match).
+    // This allows global resources (e.g. SP) to reference regional resources (e.g. AKS).
+    if (!region) {
+        const prefix = `${type}:${name}:${ring}:`;
+        for (const [key, res] of RESOURCE_REGISTRY) {
+            if (key.startsWith(prefix)) return res;
+        }
     }
 
     return undefined;

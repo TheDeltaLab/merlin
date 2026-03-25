@@ -53,10 +53,16 @@ import {
 } from './azure/azureServicePrincipal.js';
 import {
     AZURE_KEY_VAULT_RESOURCE_TYPE, AzureKeyVaultRender,
+} from './azure/azureKeyVault.js';
+import {
     AZURE_REDIS_ENTERPRISE_RESOURCE_TYPE, AzureRedisEnterpriseRender,
+} from './azure/azureRedisEnterprise.js';
+import {
     AZURE_POSTGRESQL_RESOURCE_TYPE, AzurePostgreSQLFlexibleRender,
+} from './azure/azurePostgreSQLFlexible.js';
+import {
     AZURE_FUNCTION_APP_RESOURCE_TYPE, AzureFunctionAppRender,
-} from './azure/azureStubs.js';
+} from './azure/azureFunctionApp.js';
 import {
     AzureResourceManagedIdentityGetter,
     AzureResourceNameGetter,
@@ -70,6 +76,7 @@ import {
     AzureServicePrincipalClientIdGetter,
     AzureRedisEnterpriseUrlGetter,
     AzureResourceApiScopeGetter,
+    AzureAKSOidcIssuerUrlGetter,
 } from './azure/proprietyGetter.js';
 import {
     CONTAINER_APP_TYPE,
@@ -80,7 +87,32 @@ import {
     DNS_ZONE_TYPE,
     SERVICE_PRINCIPAL_TYPE,
     APP_REGISTRATION_TYPE,
+    KUBERNETES_CLUSTER_TYPE,
+    KUBERNETES_NAMESPACE_TYPE,
+    KUBERNETES_DEPLOYMENT_TYPE,
+    KUBERNETES_SERVICE_TYPE,
+    KUBERNETES_INGRESS_TYPE,
+    KUBERNETES_HELM_RELEASE_TYPE,
+    KUBERNETES_MANIFEST_TYPE,
+    KUBERNETES_CONFIG_MAP_TYPE,
+    KUBERNETES_SERVICE_ACCOUNT_TYPE,
 } from './common/cloudTypes.js';
+import {
+    AZURE_AKS_TYPE,
+    AzureAKSRender,
+} from './kubernetes/kubernetesCluster.js';
+import { KubernetesNamespaceRender } from './kubernetes/kubernetesNamespace.js';
+import { KubernetesDeploymentRender } from './kubernetes/kubernetesDeployment.js';
+import { KubernetesServiceRender } from './kubernetes/kubernetesService.js';
+import { KubernetesIngressRender } from './kubernetes/kubernetesIngress.js';
+import { KubernetesHelmReleaseRender } from './kubernetes/kubernetesHelmRelease.js';
+import { KubernetesManifestRender } from './kubernetes/kubernetesManifest.js';
+import { KubernetesConfigMapRender } from './kubernetes/kubernetesConfigMap.js';
+import { KubernetesServiceAccountRender } from './kubernetes/kubernetesServiceAccount.js';
+import {
+    GITHUB_WORKFLOW_RESOURCE_TYPE,
+    GitHubWorkflowRender,
+} from './github/githubWorkflow.js';
 
 // ── Cloud selection ────────────────────────────────────────────────────────────
 
@@ -97,6 +129,7 @@ if (cloud === 'azure') {
     registerRender(DNS_ZONE_TYPE,                  new AzureDnsZoneRender());
     registerRender(SERVICE_PRINCIPAL_TYPE,         new AzureServicePrincipalRender());
     registerRender(APP_REGISTRATION_TYPE,          new AzureADAppRender());
+    registerRender(KUBERNETES_CLUSTER_TYPE,        new AzureAKSRender());
 
     // ② Azure-specific type names → same Azure implementations (backwards compatibility)
     //    All existing YAML files using Azure* types continue to work without changes.
@@ -113,6 +146,7 @@ if (cloud === 'azure') {
     registerRender(AZURE_REDIS_ENTERPRISE_RESOURCE_TYPE,        new AzureRedisEnterpriseRender());
     registerRender(AZURE_POSTGRESQL_RESOURCE_TYPE,              new AzurePostgreSQLFlexibleRender());
     registerRender(AZURE_FUNCTION_APP_RESOURCE_TYPE,            new AzureFunctionAppRender());
+    registerRender(AZURE_AKS_TYPE,                              new AzureAKSRender());
 
 } else if (cloud === 'alibaba') {
     throw new Error(
@@ -125,6 +159,19 @@ if (cloud === 'azure') {
         `Unknown cloud provider: "${cloud}". Supported values: azure, alibaba`
     );
 }
+
+// ── Cloud-neutral resources ────────────────────────────────────────────────────
+registerRender(GITHUB_WORKFLOW_RESOURCE_TYPE, new GitHubWorkflowRender());
+
+// ── Cloud-neutral Kubernetes resources (use kubectl/helm, work on any cluster) ──
+registerRender(KUBERNETES_NAMESPACE_TYPE,    new KubernetesNamespaceRender());
+registerRender(KUBERNETES_DEPLOYMENT_TYPE,   new KubernetesDeploymentRender());
+registerRender(KUBERNETES_SERVICE_TYPE,      new KubernetesServiceRender());
+registerRender(KUBERNETES_INGRESS_TYPE,      new KubernetesIngressRender());
+registerRender(KUBERNETES_HELM_RELEASE_TYPE, new KubernetesHelmReleaseRender());
+registerRender(KUBERNETES_MANIFEST_TYPE,     new KubernetesManifestRender());
+registerRender(KUBERNETES_CONFIG_MAP_TYPE,   new KubernetesConfigMapRender());
+registerRender(KUBERNETES_SERVICE_ACCOUNT_TYPE, new KubernetesServiceAccountRender());
 
 // ── Auth providers ─────────────────────────────────────────────────────────────
 // Currently Azure-only. Phase 2 will add Alibaba RAM/OIDC auth providers.
@@ -147,6 +194,7 @@ registerProprietyGetter(new AzureKeyVaultUrlGetter());
 registerProprietyGetter(new AzureServicePrincipalClientIdGetter());
 registerProprietyGetter(new AzureRedisEnterpriseUrlGetter());
 registerProprietyGetter(new AzureResourceApiScopeGetter());
+registerProprietyGetter(new AzureAKSOidcIssuerUrlGetter());
 
 export function initializeMerlin(): void {
     // Initialization happens during module load via the side-effects above.

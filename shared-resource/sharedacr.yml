@@ -27,3 +27,4 @@ specificConfig: []
 
 exports:
   server: AzureContainerRegistryServer
+  name: AzureResourceName

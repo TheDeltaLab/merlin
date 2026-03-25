@@ -28,8 +28,8 @@ dependencies:
 defaultConfig:
   image: ${ AzureContainerRegistry.shared.server }/trinity/func:nightly
   containerName: func
-  cpu: 0.5
-  memory: 1Gi
+  storageAccount: ${ AzureBlobStorage.shared.name }
+  consumptionPlanLocation: ${ this.region }
 
   envVars:
     - AzureWebJobsStorage=DefaultEndpointsProtocol=https;AccountName=${ AzureBlobStorage.shared.name };EndpointSuffix=core.windows.net

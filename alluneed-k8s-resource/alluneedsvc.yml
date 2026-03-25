@@ -1,0 +1,25 @@
+name: alluneed
+type: KubernetesService
+project: merlin
+ring:
+  - test
+  - staging
+region:
+  - koreacentral
+  - eastasia
+
+dependencies:
+  - resource: KubernetesDeployment.alluneed
+    isHardDependency: true
+
+defaultConfig:
+  namespace: alluneed
+  serviceType: ClusterIP
+  appName: alluneed
+  ports:
+    - port: 8000
+      targetPort: 8000
+
+specificConfig: []
+
+exports: {}

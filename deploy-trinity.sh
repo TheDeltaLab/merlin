@@ -59,6 +59,9 @@ cp "$SCRIPT_DIR"/trinity-func-resource/*.yml          "$STAGING_DIR/"
 # Alluneed services
 cp "$SCRIPT_DIR"/alluneed-resource/*.yml              "$STAGING_DIR/"
 
+# Synapse services
+cp "$SCRIPT_DIR"/synapse-resource/*.yml               "$STAGING_DIR/"
+
 echo ""
 echo "Resources staged in: $STAGING_DIR"
 echo ""
@@ -66,7 +69,7 @@ echo ""
 # ── Deploy (compile + build .merlin/ + execute are all handled by merlin deploy) ──
 if [[ "$ALL_MODE" == "true" ]]; then
   echo "=========================================="
-  echo " Merlin Deploy: Trinity + Alluneed (ALL)"
+  echo " Merlin Deploy: Trinity + Alluneed + Synapse (ALL)"
   echo " Rings:   test, staging"
   echo " Regions: koreacentral, eastasia"
   echo " Execute: ${EXECUTE_FLAG:-dry-run}"
@@ -84,7 +87,7 @@ if [[ "$ALL_MODE" == "true" ]]; then
   done
 else
   echo "=========================================="
-  echo " Merlin Deploy: Trinity + Alluneed"
+  echo " Merlin Deploy: Trinity + Alluneed + Synapse"
   echo " Ring:    ${RING}"
   echo " Region:  ${REGION}"
   echo " Execute: ${EXECUTE_FLAG:-dry-run}"

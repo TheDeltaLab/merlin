@@ -1,0 +1,30 @@
+name: cert-manager
+type: KubernetesHelmRelease
+# no project — shared across all projects
+ring:
+  - test
+  - staging
+region:
+  - koreacentral
+  - eastasia
+
+dependencies:
+  - resource: KubernetesCluster.aks
+    isHardDependency: true
+
+defaultConfig:
+  releaseName: cert-manager
+  chart: jetstack/cert-manager
+  repoName: jetstack
+  repoUrl: https://charts.jetstack.io
+  namespace: cert-manager
+  createNamespace: true
+  set:
+    - key: crds.enabled
+      value: "true"
+  wait: true
+  timeout: 5m0s
+
+specificConfig: []
+
+exports: {}
