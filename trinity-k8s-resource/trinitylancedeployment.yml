@@ -1,0 +1,93 @@
+name: trinity-lance
+type: KubernetesDeployment
+project: merlin
+ring:
+  - test
+  - staging
+region:
+  - koreacentral
+  - eastasia
+
+dependencies:
+  - resource: KubernetesCluster.aks
+    isHardDependency: true
+  - resource: KubernetesService.synapse-gateway
+    isHardDependency: true
+  - resource: KubernetesManifest.trinity-lance-secret-provider
+    isHardDependency: true
+  - resource: KubernetesServiceAccount.trinity-workload-sa
+    isHardDependency: true
+
+defaultConfig:
+  namespace: trinity
+  replicas: 1
+  serviceAccountName: trinity-workload-sa
+  podLabels:
+    azure.workload.identity/use: "true"
+
+  volumes:
+    - name: secrets-store
+      csi:
+        driver: secrets-store.csi.k8s.io
+        readOnly: true
+        volumeAttributes:
+          secretProviderClass: trinity-lance-secret-provider
+
+  containers:
+    - name: lance
+      image: deltasharedtestkrcacr.azurecr.io/trinity/lance:nightly
+      imagePullPolicy: IfNotPresent
+      port: 3000
+      cpuRequest: "250m"
+      memoryRequest: 512Mi
+      cpuLimit: "500m"
+      memoryLimit: 1Gi
+
+      envFrom:
+        - secretRef: trinity-lance-secrets
+
+      envVars:
+        # Non-sensitive config
+        - UPSTASH_REDIS_REST_URL=https://pure-sole-37433.upstash.io
+        - LANGFUSE_BASE_URL=https://us.cloud.langfuse.com
+        - OPENAI_COMPATIBLE_API_BASE_URL=https://openrouter.ai/api/v1
+        - SEARCH_API_ENDPOINT=https://trinity-search-test.search.windows.net
+        # Synapse URL — K8s internal (cross-namespace)
+        - SYNAPSE_URL=http://synapse-gateway.synapse.svc.cluster.local:3000/v1
+        # Lance base URL — self-reference via K8s internal DNS
+        - LANCE_BASE_URL=http://trinity-lance.trinity.svc.cluster.local:3000/api/lance
+        - LANCE_FTS_COLUMNS=summary,title,summary_tokenized,content_tokenized
+        - LANCE_SCORE_THRESHOLD=0.015
+        - FORCE_MEMORY_SEARCH=true
+
+      volumeMounts:
+        - name: secrets-store
+          mountPath: /mnt/secrets-store
+          readOnly: true
+
+      livenessProbe:
+        httpGet:
+          path: /health
+          port: 3000
+        periodSeconds: 10
+        timeoutSeconds: 5
+        failureThreshold: 3
+      readinessProbe:
+        httpGet:
+          path: /health
+          port: 3000
+        periodSeconds: 5
+        timeoutSeconds: 5
+        failureThreshold: 48
+      startupProbe:
+        httpGet:
+          path: /health
+          port: 3000
+        initialDelaySeconds: 1
+        periodSeconds: 1
+        timeoutSeconds: 3
+        failureThreshold: 240
+
+specificConfig: []
+
+exports: {}

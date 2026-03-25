@@ -1,0 +1,46 @@
+name: synapse-dashboard
+type: KubernetesIngress
+project: merlin
+ring:
+  - test
+  - staging
+region:
+  - koreacentral
+
+dependencies:
+  - resource: KubernetesService.synapse-dashboard
+    isHardDependency: true
+
+defaultConfig:
+  namespace: synapse
+  ingressClassName: nginx
+  clusterIssuer: letsencrypt-prod
+
+  rules:
+    - host: synapse.test.thebrainly.dev
+      paths:
+        - path: /
+          pathType: Prefix
+          serviceName: synapse-dashboard
+          servicePort: 3001
+
+  tls:
+    - hosts:
+        - synapse.test.thebrainly.dev
+      secretName: synapse-dashboard-tls
+
+specificConfig:
+  - ring: staging
+    rules:
+      - host: synapse.staging.thebrainly.dev
+        paths:
+          - path: /
+            pathType: Prefix
+            serviceName: synapse-dashboard
+            servicePort: 3001
+    tls:
+      - hosts:
+          - synapse.staging.thebrainly.dev
+        secretName: synapse-dashboard-tls
+
+exports: {}

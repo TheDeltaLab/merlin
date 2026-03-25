@@ -6,8 +6,10 @@
  */
 
 import { createHash } from 'crypto';
-import { readFile, writeFile, readdir, rm } from 'fs/promises';
+import { readFile, writeFile, readdir, rm, stat } from 'fs/promises';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -34,13 +36,17 @@ export const CACHE_FILE_NAME = '.merlin-cache';
 // ── Hash computation ─────────────────────────────────────────────────────────
 
 /**
- * Computes an MD5 hash over all YAML file paths and their contents.
+ * Computes an MD5 hash over all YAML file paths and their contents,
+ * plus merlin's own dist/ files (init.js, runtime.js) to detect
+ * when merlin source code has changed.
  *
  * Algorithm:
  *   1. Sort file paths alphabetically (for determinism across OSes/runs)
  *   2. For each file, read its contents and feed "<path>\n<content>\n" to
  *      a running hasher (no giant in-memory string needed)
- *   3. Return the final hex digest
+ *   3. Hash key merlin dist/ files (init.js, runtime.js) so that
+ *      rebuilding merlin triggers a cache miss
+ *   4. Return the final hex digest
  *
  * Covering file paths ensures that adding, removing, or renaming any YAML
  * file triggers a cache miss, not just content edits.
@@ -56,6 +62,10 @@ export async function computeYAMLHash(yamlFiles: string[]): Promise<string> {
         hasher.update(content);
         hasher.update('\n');
     }
+
+    // Include merlin's own dist/ key files in the hash.
+    // This ensures that `pnpm build` in merlin root → cache miss → recompile.
+    await hashMerlinDist(hasher);
 
     return hasher.digest('hex');
 }
@@ -185,4 +195,44 @@ export async function invalidateCache(outputPath: string): Promise<void> {
  */
 function isGeneratedTsFile(name: string): boolean {
     return name !== 'tsup.config.ts' && name !== 'deploy.ts';
+}
+
+// ── Merlin dist hash ────────────────────────────────────────────────────────
+
+/**
+ * Key files from merlin's dist/ to include in the cache hash.
+ * When any of these change (after `pnpm build`), the cache misses
+ * and .merlin/ is rebuilt with the new merlin code.
+ */
+const MERLIN_DIST_FILES = ['init.js', 'runtime.js', 'deployer.js'];
+
+/**
+ * Returns the absolute path to merlin's dist/ directory.
+ * Works both in dev (src/) and after build (dist/).
+ */
+function getMerlinDistPath(): string {
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+    // After build: __dirname is <project>/dist/
+    // The dist/ files are in the same directory
+    return __dirname;
+}
+
+/**
+ * Hashes key merlin dist/ files into the running hasher.
+ * Uses file mtime + size as a fast proxy (avoids reading large files).
+ * Falls back gracefully if files don't exist (e.g. dev mode).
+ */
+async function hashMerlinDist(hasher: ReturnType<typeof createHash>): Promise<void> {
+    const distDir = getMerlinDistPath();
+
+    for (const file of MERLIN_DIST_FILES) {
+        try {
+            const filePath = path.join(distDir, file);
+            const s = await stat(filePath);
+            hasher.update(`merlin:${file}:${s.mtimeMs}:${s.size}\n`);
+        } catch {
+            // File doesn't exist (e.g. in dev mode or partial build) — skip
+        }
+    }
 }

@@ -1,0 +1,74 @@
+name: alluneed
+type: KubernetesDeployment
+project: merlin
+ring:
+  - test
+  - staging
+region:
+  - koreacentral
+  - eastasia
+
+dependencies:
+  - resource: KubernetesCluster.aks
+    isHardDependency: true
+  - resource: KubernetesServiceAccount.alluneed-workload-sa
+    isHardDependency: true
+
+defaultConfig:
+  namespace: alluneed
+  replicas: 1
+  serviceAccountName: alluneed-workload-sa
+  podLabels:
+    azure.workload.identity/use: "true"
+
+  containers:
+    - name: alluneed
+      image: brainlytest-c4cscpe6b9b5f8fq.azurecr.io/alluneed:latest
+      imagePullPolicy: IfNotPresent
+      port: 8000
+      cpuRequest: "1000m"
+      memoryRequest: 2Gi
+      cpuLimit: "4000m"
+      memoryLimit: 8Gi
+
+      envVars:
+        - APP_ENV=${ this.ring }
+        - MODEL_BLOB_ACCOUNT=chuangdevstorage
+        - MODEL_BLOB_CONTAINER=speaker-embedding-models
+        - MODEL_BLOB_FOLDER=
+        - MODEL_CACHE_FOLDER=.model_cache
+        - WAV_CACHE_FOLDER=.wav_cache
+        - PROJECT_NAME=alluneed
+        - DEBUG_MODE=False
+        - LOG_LEVEL=INFO
+
+      livenessProbe:
+        httpGet:
+          path: /
+          port: 8000
+        periodSeconds: 60
+        timeoutSeconds: 30
+        failureThreshold: 30
+      readinessProbe:
+        httpGet:
+          path: /
+          port: 8000
+        periodSeconds: 10
+        timeoutSeconds: 30
+        failureThreshold: 30
+      startupProbe:
+        httpGet:
+          path: /
+          port: 8000
+        initialDelaySeconds: 1
+        periodSeconds: 10
+        timeoutSeconds: 30
+        failureThreshold: 30
+
+specificConfig:
+  - ring: staging
+    replicas: 2
+  - ring: test
+    replicas: 1
+
+exports: {}

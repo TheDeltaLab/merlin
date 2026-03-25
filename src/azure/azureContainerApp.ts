@@ -217,7 +217,9 @@ export class AzureContainerAppRender extends AzureResourceRender {
     supportConnectorInResourceName: boolean = true;
 
     override getShortResourceTypeName(): string {
-        return 'aca';
+        // ACA names must be ≤ 32 chars; omitting the type suffix keeps names short.
+        // The resource is already unambiguously an ACA by context.
+        return '';
     }
 
     async renderImpl(resource: Resource, context?: RenderContext): Promise<Command[]> {

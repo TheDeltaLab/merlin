@@ -1,0 +1,26 @@
+name: synapse-workload-sa
+type: KubernetesServiceAccount
+project: merlin
+ring:
+  - test
+  - staging
+region:
+  - koreacentral
+
+dependencies:
+  - resource: KubernetesCluster.aks
+    isHardDependency: true
+  - resource: AzureServicePrincipal.kv-workload
+    isHardDependency: true
+
+defaultConfig:
+  namespace: synapse
+  annotations:
+    azure.workload.identity/client-id: ${ AzureServicePrincipal.kv-workload.clientId }
+  labels:
+    app.kubernetes.io/part-of: synapse
+    managed-by: merlin
+
+specificConfig: []
+
+exports: {}

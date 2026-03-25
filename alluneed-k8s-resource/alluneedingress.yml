@@ -1,0 +1,47 @@
+name: alluneed
+type: KubernetesIngress
+project: merlin
+ring:
+  - test
+  - staging
+region:
+  - koreacentral
+  - eastasia
+
+dependencies:
+  - resource: KubernetesService.alluneed
+    isHardDependency: true
+
+defaultConfig:
+  namespace: alluneed
+  ingressClassName: nginx
+  clusterIssuer: letsencrypt-prod
+
+  rules:
+    - host: alluneed.test.thebrainly.dev
+      paths:
+        - path: /
+          pathType: Prefix
+          serviceName: alluneed
+          servicePort: 8000
+
+  tls:
+    - hosts:
+        - alluneed.test.thebrainly.dev
+      secretName: alluneed-tls
+
+specificConfig:
+  - ring: staging
+    rules:
+      - host: alluneed.staging.thebrainly.dev
+        paths:
+          - path: /
+            pathType: Prefix
+            serviceName: alluneed
+            servicePort: 8000
+    tls:
+      - hosts:
+          - alluneed.staging.thebrainly.dev
+        secretName: alluneed-tls
+
+exports: {}

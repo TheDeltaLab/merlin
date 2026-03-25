@@ -82,8 +82,8 @@ describe('AzureContainerAppRender', () => {
     // ── 1. Basic metadata ────────────────────────────────────────────────────
 
     describe('getShortResourceTypeName', () => {
-        it('returns aca', () => {
-            expect(render.getShortResourceTypeName()).toBe('aca');
+        it('returns empty string (no type suffix for ACA)', () => {
+            expect(render.getShortResourceTypeName()).toBe('');
         });
     });
 
@@ -99,12 +99,12 @@ describe('AzureContainerAppRender', () => {
         it('builds correct name with project, ring, region and type suffix', () => {
             const resource = makeResource();
             // project=myproject, name=myapp, ring=staging→stg, region=eastus→eus, type=aca
-            expect(render.getResourceName(resource)).toBe('myproject-myapp-stg-eus-aca');
+            expect(render.getResourceName(resource)).toBe('myproject-myapp-stg-eus');
         });
 
         it('uses "shared" when no project is set', () => {
             const resource = makeResource({}, { project: undefined });
-            expect(render.getResourceName(resource)).toBe('shared-myapp-stg-eus-aca');
+            expect(render.getResourceName(resource)).toBe('shared-myapp-stg-eus');
         });
     });
 
@@ -237,7 +237,7 @@ describe('AzureContainerAppRender', () => {
         it('includes --name and --resource-group', () => {
             const resource = makeResource();
             const args = render.renderCreate(resource)[0].args;
-            expect(hasParam(args, '--name', 'myproject-myapp-stg-eus-aca')).toBe(true);
+            expect(hasParam(args, '--name', 'myproject-myapp-stg-eus')).toBe(true);
             expect(hasParam(args, '--resource-group', 'myproject-rg-stg-eus')).toBe(true);
         });
 
@@ -487,7 +487,7 @@ describe('AzureContainerAppRender', () => {
         it('includes --name and --resource-group', () => {
             const resource = makeResource();
             const args = render.renderUpdate(resource)[0].args;
-            expect(hasParam(args, '--name', 'myproject-myapp-stg-eus-aca')).toBe(true);
+            expect(hasParam(args, '--name', 'myproject-myapp-stg-eus')).toBe(true);
             expect(hasParam(args, '--resource-group', 'myproject-rg-stg-eus')).toBe(true);
         });
 
@@ -790,14 +790,14 @@ describe('AzureContainerAppRender', () => {
     // ── 8. renderBindDnsZone ─────────────────────────────────────────────────
 
     describe('renderBindDnsZone()', () => {
-        // Resource name = 'myproject-myapp-stg-eus-aca'
-        // slug = 'MYPROJECT_MYAPP_STG_EUS_ACA'
-        // slug now includes dnsZone: 'MYPROJECT_MYAPP_STG_EUS_ACA' + '_' + 'EXAMPLE_COM'
-        const DNS_ZONE_RG_VAR    = 'MERLIN_MYPROJECT_MYAPP_STG_EUS_ACA_EXAMPLE_COM_DNS_ZONE_RG';
-        const ENV_ARM_ID_VAR     = 'MERLIN_MYPROJECT_MYAPP_STG_EUS_ACA_EXAMPLE_COM_ENV_ARM_ID';
-        const ENV_NAME_VAR       = 'MERLIN_MYPROJECT_MYAPP_STG_EUS_ACA_EXAMPLE_COM_ENV_NAME';
-        const FQDN_VAR           = 'MERLIN_MYPROJECT_MYAPP_STG_EUS_ACA_EXAMPLE_COM_FQDN';
-        const VERIFICATION_VAR   = 'MERLIN_MYPROJECT_MYAPP_STG_EUS_ACA_EXAMPLE_COM_VERIFICATION_ID';
+        // Resource name = 'myproject-myapp-stg-eus'
+        // slug = 'MYPROJECT_MYAPP_STG_EUS'
+        // slug now includes dnsZone: 'MYPROJECT_MYAPP_STG_EUS' + '_' + 'EXAMPLE_COM'
+        const DNS_ZONE_RG_VAR    = 'MERLIN_MYPROJECT_MYAPP_STG_EUS_EXAMPLE_COM_DNS_ZONE_RG';
+        const ENV_ARM_ID_VAR     = 'MERLIN_MYPROJECT_MYAPP_STG_EUS_EXAMPLE_COM_ENV_ARM_ID';
+        const ENV_NAME_VAR       = 'MERLIN_MYPROJECT_MYAPP_STG_EUS_EXAMPLE_COM_ENV_NAME';
+        const FQDN_VAR           = 'MERLIN_MYPROJECT_MYAPP_STG_EUS_EXAMPLE_COM_FQDN';
+        const VERIFICATION_VAR   = 'MERLIN_MYPROJECT_MYAPP_STG_EUS_EXAMPLE_COM_VERIFICATION_ID';
 
         function makeResourceWithDns(
             dnsZone = 'example.com',
@@ -983,7 +983,7 @@ describe('AzureContainerAppRender', () => {
             const script = cmd!.args[1];
             expect(script).toContain('--hostname myapp.example.com');
             expect(script).toContain('--resource-group myproject-rg-stg-eus');
-            expect(script).toContain('--name myproject-myapp-stg-eus-aca');
+            expect(script).toContain('--name myproject-myapp-stg-eus');
             expect(script).toContain(`--environment $${ENV_NAME_VAR}`);
             expect(script).toContain('--validation-method CNAME');
         });
@@ -1043,8 +1043,8 @@ describe('AzureContainerAppRender', () => {
             const resource = makeResourceWithDns();
             const commands = await render.render(resource as unknown as Resource);
 
-            // resourceName = 'myproject-myapp-stg-eus-aca', dnsZone = 'example.com'
-        // slug = 'MYPROJECT_MYAPP_STG_EUS_ACA_EXAMPLE_COM'
+            // resourceName = 'myproject-myapp-stg-eus', dnsZone = 'example.com'
+        // slug = 'MYPROJECT_MYAPP_STG_EUS_EXAMPLE_COM'
             expect(commands.some(c => c.envCapture === FQDN_VAR)).toBe(true);
             expect(commands.some(c => c.envCapture === VERIFICATION_VAR)).toBe(true);
             expect(commands.some(c => c.envCapture === DNS_ZONE_RG_VAR)).toBe(true);

@@ -1,0 +1,47 @@
+name: trinity-web
+type: KubernetesIngress
+project: merlin
+ring:
+  - test
+  - staging
+region:
+  - koreacentral
+  - eastasia
+
+dependencies:
+  - resource: KubernetesService.trinity-web
+    isHardDependency: true
+
+defaultConfig:
+  namespace: trinity
+  ingressClassName: nginx
+  clusterIssuer: letsencrypt-prod
+
+  rules:
+    - host: web.test.thebrainly.dev
+      paths:
+        - path: /
+          pathType: Prefix
+          serviceName: trinity-web
+          servicePort: 3000
+
+  tls:
+    - hosts:
+        - web.test.thebrainly.dev
+      secretName: trinity-web-tls
+
+specificConfig:
+  - ring: staging
+    rules:
+      - host: web.staging.thebrainly.dev
+        paths:
+          - path: /
+            pathType: Prefix
+            serviceName: trinity-web
+            servicePort: 3000
+    tls:
+      - hosts:
+          - web.staging.thebrainly.dev
+        secretName: trinity-web-tls
+
+exports: {}

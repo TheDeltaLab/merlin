@@ -21,7 +21,9 @@ export interface InitResult {
 
 /**
  * Initializes the output directory with package.json and tsup.config.ts
- * Only runs if package.json doesn't exist
+ * Only runs full init if package.json doesn't exist.
+ * If package.json exists but uses stale `file:` protocol for merlin,
+ * upgrades it to `link:` and re-installs.
  */
 export async function initializeOutputDirectory(options: InitOptions): Promise<InitResult> {
     const { outputPath, merlinPath } = options;
@@ -32,14 +34,16 @@ export async function initializeOutputDirectory(options: InitOptions): Promise<I
 
         const packageJsonPath = path.join(outputPath, 'package.json');
 
+        // Calculate relative path from outputPath to merlinPath
+        const relativeMerlinPath = path.relative(outputPath, merlinPath);
+
         // Check if package.json already exists
         const exists = await checkFileExists(packageJsonPath);
         if (exists) {
-            return { initialized: false, skipped: true };
+            // Check if we need to migrate file: → link: protocol
+            const migrated = await migrateToLinkProtocol(packageJsonPath, relativeMerlinPath, outputPath);
+            return { initialized: migrated, skipped: !migrated };
         }
-
-        // Calculate relative path from outputPath to merlinPath
-        const relativeMerlinPath = path.relative(outputPath, merlinPath);
 
         // Create package.json
         await createPackageJson(packageJsonPath, relativeMerlinPath);
@@ -88,7 +92,7 @@ async function createPackageJson(filePath: string, relativeMerlinPath: string): 
             execute: 'pnpm build && node dist/deploy.js --execute'
         },
         dependencies: {
-            merlin: `file:${relativeMerlinPath}`,
+            merlin: `link:${relativeMerlinPath}`,
             execa: '^9.6.1'
         },
         devDependencies: {
@@ -139,6 +143,36 @@ async function createDeployScript(filePath: string): Promise<void> {
 
 async function installDependencies(cwd: string): Promise<void> {
     await execaCommand('pnpm install', { cwd, stdio: 'pipe' });
+}
+
+/**
+ * Checks if package.json uses the old `file:` protocol for the merlin dependency
+ * and migrates it to `link:` if so. The `link:` protocol creates a symlink
+ * instead of a copy, ensuring .merlin/ always sees the latest merlin dist/.
+ */
+async function migrateToLinkProtocol(
+    packageJsonPath: string,
+    relativeMerlinPath: string,
+    outputPath: string
+): Promise<boolean> {
+    try {
+        const raw = await readFile(packageJsonPath, 'utf-8');
+        const pkg = JSON.parse(raw);
+
+        const currentRef = pkg.dependencies?.merlin;
+        const expectedRef = `link:${relativeMerlinPath}`;
+
+        if (currentRef && currentRef !== expectedRef && currentRef.startsWith('file:')) {
+            pkg.dependencies.merlin = expectedRef;
+            await writeFile(packageJsonPath, JSON.stringify(pkg, null, 2) + '\n', 'utf-8');
+            await installDependencies(outputPath);
+            return true;
+        }
+
+        return false;
+    } catch {
+        return false;
+    }
 }
 
 /**

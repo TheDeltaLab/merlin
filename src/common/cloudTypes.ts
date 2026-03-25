@@ -19,6 +19,16 @@
  *   DnsZone                 → AzureDnsZoneRender
  *   ServicePrincipal        → AzureServicePrincipalRender
  *   AppRegistration         → AzureADAppRender
+ *   KubernetesCluster       → AzureAKSRender
+ *
+ * Cloud-neutral K8s resource types (use kubectl/helm, same across all clouds):
+ *   KubernetesNamespace     → KubernetesNamespaceRender
+ *   KubernetesDeployment    → KubernetesDeploymentRender
+ *   KubernetesService       → KubernetesServiceRender
+ *   KubernetesIngress       → KubernetesIngressRender
+ *   KubernetesHelmRelease   → KubernetesHelmReleaseRender
+ *   KubernetesConfigMap     → KubernetesConfigMapRender
+ *   KubernetesServiceAccount → KubernetesServiceAccountRender
  *
  * Planned Alibaba Cloud mappings (Phase 2, src/alibaba/):
  *   ContainerApp            → AlibabaSAERender  (Serverless App Engine)
@@ -29,6 +39,7 @@
  *   SecretVault             → AlibabaKMSRender
  *   LogSink                 → AlibabaSLSRender  (Simple Log Service)
  *   DnsZone                 → AlibabaAlidnsRender
+ *   KubernetesCluster       → AlibabaACKRender  (Alibaba Container Service for K8s)
  */
 
 export const CONTAINER_APP_TYPE             = 'ContainerApp';
@@ -42,3 +53,16 @@ export const LOG_SINK_TYPE                  = 'LogSink';
 export const DNS_ZONE_TYPE                  = 'DnsZone';
 export const SERVICE_PRINCIPAL_TYPE         = 'ServicePrincipal';
 export const APP_REGISTRATION_TYPE          = 'AppRegistration';
+
+// ── Kubernetes resource types ──────────────────────────────────────────────────
+// KubernetesCluster is cloud-specific (AKS on Azure, ACK on Alibaba).
+// The remaining K8s types use kubectl and are cloud-agnostic.
+export const KUBERNETES_CLUSTER_TYPE      = 'KubernetesCluster';
+export const KUBERNETES_NAMESPACE_TYPE    = 'KubernetesNamespace';
+export const KUBERNETES_DEPLOYMENT_TYPE   = 'KubernetesDeployment';
+export const KUBERNETES_SERVICE_TYPE      = 'KubernetesService';
+export const KUBERNETES_INGRESS_TYPE      = 'KubernetesIngress';
+export const KUBERNETES_HELM_RELEASE_TYPE = 'KubernetesHelmRelease';
+export const KUBERNETES_MANIFEST_TYPE         = 'KubernetesManifest';
+export const KUBERNETES_CONFIG_MAP_TYPE      = 'KubernetesConfigMap';
+export const KUBERNETES_SERVICE_ACCOUNT_TYPE = 'KubernetesServiceAccount';

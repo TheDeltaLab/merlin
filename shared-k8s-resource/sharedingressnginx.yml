@@ -1,0 +1,27 @@
+name: ingress-nginx
+type: KubernetesHelmRelease
+# no project — shared across all projects
+ring:
+  - test
+  - staging
+region:
+  - koreacentral
+  - eastasia
+
+dependencies:
+  - resource: KubernetesCluster.aks
+    isHardDependency: true
+
+defaultConfig:
+  releaseName: ingress-nginx
+  chart: ingress-nginx/ingress-nginx
+  repoName: ingress-nginx
+  repoUrl: https://kubernetes.github.io/ingress-nginx
+  namespace: ingress-nginx
+  createNamespace: true
+  wait: true
+  timeout: 5m0s
+
+specificConfig: []
+
+exports: {}

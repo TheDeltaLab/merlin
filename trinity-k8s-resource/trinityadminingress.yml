@@ -1,0 +1,47 @@
+name: trinity-admin
+type: KubernetesIngress
+project: merlin
+ring:
+  - test
+  - staging
+region:
+  - koreacentral
+  - eastasia
+
+dependencies:
+  - resource: KubernetesService.trinity-admin
+    isHardDependency: true
+
+defaultConfig:
+  namespace: trinity
+  ingressClassName: nginx
+  clusterIssuer: letsencrypt-prod
+
+  rules:
+    - host: admin.test.thebrainly.dev
+      paths:
+        - path: /
+          pathType: Prefix
+          serviceName: trinity-admin
+          servicePort: 3000
+
+  tls:
+    - hosts:
+        - admin.test.thebrainly.dev
+      secretName: trinity-admin-tls
+
+specificConfig:
+  - ring: staging
+    rules:
+      - host: admin.staging.thebrainly.dev
+        paths:
+          - path: /
+            pathType: Prefix
+            serviceName: trinity-admin
+            servicePort: 3000
+    tls:
+      - hosts:
+          - admin.staging.thebrainly.dev
+        secretName: trinity-admin-tls
+
+exports: {}

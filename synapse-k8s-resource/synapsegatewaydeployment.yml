@@ -1,0 +1,79 @@
+name: synapse-gateway
+type: KubernetesDeployment
+project: merlin
+ring:
+  - test
+  - staging
+region:
+  - koreacentral
+
+dependencies:
+  - resource: KubernetesCluster.aks
+    isHardDependency: true
+  - resource: KubernetesConfigMap.synapse-shared-config
+    isHardDependency: true
+  - resource: KubernetesManifest.synapse-secret-provider
+    isHardDependency: true
+  - resource: KubernetesServiceAccount.synapse-workload-sa
+    isHardDependency: true
+
+defaultConfig:
+  namespace: synapse
+  replicas: 1
+  serviceAccountName: synapse-workload-sa
+  podLabels:
+    azure.workload.identity/use: "true"
+
+  volumes:
+    - name: secrets-store
+      csi:
+        driver: secrets-store.csi.k8s.io
+        readOnly: true
+        volumeAttributes:
+          secretProviderClass: synapse-secret-provider
+
+  containers:
+    - name: gateway
+      image: ghcr.io/thedeltalab/synapse/gateway:nightly
+      imagePullPolicy: IfNotPresent
+      port: 3000
+      cpuRequest: "250m"
+      memoryRequest: 256Mi
+      cpuLimit: "500m"
+      memoryLimit: 512Mi
+
+      envFrom:
+        - configMapRef: synapse-shared-config
+        - secretRef: synapse-shared-secrets
+
+      volumeMounts:
+        - name: secrets-store
+          mountPath: /mnt/secrets-store
+          readOnly: true
+
+      livenessProbe:
+        httpGet:
+          path: /health
+          port: 3000
+        periodSeconds: 10
+        timeoutSeconds: 5
+        failureThreshold: 3
+      readinessProbe:
+        httpGet:
+          path: /health
+          port: 3000
+        periodSeconds: 5
+        timeoutSeconds: 5
+        failureThreshold: 48
+      startupProbe:
+        httpGet:
+          path: /health
+          port: 3000
+        initialDelaySeconds: 1
+        periodSeconds: 1
+        timeoutSeconds: 3
+        failureThreshold: 240
+
+specificConfig: []
+
+exports: {}

@@ -40,10 +40,10 @@ specificConfig:
         scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-tst-eas
       # ACR — koreacentral
       - role: AcrPush
-        scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-tst-krc/providers/Microsoft.ContainerRegistry/registries/merlin-shared-tst-krc-acr
+        scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-tst-krc/providers/Microsoft.ContainerRegistry/registries/merlinsharedtstkrcacr
       # ACR — eastasia
       - role: AcrPush
-        scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-tst-eas/providers/Microsoft.ContainerRegistry/registries/merlin-shared-tst-eas-acr
+        scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-tst-eas/providers/Microsoft.ContainerRegistry/registries/merlinsharedtsteasacr
 
   - ring: staging
     displayName: merlin-github-stg
@@ -67,10 +67,10 @@ specificConfig:
         scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-stg-eas
       # ACR — koreacentral
       - role: AcrPush
-        scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-stg-krc/providers/Microsoft.ContainerRegistry/registries/merlin-shared-stg-krc-acr
+        scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-stg-krc/providers/Microsoft.ContainerRegistry/registries/merlinsharedstgkrcacr
       # ACR — eastasia
       - role: AcrPush
-        scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-stg-eas/providers/Microsoft.ContainerRegistry/registries/merlin-shared-stg-eas-acr
+        scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-stg-eas/providers/Microsoft.ContainerRegistry/registries/merlinsharedstgeasacr
 
 exports:
   clientId: AzureServicePrincipalClientId

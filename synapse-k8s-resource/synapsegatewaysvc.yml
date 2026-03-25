@@ -1,0 +1,25 @@
+name: synapse-gateway
+type: KubernetesService
+project: merlin
+ring:
+  - test
+  - staging
+region:
+  - koreacentral
+
+dependencies:
+  - resource: KubernetesDeployment.synapse-gateway
+    isHardDependency: true
+
+defaultConfig:
+  namespace: synapse
+  # ClusterIP — gateway is internal only, only dashboard calls it
+  serviceType: ClusterIP
+  appName: synapse-gateway
+  ports:
+    - port: 3000
+      targetPort: 3000
+
+specificConfig: []
+
+exports: {}

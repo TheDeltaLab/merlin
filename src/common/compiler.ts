@@ -38,7 +38,9 @@ export class Compiler {
 
         try {
             // 1. Discover YAML files
-            const yamlFiles = await this.discoverYAMLFiles(options.inputPath);
+            const allInputPaths = [options.inputPath, ...(options.inputPaths ?? [])];
+            const yamlFileArrays = await Promise.all(allInputPaths.map(p => this.discoverYAMLFiles(p)));
+            const yamlFiles = [...new Set(yamlFileArrays.flat())];
             if (yamlFiles.length === 0) {
                 return this.createNoFilesError(options.inputPath);
             }

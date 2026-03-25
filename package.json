@@ -19,7 +19,7 @@
   "scripts": {
     "lint": "eslint",
     "lint:fix": "eslint --fix",
-    "build": "tsup && chmod +x dist/merlin.js",
+    "build": "tsup && chmod +x dist/merlin.js && ([ -d .merlin/node_modules ] || (cd .merlin && pnpm install)) && ([ -d .merlin ] && cd .merlin && pnpm build || true)",
     "postinstall": "[ -f dist/merlin.js ] && chmod +x dist/merlin.js || true",
     "link:global": "pnpm build && pnpm link --global",
     "test": "vitest run",

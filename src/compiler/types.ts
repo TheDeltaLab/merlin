@@ -155,7 +155,8 @@ export function isParamValue(v: unknown): v is ParamValue {
  * Compiler options
  */
 export interface CompilerOptions {
-    inputPath: string;        // YAML file or directory
+    inputPath: string;        // YAML file or directory (primary; use inputPaths for multiple)
+    inputPaths?: string[];    // Additional YAML files or directories to compile alongside inputPath
     outputPath: string;       // Output directory (default: .merlin)
     watch?: boolean;          // Enable watch mode
     validate?: boolean;       // Validation-only mode (don't generate)

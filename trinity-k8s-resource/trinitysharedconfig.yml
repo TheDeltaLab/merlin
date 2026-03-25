@@ -1,0 +1,37 @@
+name: trinity-shared-config
+type: KubernetesConfigMap
+project: merlin
+ring:
+  - test
+  - staging
+region:
+  - koreacentral
+  - eastasia
+
+dependencies:
+  - resource: KubernetesCluster.aks
+    isHardDependency: true
+
+defaultConfig:
+  namespace: trinity
+  data:
+    NODE_ENV: ${ this.ring }
+    PORT: "3000"
+    # ── Internal service URLs (K8s DNS) ─────────────────────────────
+    ADMIN_SERVER_URL: http://trinity-admin.trinity.svc.cluster.local:3000
+    ALLUNEED_URL: http://alluneed.alluneed.svc.cluster.local:8000
+    # ── External service URLs ───────────────────────────────────────
+    TURING_URL: https://turing-test-a2hyb7hjcjfbdbb3.koreacentral-01.azurewebsites.net
+    SEARCH_API_ENDPOINT: https://trinity-search-test.search.windows.net
+    # ── Azure Storage ───────────────────────────────────────────────
+    AZURE_STORAGE_ACCOUNT_NAME: brainlydevblobstorage
+    AZURE_STORAGE_CONTAINER_NAME: conversations
+    # ── Alibaba Key (Key Vault reference for ali key fetching) ──────
+    ALI_KEY_NAME: alibaba-key
+  labels:
+    app.kubernetes.io/part-of: trinity
+    managed-by: merlin
+
+specificConfig: []
+
+exports: {}

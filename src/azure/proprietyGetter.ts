@@ -285,3 +285,31 @@ export class AzureResourceApiScopeGetter implements ProprietyGetter {
         }];
     }
 }
+
+/**
+ * ProprietyGetter for AKS OIDC Issuer URL.
+ * Returns the OIDC issuer URL for Workload Identity federated credentials.
+ * Required when creating Federated Credentials that trust a K8s ServiceAccount.
+ */
+export class AzureAKSOidcIssuerUrlGetter implements ProprietyGetter {
+    name: string = 'AzureAKSOidcIssuerUrl';
+
+    dependencies: Dependency[] = [];
+
+    async get(resource: Resource, _args: Record<string, string>): Promise<Command[]> {
+        const render = getRender(resource.type) as AzureResourceRender;
+        const resourceGroup = render.getResourceGroupName(resource);
+        const resourceName = render.getResourceName(resource);
+
+        return [{
+            command: 'az',
+            args: [
+                'aks', 'show',
+                '-g', resourceGroup,
+                '-n', resourceName,
+                '-o', 'tsv',
+                '--query', 'oidcIssuerProfile.issuerUrl'
+            ]
+        }];
+    }
+}

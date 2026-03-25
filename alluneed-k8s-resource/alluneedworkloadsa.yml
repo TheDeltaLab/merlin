@@ -1,0 +1,27 @@
+name: alluneed-workload-sa
+type: KubernetesServiceAccount
+project: merlin
+ring:
+  - test
+  - staging
+region:
+  - koreacentral
+  - eastasia
+
+dependencies:
+  - resource: KubernetesCluster.aks
+    isHardDependency: true
+  - resource: AzureServicePrincipal.kv-workload
+    isHardDependency: true
+
+defaultConfig:
+  namespace: alluneed
+  annotations:
+    azure.workload.identity/client-id: ${ AzureServicePrincipal.kv-workload.clientId }
+  labels:
+    app.kubernetes.io/part-of: alluneed
+    managed-by: merlin
+
+specificConfig: []
+
+exports: {}

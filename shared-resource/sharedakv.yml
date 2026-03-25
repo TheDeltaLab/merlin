@@ -16,7 +16,6 @@ authProvider:
 defaultConfig:
   sku: standard
   enableRbacAuthorization: true
-  enableSoftDelete: true
   softDeleteRetentionInDays: 7
 
   tags:

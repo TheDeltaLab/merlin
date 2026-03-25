@@ -1,0 +1,76 @@
+name: kv-workload
+type: AzureServicePrincipal
+project: merlin
+ring:
+  - test
+  - staging
+
+authProvider:
+  name: AzureEntraID
+
+dependencies:
+  - resource: KubernetesCluster.aks
+    isHardDependency: true
+  - resource: AzureKeyVault.shared
+    isHardDependency: true
+  - resource: AzureBlobStorage.shared
+    isHardDependency: true
+
+defaultConfig:
+  tags:
+    merlin: "true"
+    env: ${ this.ring }
+
+specificConfig:
+  - ring: test
+    displayName: merlin-kv-workload-tst
+    federatedCredentials:
+      # Trinity namespace ServiceAccount
+      - name: trinity-sa
+        issuer: ${ KubernetesCluster.aks.oidcIssuerUrl }
+        subject: system:serviceaccount:trinity:trinity-workload-sa
+      # Synapse namespace ServiceAccount
+      - name: synapse-sa
+        issuer: ${ KubernetesCluster.aks.oidcIssuerUrl }
+        subject: system:serviceaccount:synapse:synapse-workload-sa
+      # Alluneed namespace ServiceAccount
+      - name: alluneed-sa
+        issuer: ${ KubernetesCluster.aks.oidcIssuerUrl }
+        subject: system:serviceaccount:alluneed:alluneed-workload-sa
+    roleAssignments:
+      # Key Vault Secrets User on both regional Key Vaults
+      - role: Key Vault Secrets User
+        scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-tst-krc/providers/Microsoft.KeyVault/vaults/merlinsharedtstkrcakv
+      - role: Key Vault Secrets User
+        scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-tst-eas/providers/Microsoft.KeyVault/vaults/merlinsharedtsteasakv
+      # Storage Blob Data Contributor on both regional Storage Accounts
+      - role: Storage Blob Data Contributor
+        scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-tst-krc/providers/Microsoft.Storage/storageAccounts/merlinsharedtstkrcabs
+      - role: Storage Blob Data Contributor
+        scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-tst-eas/providers/Microsoft.Storage/storageAccounts/merlinsharedtsteasabs
+
+  - ring: staging
+    displayName: merlin-kv-workload-stg
+    federatedCredentials:
+      - name: trinity-sa
+        issuer: ${ KubernetesCluster.aks.oidcIssuerUrl }
+        subject: system:serviceaccount:trinity:trinity-workload-sa
+      - name: synapse-sa
+        issuer: ${ KubernetesCluster.aks.oidcIssuerUrl }
+        subject: system:serviceaccount:synapse:synapse-workload-sa
+      - name: alluneed-sa
+        issuer: ${ KubernetesCluster.aks.oidcIssuerUrl }
+        subject: system:serviceaccount:alluneed:alluneed-workload-sa
+    roleAssignments:
+      - role: Key Vault Secrets User
+        scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-stg-krc/providers/Microsoft.KeyVault/vaults/merlinsharedstgkrcakv
+      - role: Key Vault Secrets User
+        scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-stg-eas/providers/Microsoft.KeyVault/vaults/merlinsharedstgeasakv
+      # Storage Blob Data Contributor on both regional Storage Accounts
+      - role: Storage Blob Data Contributor
+        scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-stg-krc/providers/Microsoft.Storage/storageAccounts/merlinsharedstgkrcabs
+      - role: Storage Blob Data Contributor
+        scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-stg-eas/providers/Microsoft.Storage/storageAccounts/merlinsharedstgeasabs
+
+exports:
+  clientId: AzureServicePrincipalClientId

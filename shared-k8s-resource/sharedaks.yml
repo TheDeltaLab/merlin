@@ -1,0 +1,45 @@
+name: aks
+type: KubernetesCluster
+# no project — shared across all projects
+ring:
+  - test
+  - staging
+region:
+  - koreacentral
+  - eastasia
+
+dependencies:
+  - resource: AzureContainerRegistry.shared
+    isHardDependency: true
+
+defaultConfig:
+  enableManagedIdentity: true
+  enableOidcIssuer: true
+  enableWorkloadIdentity: true
+  enableCsiSecretProvider: true
+  enableSecretRotation: true
+  attachAcr: ${ AzureContainerRegistry.shared.name }
+  nodeVmSize: Standard_D2s_v3
+  nodeCount: 2
+  enableAutoScaling: true
+  minCount: 1
+  maxCount: 5
+  networkPlugin: azure
+  noWait: false
+  tags:
+    merlin: "true"
+    env: ${ this.ring }
+  # namespaces shared across all projects
+  namespaces:
+    - synapse
+    - trinity
+    - alluneed
+
+specificConfig:
+  - region: koreacentral
+    location: koreacentral
+  - region: eastasia
+    location: eastasia
+
+exports:
+  oidcIssuerUrl: AzureAKSOidcIssuerUrl
