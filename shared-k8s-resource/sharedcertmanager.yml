@@ -24,6 +24,11 @@ defaultConfig:
       value: "true"
   wait: true
   timeout: 5m0s
+  # AKS admissionsenforcer takes ownership of cert-manager's ValidatingWebhookConfiguration
+  # namespaceSelector field, causing Helm upgrade to fail with a field manager conflict.
+  # Delete the webhook before upgrade so Helm can recreate it cleanly.
+  preCommands:
+    - kubectl delete validatingwebhookconfiguration cert-manager-webhook
 
 specificConfig: []
 

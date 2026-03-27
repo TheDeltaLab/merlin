@@ -47,6 +47,12 @@ export class KubernetesConfigMapRender implements Render {
         const config = resource.config as KubernetesConfigMapConfig;
         const configMapName = resource.name;
 
+        // ConfigMap .data values MUST be strings — coerce any non-string values
+        const stringData: Record<string, string> = {};
+        for (const [k, v] of Object.entries(config.data)) {
+            stringData[k] = String(v);
+        }
+
         const manifest = {
             apiVersion: 'v1',
             kind: 'ConfigMap',
@@ -56,7 +62,7 @@ export class KubernetesConfigMapRender implements Render {
                 ...(config.labels ? { labels: config.labels } : {}),
                 ...(config.annotations ? { annotations: config.annotations } : {}),
             },
-            data: config.data,
+            data: stringData,
         };
 
         const fileContent = manifestToYaml(manifest);

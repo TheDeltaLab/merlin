@@ -39,7 +39,7 @@ defaultConfig:
 
   containers:
     - name: worker
-      image: deltasharedtestkrcacr.azurecr.io/trinity/worker:nightly
+      image: merlinsharedstgkrcacr.azurecr.io/trinity/worker:nightly
       imagePullPolicy: IfNotPresent
       port: 3000
       cpuRequest: "250m"

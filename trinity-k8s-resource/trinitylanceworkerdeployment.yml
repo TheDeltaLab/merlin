@@ -17,6 +17,8 @@ dependencies:
     isHardDependency: true
   - resource: KubernetesServiceAccount.trinity-workload-sa
     isHardDependency: true
+  - resource: AzureRedisEnterprise.shared
+    isHardDependency: true
 
 defaultConfig:
   namespace: trinity
@@ -35,7 +37,7 @@ defaultConfig:
 
   containers:
     - name: lance-worker
-      image: deltasharedtestkrcacr.azurecr.io/trinity/lance-worker:nightly
+      image: merlinsharedstgkrcacr.azurecr.io/trinity/lance-worker:nightly
       imagePullPolicy: IfNotPresent
       port: 3000
       cpuRequest: "250m"
@@ -47,6 +49,9 @@ defaultConfig:
         - secretRef: trinity-lance-worker-secrets
 
       envVars:
+        # Same as old ACA: NODE_ENV + REDIS_URL from resource
+        - NODE_ENV=${ this.ring }
+        - REDIS_URL=${ AzureRedisEnterprise.shared.redisUrl }
         - PORT=3000
         # LanceDB — uses Azure Blob Storage
         - LANCEDB_BASE_URL=abs://brainlydevblobstorage/lance-data/

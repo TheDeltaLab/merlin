@@ -93,11 +93,14 @@ export function manifestToYaml(obj: unknown, indent = 0): string {
     }
 
     if (typeof obj === 'string') {
-        // Quote strings that could be misinterpreted
+        // Quote strings that could be misinterpreted by YAML parser
         if (obj === '' || /[:{}\[\],#&*?|<>=!%@`]/.test(obj) ||
             obj.includes('\n') || obj.includes("'") ||
             /^\s|\s$/.test(obj) || obj.toLowerCase() === 'true' ||
-            obj.toLowerCase() === 'false' || obj.toLowerCase() === 'null') {
+            obj.toLowerCase() === 'false' || obj.toLowerCase() === 'null' ||
+            // Quote numeric-looking strings so YAML doesn't parse them as numbers
+            /^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/.test(obj) ||
+            /^0[xXoO][\da-fA-F]+$/.test(obj)) {
             return `"${obj.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n')}"`;
         }
         return obj;

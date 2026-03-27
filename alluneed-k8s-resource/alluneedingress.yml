@@ -16,6 +16,8 @@ defaultConfig:
   namespace: alluneed
   ingressClassName: nginx
   clusterIssuer: letsencrypt-prod
+  bindDnsZone:
+    dnsZone: thebrainly.dev
 
   rules:
     - host: alluneed.test.thebrainly.dev

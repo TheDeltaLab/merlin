@@ -21,6 +21,11 @@ defaultConfig:
   createNamespace: true
   wait: true
   timeout: 5m0s
+  values:
+    controller:
+      service:
+        annotations:
+          service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path: /healthz
 
 specificConfig: []
 

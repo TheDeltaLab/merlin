@@ -35,7 +35,7 @@ defaultConfig:
 
   containers:
     - name: admin
-      image: deltasharedtestkrcacr.azurecr.io/trinity/admin:nightly
+      image: merlinsharedstgkrcacr.azurecr.io/trinity/admin:nightly
       imagePullPolicy: IfNotPresent
       port: 3000
       cpuRequest: "250m"

@@ -23,7 +23,7 @@ defaultConfig:
 
   containers:
     - name: alluneed
-      image: brainlytest-c4cscpe6b9b5f8fq.azurecr.io/alluneed:latest
+      image: merlinsharedstgkrcacr.azurecr.io/alluneed:latest
       imagePullPolicy: IfNotPresent
       port: 8000
       cpuRequest: "1000m"

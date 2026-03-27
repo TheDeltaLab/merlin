@@ -40,6 +40,26 @@ export interface KubernetesIngressConfig extends ResourceSchema {
     annotations?: Record<string, string>;
     /** Additional labels */
     labels?: Record<string, string>;
+
+    /**
+     * DNS zone binding — automatically create A records in Azure DNS
+     * after the Ingress is applied.
+     *
+     * Hostnames are extracted from rules[].host. For each host that ends with
+     * the configured dnsZone, an A record is created pointing to the Ingress
+     * controller's LoadBalancer IP.
+     *
+     * Example: host "web.staging.thebrainly.dev" with dnsZone "thebrainly.dev"
+     *   → creates A record "web.staging" in zone "thebrainly.dev"
+     */
+    bindDnsZone?: {
+        /** DNS zone name, e.g. "thebrainly.dev" */
+        dnsZone: string;
+        /** Ingress controller service name (default: "ingress-nginx-controller") */
+        ingressServiceName?: string;
+        /** Ingress controller namespace (default: "ingress-nginx") */
+        ingressNamespace?: string;
+    };
 }
 
 export interface KubernetesIngressResource extends Resource<KubernetesIngressConfig> {}
@@ -145,11 +165,95 @@ export class KubernetesIngressRender implements Render {
 
         const fileContent = manifestToYaml(manifest);
 
-        return [{
+        const commands: Command[] = [{
             command: 'kubectl',
             args: ['apply', '-f', '__MERLIN_YAML_FILE__'],
             fileContent,
         }];
+
+        // Append DNS record commands if bindDnsZone is configured
+        commands.push(...this.renderBindDnsZone(config, resource.name));
+
+        return commands;
+    }
+
+    /**
+     * Generates Azure DNS A-record commands for each host in the Ingress rules.
+     *
+     * Steps:
+     *   1. Capture the Ingress controller LoadBalancer external IP via kubectl
+     *   2. Look up the DNS Zone resource group via az CLI
+     *   3. For each host, create/update an A record pointing to the LB IP
+     *
+     * Returns an empty array if bindDnsZone is not configured.
+     */
+    private renderBindDnsZone(config: KubernetesIngressConfig, resourceName: string): Command[] {
+        const { bindDnsZone } = config;
+        if (!bindDnsZone) return [];
+
+        const { dnsZone, ingressServiceName, ingressNamespace } = bindDnsZone;
+        const svcName = ingressServiceName ?? 'ingress-nginx-controller';
+        const svcNamespace = ingressNamespace ?? 'ingress-nginx';
+
+        // Slug for env var names: uppercase, non-alphanumeric → underscore
+        const slug = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '_');
+        const varPrefix = `MERLIN_${slug(resourceName)}_${slug(dnsZone)}`;
+        const lbIpVar = `${varPrefix}_LB_IP`;
+        const dnsZoneRgVar = `${varPrefix}_DNS_ZONE_RG`;
+
+        const commands: Command[] = [];
+
+        // ── Step 1: Capture the Ingress LB external IP ──────────────────────
+        commands.push({
+            command: 'kubectl',
+            args: [
+                'get', 'svc', svcName,
+                '-n', svcNamespace,
+                '-o', `jsonpath={.status.loadBalancer.ingress[0].ip}`,
+            ],
+            envCapture: lbIpVar,
+        });
+
+        // ── Step 2: Look up the DNS Zone resource group ─────────────────────
+        commands.push({
+            command: 'az',
+            args: [
+                'network', 'dns', 'zone', 'list',
+                '--query', `[?name=='${dnsZone}'].resourceGroup`,
+                '--output', 'tsv',
+            ],
+            envCapture: dnsZoneRgVar,
+        });
+
+        // ── Step 3: Create/update A records for each host ───────────────────
+        // Extract unique hosts from rules
+        const hosts = [...new Set(config.rules.map(r => r.host))];
+        const zoneSuffix = `.${dnsZone}`;
+
+        for (const host of hosts) {
+            if (!host.endsWith(zoneSuffix)) {
+                throw new Error(
+                    `Ingress host "${host}" does not end with DNS zone "${dnsZone}". ` +
+                    `bindDnsZone.dnsZone must be a suffix of every rule host.`
+                );
+            }
+            // "web.staging.thebrainly.dev" → record name "web.staging"
+            const recordName = host.slice(0, -zoneSuffix.length);
+
+            // Use bash to attempt add-record first, fall back to update if the
+            // record-set already exists. This makes the command idempotent.
+            commands.push({
+                command: 'bash',
+                args: [
+                    '-c',
+                    `az network dns record-set a create --resource-group $${dnsZoneRgVar} --zone-name ${dnsZone} --name ${recordName} --ttl 300 2>/dev/null || true; ` +
+                    `az network dns record-set a remove-record --resource-group $${dnsZoneRgVar} --zone-name ${dnsZone} --record-set-name ${recordName} --ipv4-address 0.0.0.0 2>/dev/null || true; ` +
+                    `az network dns record-set a add-record --resource-group $${dnsZoneRgVar} --zone-name ${dnsZone} --record-set-name ${recordName} --ipv4-address $${lbIpVar}`,
+                ],
+            });
+        }
+
+        return commands;
     }
 
     private static isKubernetesIngressResource(resource: Resource): resource is KubernetesIngressResource {

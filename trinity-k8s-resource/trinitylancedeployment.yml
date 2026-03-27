@@ -17,6 +17,8 @@ dependencies:
     isHardDependency: true
   - resource: KubernetesServiceAccount.trinity-workload-sa
     isHardDependency: true
+  - resource: AzureRedisEnterprise.shared
+    isHardDependency: true
 
 defaultConfig:
   namespace: trinity
@@ -35,7 +37,7 @@ defaultConfig:
 
   containers:
     - name: lance
-      image: deltasharedtestkrcacr.azurecr.io/trinity/lance:nightly
+      image: merlinsharedstgkrcacr.azurecr.io/trinity/lance:nightly
       imagePullPolicy: IfNotPresent
       port: 3000
       cpuRequest: "250m"
@@ -47,6 +49,9 @@ defaultConfig:
         - secretRef: trinity-lance-secrets
 
       envVars:
+        # Same as old ACA: NODE_ENV + REDIS_URL from resource
+        - NODE_ENV=${ this.ring }
+        - REDIS_URL=${ AzureRedisEnterprise.shared.redisUrl }
         # Non-sensitive config
         - UPSTASH_REDIS_REST_URL=https://pure-sole-37433.upstash.io
         - LANGFUSE_BASE_URL=https://us.cloud.langfuse.com

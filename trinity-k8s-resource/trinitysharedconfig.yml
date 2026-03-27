@@ -11,6 +11,10 @@ region:
 dependencies:
   - resource: KubernetesCluster.aks
     isHardDependency: true
+  - resource: AzureRedisEnterprise.shared
+    isHardDependency: true
+  - resource: AzureKeyVault.shared
+    isHardDependency: true
 
 defaultConfig:
   namespace: trinity
@@ -28,6 +32,13 @@ defaultConfig:
     AZURE_STORAGE_CONTAINER_NAME: conversations
     # ── Alibaba Key (Key Vault reference for ali key fetching) ──────
     ALI_KEY_NAME: alibaba-key
+    ALI_KEY_ENDPOINT: ${ AzureKeyVault.shared.url }
+    # ── Redis ───────────────────────────────────────────────────────
+    REDIS_URL: ${ AzureRedisEnterprise.shared.redisUrl }
+    # ── API Scopes & tenant IDs (same as old ACA hardcoded values) ──
+    TURING_API_SCOPE: api://0e373360-ee71-4bbf-b141-2e0b8d27d9da/.default
+    ALLUNEED_SCOPE: api://4cdb0cdf-94d8-4c20-88de-e7683d81cf1f/.default
+    ALLUNEED_TENANT_ID: 2c10b0b9-d9c1-4c81-85ee-6a2297ed77f4
   labels:
     app.kubernetes.io/part-of: trinity
     managed-by: merlin

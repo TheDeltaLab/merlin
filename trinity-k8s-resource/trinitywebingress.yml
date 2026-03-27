@@ -16,6 +16,8 @@ defaultConfig:
   namespace: trinity
   ingressClassName: nginx
   clusterIssuer: letsencrypt-prod
+  bindDnsZone:
+    dnsZone: thebrainly.dev
 
   rules:
     - host: web.test.thebrainly.dev

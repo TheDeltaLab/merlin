@@ -33,6 +33,12 @@ export interface KubernetesHelmReleaseConfig extends ResourceSchema {
     wait?: boolean;
     /** Timeout for --wait, e.g. "5m0s" */
     timeout?: string;
+    /**
+     * Shell commands to run before helm upgrade --install.
+     * Useful for workarounds like deleting conflicting webhooks.
+     * Each command is wrapped in `bash -c '... || true'` to be idempotent.
+     */
+    preCommands?: string[];
 }
 
 export interface KubernetesHelmReleaseResource extends Resource<KubernetesHelmReleaseConfig> {}
@@ -86,6 +92,16 @@ export class KubernetesHelmReleaseRender implements Render {
             command: 'helm',
             args: ['repo', 'update'],
         });
+
+        // Step 2.5: run pre-commands (e.g. delete conflicting webhooks)
+        if (config.preCommands && config.preCommands.length > 0) {
+            for (const cmd of config.preCommands) {
+                commands.push({
+                    command: 'bash',
+                    args: ['-c', `${cmd} || true`],
+                });
+            }
+        }
 
         // Step 3: helm upgrade --install
         const args: string[] = [
