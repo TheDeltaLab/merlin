@@ -11,10 +11,60 @@ Merlin follows a **compile-time + runtime** architecture:
 
 ## Installation
 
+### As a dependency (for projects using Merlin)
+
+**1. One-time setup: configure GitHub Packages authentication**
+
+Merlin is published to GitHub Packages (`@thedeltalab/merlin`). All developers need to configure npm authentication once:
+
 ```bash
+# Install GitHub CLI if you haven't
+brew install gh
+
+# Login with read:packages scope
+gh auth login -s read:packages
+# If already logged in, add the scope:
+gh auth refresh -h github.com -s read:packages
+```
+
+Add to your global `~/.npmrc`:
+```ini
+//npm.pkg.github.com/:_authToken=${GH_TOKEN}
+```
+
+Add to your shell profile (`~/.zshrc` or `~/.bashrc`):
+```bash
+export GH_TOKEN=$(gh auth token)
+```
+
+Restart your terminal or run `source ~/.zshrc`.
+
+**2. Add to your project**
+
+In your project's `.npmrc`:
+```ini
+@thedeltalab:registry=https://npm.pkg.github.com
+```
+
+In your project's `package.json`:
+```json
+{
+  "devDependencies": {
+    "@thedeltalab/merlin": "^1.0.0"
+  }
+}
+```
+
+Then `pnpm install` and you're ready to go.
+
+### For Merlin development
+
+```bash
+git clone https://github.com/TheDeltaLab/merlin.git
+cd merlin
 pnpm install
 pnpm build
-pnpm link:global
+pnpm link:global   # Makes `merlin` command available globally
 ```
 
 ## Usage
@@ -183,6 +233,7 @@ merlin/
 │   ├── runtime.ts                   # Public API for generated code
 │   ├── common/
 │   │   ├── compiler.ts              # Compiler pipeline orchestration
+│   │   ├── constants.ts             # Package name/version constants
 │   │   ├── registry.ts              # Resource registry (name:ring:region → Resource)
 │   │   ├── resource.ts              # Core types, render/auth registries, Region enum
 │   │   ├── cloudTypes.ts            # Cloud-agnostic resource type constants
@@ -193,30 +244,11 @@ merlin/
 │   │   ├── transformer.ts           # Ring×region expansion, config merging
 │   │   ├── generator.ts             # TypeScript code generation
 │   │   ├── initializer.ts           # .merlin/ pnpm project setup
+│   │   ├── deploy-script-generator.ts # Deploy script generation
 │   │   └── schemas.ts               # Zod schemas for YAML validation
-│   ├── azure/
-│   │   ├── render.ts                # AzureResourceRender base class + naming
-│   │   ├── azureContainerApp.ts     # ACA render (create/update/DNS bind/EasyAuth)
-│   │   ├── azureContainerRegistry.ts
-│   │   ├── azureDnsZone.ts          # DNS Zone render (+ NS delegation)
-│   │   ├── azureServicePrincipal.ts # SP render (OIDC federated creds + RBAC)
-│   │   ├── azureBlobStorage.ts
-│   │   ├── azureKeyVault.ts
-│   │   ├── azureLogAnalyticsWorkspace.ts
-│   │   ├── proprietyGetter.ts       # ProprietyGetter implementations
-│   │   └── authProvider.ts          # AuthProvider implementations
-│   ├── kubernetes/
-│   │   ├── kubernetesCluster.ts     # AKS cluster render (node pools, ACR attach, namespaces)
-│   │   ├── kubernetesDeployment.ts  # Deployment render (containers, probes, volumes)
-│   │   ├── kubernetesService.ts     # Service render (ClusterIP)
-│   │   ├── kubernetesIngress.ts     # Ingress render (TLS, DNS A-record binding)
-│   │   ├── kubernetesHelmRelease.ts # Helm release render (preCommands, values)
-│   │   ├── kubernetesConfigMap.ts   # ConfigMap render
-│   │   ├── kubernetesServiceAccount.ts # ServiceAccount render (workload identity)
-│   │   ├── kubernetesNamespace.ts   # Namespace render + manifestToYaml utility
-│   │   └── kubernetesManifest.ts    # Raw manifest render (SPC, ClusterIssuer, etc.)
-│   └── alibaba/
-│       └── index.ts                 # Alibaba Cloud provider (Phase 2 placeholder)
+│   ├── azure/                       # Azure resource renders
+│   ├── kubernetes/                  # Kubernetes resource renders
+│   └── alibaba/                     # Alibaba Cloud provider (Phase 2 placeholder)
 │
 ├── shared-resource/                 # Cross-project shared Azure infrastructure
 │   ├── sharedacr.yml                # Container Registry
@@ -233,60 +265,39 @@ merlin/
 │   ├── sharedletsencryptissuer.yml  # Let's Encrypt ClusterIssuer
 │   └── sharedkvsp.yml               # Key Vault workload identity SP
 │
-├── trinity-k8s-resource/            # Trinity application (6 microservices on K8s)
-│   ├── trinityworkloadsa.yml        # Workload Identity ServiceAccount
-│   ├── trinitysharedconfig.yml      # Shared ConfigMap (env vars)
-│   ├── trinitysecretprovider.yml    # CSI SecretProviderClass (DB, JWT secrets)
-│   ├── trinitylancesecretprovider.yml # Lance SecretProviderClass (AI API keys)
-│   ├── trinity{web,home,admin,worker,lance,lance-worker}deployment.yml
-│   ├── trinity{web,home,admin,worker,lance,lance-worker}svc.yml
-│   └── trinity{web,home,admin}ingress.yml  # External access + DNS + TLS
-│
 ├── synapse-k8s-resource/            # Synapse AI gateway (koreacentral only)
-│   ├── synapseworkloadsa.yml
-│   ├── synapsesharedconfig.yml
-│   ├── synapsesecretprovider.yml
-│   ├── synapse{gateway,dashboard}deployment.yml
-│   ├── synapse{gateway,dashboard}svc.yml
-│   └── synapsedashboardingress.yml
-│
 ├── alluneed-k8s-resource/           # Alluneed AI inference service
-│   ├── alluneedworkloadsa.yml
-│   ├── alluneedsecretprovider.yml
-│   ├── alluneeddeployment.yml       # Heavy: 4 CPU / 8 Gi (ML inference)
-│   ├── alluneedsvc.yml
-│   └── alluneedingress.yml
-│
-├── trinity-func-resource/           # Trinity Azure Functions (stub)
-│
-├── trinity-resource/                # (Legacy) Trinity ACA infrastructure — LAW + ACAE
-├── trinity-*-resource/              # (Legacy) Trinity ACA services
-├── alluneed-resource/               # (Legacy) Alluneed ACA resources
 │
 └── .merlin/                         # Generated TypeScript project (git-ignored)
 ```
 
-### Why each project has its own ACAE + LAW
-
-Alluneed is an AI inference service that consumes 4 CPU / 8 Gi per replica. Sharing a Container App Environment with Trinity would create resource competition (shared CPU/memory quota, shared egress IP, shared maintenance windows). Each project therefore has its own environment:
-
-| Resource | Trinity | Alluneed |
-|----------|---------|---------|
-| Container Registry | `ghcr.io/thedeltalab/trinity/*` (GHCR) | `ghcr.io/thedeltalab/alluneed` (GHCR) |
-| ACAE | `AzureContainerAppEnvironment.trinity` | `AzureContainerAppEnvironment.alluneed` |
-| LAW | `AzureLogAnalyticsWorkspace.trinity` | `AzureLogAnalyticsWorkspace.alluneed` |
+> **Note:** Trinity resources have been moved to the [trinity repo](https://github.com/TheDeltaLab/trinity).
+> Each project maintains its own `merlin-resources/` directory and installs `@thedeltalab/merlin` as a dependency.
+> Shared resources (`shared-resource/`, `shared-k8s-resource/`) are bundled in the npm package and auto-included during compile/deploy.
 
 ## Deploying
 
+### From a project repo (e.g. trinity)
+
 ```bash
-# Dry-run (preview commands) for test ring, koreacentral
-./deploy-trinity.sh
+# Dry-run (preview commands)
+pnpm exec merlin deploy ./merlin-resources --ring staging --region koreacentral
 
-# Execute deployment for staging ring, eastasia
-./deploy-trinity.sh --ring staging --region eastasia --execute
+# Execute deployment
+pnpm exec merlin deploy ./merlin-resources --execute --ring staging --region koreacentral
 
-# Print GitHub Actions config after first deploy
-./print-github-config.sh --ring test
+# Skip auto-including shared resources
+pnpm exec merlin deploy ./merlin-resources --no-shared --ring staging --region koreacentral
+```
+
+### From the merlin repo (shared infrastructure)
+
+```bash
+# Deploy shared Azure resources
+merlin deploy shared-resource --execute --ring staging --region koreacentral
+
+# Deploy shared K8s infrastructure (AKS, NGINX, cert-manager)
+merlin deploy shared-k8s-resource --execute --ring staging --region koreacentral
 ```
 
 ## Development

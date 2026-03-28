@@ -76,6 +76,11 @@ specificConfig:
         scope: /subscriptions/{subscriptionId}/resourceGroups/shared-rg-stg-krc
       - role: Azure Kubernetes Service Cluster User Role
         scope: /subscriptions/{subscriptionId}/resourceGroups/shared-rg-stg-eas
+      # AKS — K8s RBAC write for kubectl apply (Deployments, Services, Ingress, ConfigMaps, etc.)
+      - role: Azure Kubernetes Service RBAC Writer
+        scope: /subscriptions/{subscriptionId}/resourceGroups/shared-rg-stg-krc
+      - role: Azure Kubernetes Service RBAC Writer
+        scope: /subscriptions/{subscriptionId}/resourceGroups/shared-rg-stg-eas
 
 exports:
   clientId: AzureServicePrincipalClientId
