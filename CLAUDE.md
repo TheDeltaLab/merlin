@@ -440,9 +440,30 @@ When `ring` and `region` are arrays, Merlin generates a cartesian product (e.g.,
 - `dist/merlin.js` has shebang (`#!/usr/bin/env node`) and is executable
 - `.merlin/` directory is a separate pnpm project with its own build pipeline
 
+## Git Workflow
+
+Every change must follow this flow: **Issue → Branch → PR → Merge**
+
+1. **Create an Issue** — describe what needs to be done (`gh issue create`)
+2. **Create a branch** — `git checkout -b <type>/<short-description>` from main
+3. **Commit & push** — use [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`, etc.)
+4. **Create a PR** — reference the issue with `Closes #<number>` in the body (`gh pr create`)
+5. **Assign** — assign both the issue and PR to the author (`gh issue edit --add-assignee`, `gh pr edit --add-assignee`)
+6. **Merge** — merge the PR on GitHub; release-please will auto-create a release PR based on conventional commits
+
+**Never commit directly to main.** Direct pushes bypass code review and can trigger unintended release-please releases.
+
+```bash
+# Example full workflow
+gh issue create --title "feat: add widget support" --body "Description" --assignee xintongli123
+git checkout -b feat/widget-support
+# ... make changes, commit ...
+git push -u origin feat/widget-support
+gh pr create --title "feat: add widget support" --body "Closes #42" --assignee xintongli123
+```
+
 ## Important Development Notes
 
-- **Never commit directly to main** — always create a feature branch and submit a PR. Merlin uses release-please for automated versioning; direct pushes to main bypass code review and can cause unintended releases.
 - **Do not commit `.merlin/`** - it's generated output (in `.gitignore`)
 - **Import `init.js` before `runtime.js`** - ensures providers are registered before resources load
 - **Registry initialization is side-effectful** - `src/init.ts` registers providers on import
