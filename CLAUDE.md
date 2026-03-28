@@ -440,6 +440,28 @@ When `ring` and `region` are arrays, Merlin generates a cartesian product (e.g.,
 - `dist/merlin.js` has shebang (`#!/usr/bin/env node`) and is executable
 - `.merlin/` directory is a separate pnpm project with its own build pipeline
 
+## Git Workflow
+
+Every change must follow this flow: **Issue → Branch → PR → Merge**
+
+1. **Create an Issue** — describe what needs to be done (`gh issue create`)
+2. **Create a branch** — `git checkout -b <type>/<short-description>` from main
+3. **Commit & push** — use [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`, etc.)
+4. **Create a PR** — reference the issue with `Closes #<number>` in the body (`gh pr create`)
+5. **Assign** — assign both the issue and PR to the author (`gh issue edit --add-assignee`, `gh pr edit --add-assignee`)
+6. **Merge** — merge the PR on GitHub; release-please will auto-create a release PR based on conventional commits
+
+**Never commit directly to main.** Direct pushes bypass code review and can trigger unintended release-please releases.
+
+```bash
+# Example full workflow
+gh issue create --title "feat: add widget support" --body "Description" --assignee xintongli123
+git checkout -b feat/widget-support
+# ... make changes, commit ...
+git push -u origin feat/widget-support
+gh pr create --title "feat: add widget support" --body "Closes #42" --assignee xintongli123
+```
+
 ## Important Development Notes
 
 - **Do not commit `.merlin/`** - it's generated output (in `.gitignore`)
@@ -530,6 +552,6 @@ All application images (except Synapse) are stored in the shared ACR (`merlinsha
 ### Known Issues / TODO
 
 - **trinity-lance Redis auth**: `WRONGPASS invalid username-password pair` — Redis Enterprise connection needs correct credentials
-- **Admin Easy Auth**: `admin.staging.thebrainly.dev` needs Azure AD authentication (like ACA Easy Auth). Plan: deploy oauth2-proxy + configure nginx ingress auth annotations. Original ACA auth used Azure AD App `f33ed582-6f07-4c57-86b5-86cb2f76da8f` with tenant `2c10b0b9-d9c1-4c81-85ee-6a2297ed77f4`
+- **Admin Easy Auth**: ~~Resolved~~ — oauth2-proxy deployed as OIDC auth layer on nginx ingress. Azure AD App `f33ed582-6f07-4c57-86b5-86cb2f76da8f`, secrets in Key Vault (`oauth2-proxy-client-secret`, `oauth2-proxy-cookie-secret`). Resources in `trinity/merlin-resources/oauth2proxy*.yml`.
 - **AzureRedisEnterprise / AzurePostgreSQLFlexible / AzureFunctionApp renders**: Currently stub implementations (return empty commands). Need full implementation before old Azure resources can be deleted
 - **Centralized logging**: No log aggregation configured yet. Options: Azure Monitor Container Insights (simplest), Grafana + Loki, or EFK stack
