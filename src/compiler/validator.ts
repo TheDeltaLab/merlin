@@ -55,6 +55,18 @@ export function validate(parsed: ParsedYAML): ValidationResult {
 function performSemanticValidation(data: any, source: string): CompilationError[] {
     const errors: CompilationError[] = [];
 
+    // ring is required for resource expansion — must be present after project defaults are applied
+    if (!data.ring) {
+        errors.push({
+            severity: ErrorSeverity.ERROR,
+            message: 'Resource must have a "ring" field (either directly or inherited from merlin.yml)',
+            source,
+            path: 'ring',
+            hint: 'Add ring: [test, staging] to this resource, or create a merlin.yml in the same directory with a ring field'
+        });
+        return errors; // Can't continue without ring
+    }
+
     // Note: We'll check authProvider registration at runtime rather than compile-time
     // This allows for flexible plugin loading and avoids circular dependencies
 
