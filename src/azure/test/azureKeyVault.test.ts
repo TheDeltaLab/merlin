@@ -264,4 +264,76 @@ describe('AzureKeyVaultRender', () => {
         const resource = makeResource({}, { type: 'WrongType' } as any);
         await expect(render.render(resource)).rejects.toThrow('not an AzureKeyVault resource');
     });
+
+    // ── renderSecrets ──────────────────────────────────────────────────────────
+
+    describe('renderSecrets', () => {
+        it('generates az keyvault secret set commands for each secret', () => {
+            const resource = makeResource({
+                secrets: {
+                    'my-secret': 'my-value',
+                    'another-secret': 'another-value',
+                },
+            });
+            const commands = render.renderSecrets(resource);
+            expect(commands).toHaveLength(2);
+
+            expect(commands[0].command).toBe('az');
+            expect(commands[0].args).toEqual([
+                'keyvault', 'secret', 'set',
+                '--vault-name', 'merlinsharedstgkrcakv',
+                '--name', 'my-secret',
+                '--value', 'my-value',
+            ]);
+
+            expect(commands[1].command).toBe('az');
+            expect(commands[1].args).toEqual([
+                'keyvault', 'secret', 'set',
+                '--vault-name', 'merlinsharedstgkrcakv',
+                '--name', 'another-secret',
+                '--value', 'another-value',
+            ]);
+        });
+
+        it('returns empty array when no secrets configured', () => {
+            const resource = makeResource();
+            const commands = render.renderSecrets(resource);
+            expect(commands).toHaveLength(0);
+        });
+
+        it('returns empty array when secrets is an empty object', () => {
+            const resource = makeResource({ secrets: {} });
+            const commands = render.renderSecrets(resource);
+            expect(commands).toHaveLength(0);
+        });
+
+        it('appends secret commands after create in full render', async () => {
+            mockNotFound();
+            const resource = makeResource({
+                secrets: { 'test-secret': 'test-value' },
+            });
+            const commands = await render.render(resource);
+
+            // Last command should be the secret set
+            const lastCmd = commands[commands.length - 1];
+            expect(lastCmd.command).toBe('az');
+            expect(lastCmd.args[0]).toBe('keyvault');
+            expect(lastCmd.args[1]).toBe('secret');
+            expect(lastCmd.args[2]).toBe('set');
+        });
+
+        it('appends secret commands after update in full render', async () => {
+            mockKeyVaultExists();
+            const resource = makeResource({
+                secrets: { 'test-secret': 'test-value' },
+            });
+            const commands = await render.render(resource);
+
+            const lastCmd = commands[commands.length - 1];
+            expect(lastCmd.command).toBe('az');
+            expect(lastCmd.args[0]).toBe('keyvault');
+            expect(lastCmd.args[1]).toBe('secret');
+            expect(lastCmd.args[2]).toBe('set');
+        });
+    });
 });
