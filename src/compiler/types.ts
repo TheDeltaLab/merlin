@@ -161,6 +161,7 @@ export interface CompilerOptions {
     watch?: boolean;          // Enable watch mode
     validate?: boolean;       // Validation-only mode (don't generate)
     skipCache?: boolean;      // Skip cache check and write (--no-cache flag)
+    noShared?: boolean;       // Skip auto-including shared resources from the merlin package
 }
 
 /**

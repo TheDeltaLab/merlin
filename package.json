@@ -1,6 +1,6 @@
 {
-  "name": "merlin",
-  "version": "0.1.0",
+  "name": "@thedeltalab/merlin",
+  "version": "0.2.0",
   "description": "CLI tool for Infrastructure as Code deployment and management",
   "type": "module",
   "bin": {
@@ -14,12 +14,15 @@
   },
   "files": [
     "dist",
-    "infra"
+    "shared-resource",
+    "shared-k8s-resource"
   ],
   "scripts": {
     "lint": "eslint",
     "lint:fix": "eslint --fix",
-    "build": "tsup && chmod +x dist/merlin.js && ([ -d .merlin/node_modules ] || (cd .merlin && pnpm install)) && ([ -d .merlin ] && cd .merlin && pnpm build || true)",
+    "build": "tsup && chmod +x dist/merlin.js",
+    "build:full": "pnpm build && ([ -d .merlin ] && ([ -d .merlin/node_modules ] || (cd .merlin && pnpm install)) && cd .merlin && pnpm build || true)",
+    "prepublishOnly": "pnpm build && pnpm test",
     "postinstall": "[ -f dist/merlin.js ] && chmod +x dist/merlin.js || true",
     "link:global": "pnpm build && pnpm link --global",
     "test": "vitest run",
@@ -29,6 +32,13 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/thedeltalab/merlin.git"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
   "packageManager": "pnpm@10.28.1",
   "dependencies": {
     "commander": "^14.0.2",

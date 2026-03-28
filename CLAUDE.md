@@ -56,6 +56,13 @@ merlin deploy shared-k8s-resource --execute    # 1. AKS cluster + NGINX + cert-m
 merlin deploy synapse-k8s-resource --execute   # 2. Application workloads
 ```
 
+For K8s workloads that depend on `shared-resource` (Key Vault, ACR, etc.), use `--also`:
+```
+merlin deploy trinity-k8s-resource --also shared-resource --also shared-k8s-resource --execute
+merlin deploy synapse-k8s-resource --also shared-resource --also shared-k8s-resource --execute
+merlin deploy alluneed-k8s-resource --also shared-resource --also shared-k8s-resource --execute
+```
+
 `az aks get-credentials` is called automatically during AKS cluster deployment, which configures `kubectl` and `helm` to point at the new cluster.
 
 ## Common Commands
@@ -167,9 +174,14 @@ Merlin uses a **compile-time + runtime** architecture:
 - **`src/runtime.ts`**: Public API for generated code
 - **`src/init.ts`**: Registers all providers (auth, render, propriety getters); branches on `MERLIN_CLOUD`
 - **`shared-resource/`**: Cross-project shared infrastructure — ACR, Redis, Postgres, ABS, AKV, GitHub SP (`project: merlin`)
-- **`trinity-resource/`**: Trinity-specific shared infrastructure — LAW + ACAE (`project: merlin`)
-- **`trinity-*-resource/`**: Individual Trinity service resources (web, worker, admin, lance, lance-worker, home, func)
-- **`alluneed-resource/`**: Alluneed AI inference service resources (own ACAE + LAW, `project: merlin`)
+- **`shared-k8s-resource/`**: Shared Kubernetes infrastructure — AKS cluster, NGINX Ingress, cert-manager, Let's Encrypt issuer, KV workload SP
+- **`trinity-k8s-resource/`**: Trinity application K8s workloads — 6 microservices (web, home, admin, worker, lance, lance-worker) with ConfigMaps, SecretProviders, Ingresses
+- **`synapse-k8s-resource/`**: Synapse AI gateway K8s workloads — gateway + dashboard (koreacentral only)
+- **`alluneed-k8s-resource/`**: Alluneed AI inference K8s workloads — speaker embedding service
+- **`trinity-func-resource/`**: Trinity Azure Function App (stub render, not yet deployed)
+- **`trinity-resource/`**: Trinity-specific shared infrastructure — LAW + ACAE (legacy ACA path, being replaced by K8s)
+- **`trinity-*-resource/`**: Individual Trinity service resources for ACA path (legacy, being replaced by K8s)
+- **`alluneed-resource/`**: Alluneed ACA resources (legacy, being replaced by K8s)
 - **`.merlin/`**: Generated TypeScript project (output, not in git)
 
 ### Compiler Pipeline
@@ -324,6 +336,22 @@ When `bindDnsZone: { dnsZone, subDomain }` is set in the ACA config, `renderBind
 
 **Idempotency**: Steps 1 and 6 use `bash -c '... || true'` to swallow the "already exists" error on re-runs.
 
+### Kubernetes Ingress DNS Binding (`src/kubernetes/kubernetesIngress.ts`)
+
+When `bindDnsZone: { dnsZone }` is set in the Ingress config, `renderBindDnsZone()` appends DNS record commands after the `kubectl apply` Ingress command:
+
+| Step | Command | Notes |
+|------|---------|-------|
+| 1 | `kubectl get svc ingress-nginx-controller -n ingress-nginx -o jsonpath=...` | Capture LB external IP into `$MERLIN_..._LB_IP` |
+| 2 | `az network dns zone list --query "[?name=='...'].resourceGroup"` | Capture DNS Zone RG into `$MERLIN_..._DNS_ZONE_RG` |
+| 3 | `bash -c "az network dns record-set a create ... \|\| true; az ... add-record ..."` | Create A record for each host (idempotent) |
+
+**Host → record name derivation**: For host `web.staging.thebrainly.dev` with dnsZone `thebrainly.dev`, the record name is `web.staging` (host minus `.dnsZone` suffix). Every host in `rules[]` must end with the configured `dnsZone`.
+
+**A records vs CNAME**: K8s LoadBalancer exposes an IP (not a FQDN like ACA), so A records are used instead of CNAME.
+
+**Optional config fields**: `ingressServiceName` (default: `ingress-nginx-controller`) and `ingressNamespace` (default: `ingress-nginx`) can override the Ingress controller service lookup.
+
 ### Global Resources (`isGlobalResource`)
 
 Some Azure resources are tenant-scoped and have no region (e.g. `AzureADApp`). Setting `isGlobalResource = true` on the Render implementation allows region-aware resources to resolve them by ring only, ignoring region. The registry lookup falls back to ring-only match when an exact ring+region match is not found for a global resource.
@@ -429,3 +457,79 @@ When `ring` and `region` are arrays, Merlin generates a cartesian product (e.g.,
 - **`addArrayParams` space-joins values** - Azure CLI expects array parameters as a single space-separated string argument (e.g. `--env-vars "KEY1=VAL1 KEY2=VAL2"`), not multiple positional args. `AzureResourceRender.addArrayParams()` in `render.ts` handles this by calling `.join(' ')`. Do NOT push each element separately.
 - **`envVars` is supported on update** - `az containerapp update` does accept `--env-vars`. It is in the shared `ARRAY_PARAM_MAP` (not `CREATE_ONLY_ARRAY_PARAM_MAP`) in `azureContainerApp.ts`.
 - **`MERLIN_CLOUD` env variable** - set by `merlin deploy --cloud <provider>`; read in `src/init.ts` to select which render implementations to register. Default: `azure`. Unknown values throw immediately on startup.
+
+## AKS Cluster Configuration Notes
+
+### NGINX Ingress Health Probe
+
+The Azure Standard LB health probe must use `/healthz` (returns 200) instead of `/` (returns 404). Azure LB HTTP probes only consider 200 as healthy. This is configured via the Helm values annotation:
+```yaml
+# sharedingressnginx.yml
+values:
+  controller:
+    service:
+      annotations:
+        service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path: /healthz
+```
+Without this, the LB marks all backends as unhealthy and external traffic is dropped silently.
+
+### cert-manager + AKS Webhook Conflict
+
+AKS's `admissionsenforcer` takes ownership of cert-manager's validating webhook `namespaceSelector` field, causing Helm upgrade to fail with field manager conflicts. The workaround is to delete the webhook before upgrade:
+```yaml
+# sharedcertmanager.yml
+preCommands:
+  - kubectl delete validatingwebhookconfiguration cert-manager-webhook
+```
+
+### ConfigMap and manifestToYaml Numeric Strings
+
+K8s ConfigMap `.data` values must be strings. If a YAML value looks like a number (e.g. `PORT: 3000`), `manifestToYaml()` must quote it as `"3000"` or K8s rejects it. The `manifestToYaml()` function in `kubernetesNamespace.ts` handles this with a regex check. `KubernetesConfigMapRender` also applies `String()` coercion on all data values.
+
+### specificConfig Array Replacement
+
+When `specificConfig` overrides an array field (e.g. `containers`), it **completely replaces** the `defaultConfig` array — it does NOT merge. This means staging `specificConfig` for a Deployment must include the **full** container spec (image, ports, probes, volumes, etc.), not just the fields being changed.
+
+### Secrets Flow: Key Vault → Pod
+
+```
+Azure Key Vault
+  → CSI SecretProviderClass (declares which KV secrets to fetch)
+  → K8s Secret (auto-created by CSI driver)
+  → Pod env vars (via envFrom secretRef)
+```
+The CSI driver uses Workload Identity (not client secrets) to authenticate to Key Vault. The `keyvaultName` field in SecretProviderClass must be the vault **name** (not URL), and `tenantId` must be the Azure AD tenant ID (not the SP client ID).
+
+### Container Image Registry
+
+All application images (except Synapse) are stored in the shared ACR (`merlinsharedstgkrcacr.azurecr.io` for staging). Synapse images come from GitHub Container Registry (`ghcr.io/thedeltalab/synapse/`). The AKS cluster has `AcrPull` role on the shared ACR via the `attachAcr` config.
+
+## Current Deployment Status (staging/koreacentral)
+
+### Services
+
+| Namespace | Service | URL | Status |
+|-----------|---------|-----|--------|
+| trinity | web | https://web.staging.thebrainly.dev | Running |
+| trinity | home | https://home.staging.thebrainly.dev | Running |
+| trinity | admin | https://admin.staging.thebrainly.dev | Running |
+| trinity | worker | (internal only) | Running |
+| trinity | lance | (internal only) | CrashLoopBackOff (Redis auth issue — pending fix) |
+| trinity | lance-worker | (internal only) | Running |
+| synapse | gateway | (internal only) | Running |
+| synapse | dashboard | https://synapse.staging.thebrainly.dev | Running |
+| alluneed | alluneed | https://alluneed.staging.thebrainly.dev | Running |
+
+### Infrastructure
+
+- **AKS Cluster**: `shared-aks-stg-krc-aks` — K8s 1.33, Azure CNI, 3 nodes (auto-scaled from initial 2)
+- **LoadBalancer IP**: `20.249.167.216`
+- **DNS**: Wildcard `*.staging.thebrainly.dev → 20.249.167.216` in Azure DNS zone `thebrainly.dev` (RG: `Trinity-Dev-RG`)
+- **TLS**: Let's Encrypt certificates via cert-manager, all READY
+
+### Known Issues / TODO
+
+- **trinity-lance Redis auth**: `WRONGPASS invalid username-password pair` — Redis Enterprise connection needs correct credentials
+- **Admin Easy Auth**: `admin.staging.thebrainly.dev` needs Azure AD authentication (like ACA Easy Auth). Plan: deploy oauth2-proxy + configure nginx ingress auth annotations. Original ACA auth used Azure AD App `f33ed582-6f07-4c57-86b5-86cb2f76da8f` with tenant `2c10b0b9-d9c1-4c81-85ee-6a2297ed77f4`
+- **AzureRedisEnterprise / AzurePostgreSQLFlexible / AzureFunctionApp renders**: Currently stub implementations (return empty commands). Need full implementation before old Azure resources can be deleted
+- **Centralized logging**: No log aggregation configured yet. Options: Azure Monitor Container Insights (simplest), Grafana + Loki, or EFK stack

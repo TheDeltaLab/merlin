@@ -173,7 +173,7 @@ describe('KubernetesDeploymentRender', () => {
         expect(commands[0].fileContent).toContain('name: NODE_ENV');
         expect(commands[0].fileContent).toContain('value: staging');
         expect(commands[0].fileContent).toContain('name: PORT');
-        expect(commands[0].fileContent).toContain('value: 3000');
+        expect(commands[0].fileContent).toContain('value: "3000"');
     });
 
     it('includes resource requests/limits', async () => {

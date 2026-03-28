@@ -2,11 +2,11 @@
  * Initializes the output directory as a pnpm + tsup project
  */
 
-import { writeFile, access, mkdir, readFile, copyFile } from 'fs/promises';
+import { writeFile, access, mkdir, readFile } from 'fs/promises';
 import * as path from 'path';
 import { execaCommand } from 'execa';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+import { MERLIN_PACKAGE_NAME, MERLIN_PACKAGE_VERSION } from '../common/constants.js';
+import { generateDeployScript } from './deploy-script-generator.js';
 
 export interface InitOptions {
     outputPath: string;
@@ -34,19 +34,16 @@ export async function initializeOutputDirectory(options: InitOptions): Promise<I
 
         const packageJsonPath = path.join(outputPath, 'package.json');
 
-        // Calculate relative path from outputPath to merlinPath
-        const relativeMerlinPath = path.relative(outputPath, merlinPath);
-
         // Check if package.json already exists
         const exists = await checkFileExists(packageJsonPath);
         if (exists) {
-            // Check if we need to migrate file: → link: protocol
-            const migrated = await migrateToLinkProtocol(packageJsonPath, relativeMerlinPath, outputPath);
+            // Check if we need to migrate the merlin dependency
+            const migrated = await migrateMerlinDependency(packageJsonPath, merlinPath, outputPath);
             return { initialized: migrated, skipped: !migrated };
         }
 
         // Create package.json
-        await createPackageJson(packageJsonPath, relativeMerlinPath);
+        await createPackageJson(packageJsonPath, merlinPath, outputPath);
 
         // Create tsup.config.ts
         await createTsupConfig(path.join(outputPath, 'tsup.config.ts'));
@@ -79,7 +76,28 @@ async function checkFileExists(filePath: string): Promise<boolean> {
     }
 }
 
-async function createPackageJson(filePath: string, relativeMerlinPath: string): Promise<void> {
+/**
+ * Determines the merlin dependency specifier for .merlin/package.json.
+ * - npm-installed merlin (inside node_modules): use version specifier e.g. "^0.2.0"
+ * - Local development (direct path): use link protocol e.g. "link:.."
+ */
+function getMerlinDependency(merlinPath: string, outputPath: string): { key: string; value: string } {
+    const isNpmInstalled = merlinPath.includes('node_modules');
+    if (isNpmInstalled) {
+        return {
+            key: MERLIN_PACKAGE_NAME,
+            value: `^${MERLIN_PACKAGE_VERSION}`
+        };
+    }
+    const relativePath = path.relative(outputPath, merlinPath);
+    return {
+        key: MERLIN_PACKAGE_NAME,
+        value: `link:${relativePath}`
+    };
+}
+
+async function createPackageJson(filePath: string, merlinPath: string, outputPath: string): Promise<void> {
+    const dep = getMerlinDependency(merlinPath, outputPath);
     const packageJson = {
         name: 'merlin-generated',
         version: '0.0.0',
@@ -92,7 +110,7 @@ async function createPackageJson(filePath: string, relativeMerlinPath: string): 
             execute: 'pnpm build && node dist/deploy.js --execute'
         },
         dependencies: {
-            merlin: `link:${relativeMerlinPath}`,
+            [dep.key]: dep.value,
             execa: '^9.6.1'
         },
         devDependencies: {
@@ -130,15 +148,8 @@ dist/
 }
 
 async function createDeployScript(filePath: string): Promise<void> {
-    // Get the path to the template file
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = dirname(__filename);
-    // After bundling, __dirname will be dist/
-    // Templates are copied to dist/compiler/templates/
-    const templatePath = path.join(__dirname, 'compiler', 'templates', 'deploy-script.ts.template');
-
-    // Copy the template file directly
-    await copyFile(templatePath, filePath);
+    const content = generateDeployScript();
+    await writeFile(filePath, content, 'utf-8');
 }
 
 async function installDependencies(cwd: string): Promise<void> {
@@ -146,30 +157,44 @@ async function installDependencies(cwd: string): Promise<void> {
 }
 
 /**
- * Checks if package.json uses the old `file:` protocol for the merlin dependency
- * and migrates it to `link:` if so. The `link:` protocol creates a symlink
- * instead of a copy, ensuring .merlin/ always sees the latest merlin dist/.
+ * Migrates .merlin/package.json to use the correct merlin dependency.
+ * Handles:
+ * - Old unscoped "merlin" key → rename to scoped package name
+ * - file: protocol → link: protocol
+ * - link: to wrong path → correct link: or version specifier
+ * - npm-installed merlin → version specifier instead of link:
  */
-async function migrateToLinkProtocol(
+async function migrateMerlinDependency(
     packageJsonPath: string,
-    relativeMerlinPath: string,
+    merlinPath: string,
     outputPath: string
 ): Promise<boolean> {
     try {
         const raw = await readFile(packageJsonPath, 'utf-8');
         const pkg = JSON.parse(raw);
+        const dep = getMerlinDependency(merlinPath, outputPath);
+        let changed = false;
 
-        const currentRef = pkg.dependencies?.merlin;
-        const expectedRef = `link:${relativeMerlinPath}`;
-
-        if (currentRef && currentRef !== expectedRef && currentRef.startsWith('file:')) {
-            pkg.dependencies.merlin = expectedRef;
-            await writeFile(packageJsonPath, JSON.stringify(pkg, null, 2) + '\n', 'utf-8');
-            await installDependencies(outputPath);
-            return true;
+        // Remove old unscoped 'merlin' key if present
+        if (pkg.dependencies?.merlin) {
+            delete pkg.dependencies.merlin;
+            changed = true;
         }
 
-        return false;
+        // Check if current dep matches expected
+        const currentRef = pkg.dependencies?.[MERLIN_PACKAGE_NAME];
+        if (currentRef !== dep.value) {
+            pkg.dependencies = pkg.dependencies ?? {};
+            pkg.dependencies[MERLIN_PACKAGE_NAME] = dep.value;
+            changed = true;
+        }
+
+        if (changed) {
+            await writeFile(packageJsonPath, JSON.stringify(pkg, null, 2) + '\n', 'utf-8');
+            await installDependencies(outputPath);
+        }
+
+        return changed;
     } catch {
         return false;
     }

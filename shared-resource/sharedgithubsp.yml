@@ -71,6 +71,11 @@ specificConfig:
       # ACR — eastasia
       - role: AcrPush
         scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-stg-eas/providers/Microsoft.ContainerRegistry/registries/merlinsharedstgeasacr
+      # AKS — kubectl access for merlin K8s deploys (shared RG)
+      - role: Azure Kubernetes Service Cluster User Role
+        scope: /subscriptions/{subscriptionId}/resourceGroups/shared-rg-stg-krc
+      - role: Azure Kubernetes Service Cluster User Role
+        scope: /subscriptions/{subscriptionId}/resourceGroups/shared-rg-stg-eas
 
 exports:
   clientId: AzureServicePrincipalClientId

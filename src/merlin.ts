@@ -6,26 +6,38 @@ import * as path from 'path';
 
 const program = new Command();
 
+/**
+ * Parses --also flag values which can be repeated and/or comma-separated.
+ * e.g. --also "a,b" --also c → ['a', 'b', 'c']
+ */
+function parseAlsoPaths(also: string | string[] | undefined): string[] {
+    if (!also) return [];
+    const values = Array.isArray(also) ? also : [also];
+    return values
+        .flatMap((p: string) => p.split(','))
+        .map((p: string) => p.trim())
+        .filter(Boolean);
+}
+
 program
     .name('merlin')
     .description('CLI tool for Infrastructure as Code deployment and management')
-    .version('0.1.0');
+    .version('0.2.0');
 
 program
     .command('compile')
     .description('Compile YAML resource definitions to TypeScript')
     .argument('[path]', 'Path to YAML file or directory', './resources')
     .option('-i, --input <path>', 'Path to YAML resource definitions directory (overrides [path] argument)')
-    .option('--also <paths>', 'Additional resource directories to compile alongside the main path (comma-separated)')
+    .option('--also <paths...>', 'Additional resource directories to compile alongside the main path (repeatable, also supports comma-separated)')
     .option('-o, --output <path>', 'Output directory', '.merlin')
     .option('-w, --watch', 'Watch for changes and recompile')
     .option('--validate-only', 'Validate without generating code')
     .option('--no-cache', 'Skip the compilation cache and always recompile')
+    .option('--no-shared', 'Do not auto-include shared resources from the merlin package')
     .action(async (argPath, options) => {
         const inputPath = options.input ?? argPath;
-        const extraPaths: string[] = options.also
-            ? options.also.split(',').map((p: string) => p.trim()).filter(Boolean)
-            : [];
+        const extraPaths = parseAlsoPaths(options.also);
         const compiler = new Compiler();
 
         try {
@@ -35,7 +47,8 @@ program
                 outputPath: options.output,
                 watch: options.watch,
                 validate: options.validateOnly,
-                skipCache: !options.cache
+                skipCache: !options.cache,
+                noShared: !options.shared
             });
 
             if (result.success) {
@@ -90,7 +103,7 @@ program
     .description('Deploy infrastructure resources')
     .argument('[path]', 'Path to resource configuration file or directory', './resources')
     .option('-i, --input <path>', 'Path to YAML resource definitions directory (overrides [path] argument)')
-    .option('--also <paths>', 'Additional resource directories to compile alongside the main path (comma-separated)')
+    .option('--also <paths...>', 'Additional resource directories to compile alongside the main path (repeatable, also supports comma-separated)')
     .option('-e, --execute', 'Actually execute the deployment (default is dry-run)')
     .option('-r, --ring <ring>', 'Target ring (test, staging, production)')
     .option('--region <region>', 'Target region (eastus, westus, krc)')
@@ -98,12 +111,11 @@ program
     .option('-o, --output-file <file>', 'Write generated commands to file')
     .option('-c, --concurrency <number>', 'Max parallel resource deployments per level (default: 4)', '4')
     .option('--cloud <cloud>', 'Cloud provider: azure (default) | alibaba', 'azure')
+    .option('--no-shared', 'Do not auto-include shared resources from the merlin package')
     .action(async (argPath, options) => {
         const resourcePath = options.input ?? argPath;
         const outputPath = options.dir;
-        const extraPaths: string[] = options.also
-            ? options.also.split(',').map((p: string) => p.trim()).filter(Boolean)
-            : [];
+        const extraPaths = parseAlsoPaths(options.also);
 
         try {
             // Auto-compile before deployment
@@ -113,7 +125,8 @@ program
             const compileResult = await compiler.compile({
                 inputPath: resourcePath,
                 inputPaths: extraPaths.length > 0 ? extraPaths : undefined,
-                outputPath: outputPath
+                outputPath: outputPath,
+                noShared: !options.shared
             });
 
             if (!compileResult.success) {
@@ -189,12 +202,11 @@ program
     .description('Validate resource configuration files')
     .argument('[path]', 'Path to resource configuration file or directory', './resources')
     .option('-i, --input <path>', 'Path to YAML resource definitions directory (overrides [path] argument)')
-    .option('--also <paths>', 'Additional resource directories to validate alongside the main path (comma-separated)')
+    .option('--also <paths...>', 'Additional resource directories to validate alongside the main path (repeatable, also supports comma-separated)')
+    .option('--no-shared', 'Do not auto-include shared resources from the merlin package')
     .action(async (argPath, options) => {
         const inputPath = options.input ?? argPath;
-        const extraPaths: string[] = options.also
-            ? options.also.split(',').map((p: string) => p.trim()).filter(Boolean)
-            : [];
+        const extraPaths = parseAlsoPaths(options.also);
         // Auto-compile before validation (user preference)
         console.log('🔨 Compiling resources...');
         const compiler = new Compiler();
@@ -203,7 +215,8 @@ program
             const result = await compiler.compile({
                 inputPath: inputPath,
                 inputPaths: extraPaths.length > 0 ? extraPaths : undefined,
-                outputPath: '.merlin'
+                outputPath: '.merlin',
+                noShared: !options.shared
             });
 
             if (result.success) {

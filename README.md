@@ -141,6 +141,8 @@ Existing `Azure*` type names continue to work as-is — no migration required.
 
 ## Supported Resource Types
 
+### Azure Resources
+
 | Type | Description |
 |------|-------------|
 | `AzureContainerApp` | Container Apps with optional DNS binding and EasyAuth |
@@ -151,7 +153,24 @@ Existing `Azure*` type names continue to work as-is — no migration required.
 | `AzureADApp` | Azure AD / Entra ID App Registrations |
 | `AzureServicePrincipal` | Service Principals with Federated Credentials (OIDC) and Role Assignments |
 | `AzureBlobStorage` | Blob Storage Accounts |
+| `AzureKeyVault` | Key Vaults |
+| `AzureRedisEnterprise` | Redis Enterprise (stub) |
+| `AzurePostgreSQLFlexible` | PostgreSQL Flexible Server (stub) |
+| `AzureFunctionApp` | Azure Function Apps (stub) |
 | `AzureResourceGroup` | Resource Groups (auto-created, deduplicated) |
+
+### Kubernetes Resources
+
+| Type | Description |
+|------|-------------|
+| `KubernetesCluster` | AKS clusters (with auto-namespace creation, ACR attach, Workload Identity) |
+| `KubernetesDeployment` | Deployments (with probes, env vars, CSI secret volumes, workload identity) |
+| `KubernetesService` | ClusterIP Services |
+| `KubernetesIngress` | Ingress resources (with cert-manager TLS, optional DNS A-record binding) |
+| `KubernetesHelmRelease` | Helm chart installations (with preCommands, values overrides) |
+| `KubernetesConfigMap` | ConfigMaps |
+| `KubernetesServiceAccount` | Service Accounts (with workload identity annotations) |
+| `KubernetesManifest` | Raw Kubernetes manifests (SecretProviderClass, ClusterIssuer, etc.) |
 
 ## Repository Structure
 
@@ -175,50 +194,75 @@ merlin/
 │   │   ├── generator.ts             # TypeScript code generation
 │   │   ├── initializer.ts           # .merlin/ pnpm project setup
 │   │   └── schemas.ts               # Zod schemas for YAML validation
-│   └── azure/
-│       ├── render.ts                # AzureResourceRender base class + naming
-│       ├── azureContainerApp.ts     # ACA render (create/update/DNS bind/EasyAuth)
-│       ├── azureContainerAppEnvironment.ts
-│       ├── azureContainerRegistry.ts
-│       ├── azureDnsZone.ts          # DNS Zone render (+ NS delegation)
-│       ├── azureADApp.ts            # AD App render (global resource)
-│       ├── azureServicePrincipal.ts # SP render (OIDC federated creds + RBAC)
-│       ├── azureBlobStorage.ts
-│       ├── azureLogAnalyticsWorkspace.ts
-│       ├── resourceGroup.ts
-│       ├── proprietyGetter.ts       # ProprietyGetter implementations
-│       └── authProvider.ts          # AuthProvider implementations
+│   ├── azure/
+│   │   ├── render.ts                # AzureResourceRender base class + naming
+│   │   ├── azureContainerApp.ts     # ACA render (create/update/DNS bind/EasyAuth)
+│   │   ├── azureContainerRegistry.ts
+│   │   ├── azureDnsZone.ts          # DNS Zone render (+ NS delegation)
+│   │   ├── azureServicePrincipal.ts # SP render (OIDC federated creds + RBAC)
+│   │   ├── azureBlobStorage.ts
+│   │   ├── azureKeyVault.ts
+│   │   ├── azureLogAnalyticsWorkspace.ts
+│   │   ├── proprietyGetter.ts       # ProprietyGetter implementations
+│   │   └── authProvider.ts          # AuthProvider implementations
+│   ├── kubernetes/
+│   │   ├── kubernetesCluster.ts     # AKS cluster render (node pools, ACR attach, namespaces)
+│   │   ├── kubernetesDeployment.ts  # Deployment render (containers, probes, volumes)
+│   │   ├── kubernetesService.ts     # Service render (ClusterIP)
+│   │   ├── kubernetesIngress.ts     # Ingress render (TLS, DNS A-record binding)
+│   │   ├── kubernetesHelmRelease.ts # Helm release render (preCommands, values)
+│   │   ├── kubernetesConfigMap.ts   # ConfigMap render
+│   │   ├── kubernetesServiceAccount.ts # ServiceAccount render (workload identity)
+│   │   ├── kubernetesNamespace.ts   # Namespace render + manifestToYaml utility
+│   │   └── kubernetesManifest.ts    # Raw manifest render (SPC, ClusterIssuer, etc.)
 │   └── alibaba/
 │       └── index.ts                 # Alibaba Cloud provider (Phase 2 placeholder)
 │
-├── shared-resource/                 # Cross-project shared infrastructure (project: merlin)
+├── shared-resource/                 # Cross-project shared Azure infrastructure
+│   ├── sharedacr.yml                # Container Registry
 │   ├── sharedredis.yml              # Redis Enterprise
 │   ├── sharedpsql.yml               # PostgreSQL Flexible
 │   ├── sharedabs.yml                # Blob Storage
 │   ├── sharedakv.yml                # Key Vault
-│   └── sharedgithubsp.yml           # GitHub Actions SP (trinity + alluneed OIDC)
+│   └── sharedgithubsp.yml           # GitHub Actions SP (OIDC)
 │
-├── trinity-resource/                # Trinity shared infrastructure (project: merlin)
-│   ├── trinitylaw.yml               # Log Analytics Workspace (for all trinity services)
-│   └── trinityacenv.yml             # Container App Environment (for all trinity services)
+├── shared-k8s-resource/             # Shared Kubernetes infrastructure
+│   ├── sharedaks.yml                # AKS cluster (Workload Identity, CSI, Azure CNI)
+│   ├── sharedingressnginx.yml       # NGINX Ingress Controller (Helm)
+│   ├── sharedcertmanager.yml        # cert-manager (Helm)
+│   ├── sharedletsencryptissuer.yml  # Let's Encrypt ClusterIssuer
+│   └── sharedkvsp.yml               # Key Vault workload identity SP
 │
-├── trinity-web-resource/            # Trinity Web frontend
-├── trinity-worker-resource/         # Trinity Worker + AD App
-├── trinity-admin-resource/          # Trinity Admin + AD App + DNS Zone
-├── trinity-lance-resource/          # Trinity Lance (AI backend)
-├── trinity-lance-worker-resource/   # Trinity Lance Worker
-├── trinity-home-resource/           # Trinity Home (marketing site)
-├── trinity-func-resource/           # Trinity Azure Functions
+├── trinity-k8s-resource/            # Trinity application (6 microservices on K8s)
+│   ├── trinityworkloadsa.yml        # Workload Identity ServiceAccount
+│   ├── trinitysharedconfig.yml      # Shared ConfigMap (env vars)
+│   ├── trinitysecretprovider.yml    # CSI SecretProviderClass (DB, JWT secrets)
+│   ├── trinitylancesecretprovider.yml # Lance SecretProviderClass (AI API keys)
+│   ├── trinity{web,home,admin,worker,lance,lance-worker}deployment.yml
+│   ├── trinity{web,home,admin,worker,lance,lance-worker}svc.yml
+│   └── trinity{web,home,admin}ingress.yml  # External access + DNS + TLS
 │
-├── alluneed-resource/               # Alluneed AI inference service
-│   ├── alluneedaca.yml              # Container App (uses GHCR, own ACAE)
-│   ├── alluneedacenv.yml            # Dedicated Container App Environment
-│   ├── alluneedlaw.yml              # Dedicated Log Analytics Workspace
-│   ├── alluneedadapp.yml            # AD App for EasyAuth
-│   └── chuangdnszone.yml            # DNS Zone
+├── synapse-k8s-resource/            # Synapse AI gateway (koreacentral only)
+│   ├── synapseworkloadsa.yml
+│   ├── synapsesharedconfig.yml
+│   ├── synapsesecretprovider.yml
+│   ├── synapse{gateway,dashboard}deployment.yml
+│   ├── synapse{gateway,dashboard}svc.yml
+│   └── synapsedashboardingress.yml
 │
-├── deploy-trinity.sh                # Deploy all trinity + alluneed resources
-├── print-github-config.sh           # Print GitHub Secrets/Variables for CI
+├── alluneed-k8s-resource/           # Alluneed AI inference service
+│   ├── alluneedworkloadsa.yml
+│   ├── alluneedsecretprovider.yml
+│   ├── alluneeddeployment.yml       # Heavy: 4 CPU / 8 Gi (ML inference)
+│   ├── alluneedsvc.yml
+│   └── alluneedingress.yml
+│
+├── trinity-func-resource/           # Trinity Azure Functions (stub)
+│
+├── trinity-resource/                # (Legacy) Trinity ACA infrastructure — LAW + ACAE
+├── trinity-*-resource/              # (Legacy) Trinity ACA services
+├── alluneed-resource/               # (Legacy) Alluneed ACA resources
+│
 └── .merlin/                         # Generated TypeScript project (git-ignored)
 ```
 

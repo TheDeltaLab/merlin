@@ -37,8 +37,9 @@ export class Compiler {
         const generatedFiles: string[] = [];
 
         try {
-            // 1. Discover YAML files
-            const allInputPaths = [options.inputPath, ...(options.inputPaths ?? [])];
+            // 1. Discover YAML files (auto-include shared resources from merlin package)
+            const sharedPaths = options.noShared ? [] : await this.getSharedResourcePaths();
+            const allInputPaths = [options.inputPath, ...(options.inputPaths ?? []), ...sharedPaths];
             const yamlFileArrays = await Promise.all(allInputPaths.map(p => this.discoverYAMLFiles(p)));
             const yamlFiles = [...new Set(yamlFileArrays.flat())];
             if (yamlFiles.length === 0) {
@@ -331,6 +332,31 @@ export class Compiler {
      */
     private isYAMLFile(name: string): boolean {
         return name.endsWith('.yml') || name.endsWith('.yaml');
+    }
+
+    /**
+     * Returns paths to shared resource directories bundled with the merlin package.
+     * Only includes directories that actually exist on disk.
+     */
+    private async getSharedResourcePaths(): Promise<string[]> {
+        const merlinRoot = this.getMerlinPath();
+        const candidates = [
+            path.join(merlinRoot, 'shared-resource'),
+            path.join(merlinRoot, 'shared-k8s-resource'),
+        ];
+
+        const results = await Promise.all(
+            candidates.map(async (dir) => {
+                try {
+                    const s = await stat(dir);
+                    return s.isDirectory() ? dir : null;
+                } catch {
+                    return null;
+                }
+            })
+        );
+
+        return results.filter((d): d is string => d !== null);
     }
 
     /**
