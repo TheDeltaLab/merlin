@@ -44,6 +44,29 @@ export interface AzureADAppConfig extends ResourceSchema {
     // Miscellaneous
     isFallbackPublicClient?: boolean;
     serviceManagementReference?: string;
+
+    /**
+     * Client secrets (credentials) to create for this AD App.
+     * Each secret is created via `az ad app credential reset --append`.
+     * If a credential with the same displayName already exists, it is skipped.
+     */
+    clientSecrets?: ClientSecretConfig[];
+}
+
+export interface ClientSecretConfig {
+    /** Display name for the credential (e.g. "oauth2-proxy") */
+    displayName: string;
+    /** End date in ISO format (e.g. "2027-03-28"). Omit for Azure's default (2 years). */
+    endDate?: string;
+    /**
+     * Optionally store the generated secret value in an Azure Key Vault.
+     * vaultName: the vault name (can use ${ } expressions)
+     * secretName: the secret name in the vault
+     */
+    storeInKeyVault?: {
+        vaultName: string;
+        secretName: string;
+    };
 }
 
 export interface AzureADAppResource extends Resource<AzureADAppConfig> {}
@@ -213,19 +236,24 @@ export class AzureADAppRender extends AzureResourceRender {
             args: ['ad', 'sp', 'create', '--id', `$${appIdVar}`],
         });
 
+        // Step 5: create client secrets (credentials) if configured
+        commands.push(...this.renderClientSecrets(resource, appIdVar));
+
         return commands;
     }
 
     renderUpdate(resource: AzureADAppResource, objectId: string): Command[] {
         const config = resource.config;
 
-        // Step 1: capture the existing appId (needed to resolve "api://self" in identifierUris)
+        // Step 1: capture the existing appId (needed to resolve "api://self" in identifierUris
+        // and for client secret creation)
         const appIdVar = `MERLIN_AAD_UPD_${this.getDisplayName(resource).toUpperCase().replace(/-/g, '_')}_APPID`;
         const commands: Command[] = [];
 
         const hasApiSelf = (config.identifierUris as string[] | undefined)?.some(u => u === 'api://self');
+        const hasClientSecrets = config.clientSecrets && (config.clientSecrets as ClientSecretConfig[]).length > 0;
 
-        if (hasApiSelf) {
+        if (hasApiSelf || hasClientSecrets) {
             commands.push({
                 command: 'az',
                 args: ['ad', 'app', 'list', '--filter', `displayName eq '${this.getDisplayName(resource)}'`, '--query', '[0].appId', '-o', 'tsv'],
@@ -251,6 +279,76 @@ export class AzureADAppRender extends AzureResourceRender {
         this.addArrayParams(updateArgs, resolvedConfig, AzureADAppRender.ARRAY_PARAM_MAP);
 
         commands.push({ command: 'az', args: updateArgs });
+
+        // Create client secrets (credentials) if configured
+        commands.push(...this.renderClientSecrets(resource, appIdVar));
+
+        return commands;
+    }
+
+    /**
+     * Render client secret (credential) creation commands.
+     *
+     * For each configured client secret:
+     * 1. Check if a credential with the same displayName already exists (skip if so)
+     * 2. Create the credential via `az ad app credential reset --append`
+     * 3. Optionally store the secret value in Azure Key Vault
+     *
+     * The check-then-create approach avoids rotating secrets on every deploy.
+     */
+    renderClientSecrets(resource: AzureADAppResource, appIdVar: string): Command[] {
+        const config = resource.config;
+        if (!config.clientSecrets || (config.clientSecrets as ClientSecretConfig[]).length === 0) return [];
+
+        const commands: Command[] = [];
+
+        for (const secret of config.clientSecrets as ClientSecretConfig[]) {
+            const safeName = secret.displayName.toUpperCase().replace(/[^A-Z0-9]/g, '_');
+            const secretVar = `MERLIN_AAD_CLIENT_SECRET_${safeName}`;
+
+            // Check if credential already exists — if so, skip creation.
+            // `az ad app credential list` returns an array; we filter by displayName.
+            // If a match is found, we skip; otherwise, we create.
+            const checkAndCreateArgs = [
+                `EXISTING=$(az ad app credential list --id $${appIdVar} --query "[?displayName=='${secret.displayName}'].keyId | [0]" -o tsv 2>/dev/null || true)`,
+                `if [ -z "$EXISTING" ]; then`,
+            ];
+
+            const credArgs = ['ad', 'app', 'credential', 'reset',
+                              '--id', `$${appIdVar}`,
+                              '--append',
+                              '--display-name', secret.displayName,
+                              '--query', 'password', '-o', 'tsv'];
+            if (secret.endDate) {
+                credArgs.push('--end-date', secret.endDate);
+            }
+            const credCommand = `az ${credArgs.join(' ')}`;
+
+            if (secret.storeInKeyVault) {
+                // Create credential and store in Key Vault
+                const kvSetCommand = `az keyvault secret set --vault-name ${secret.storeInKeyVault.vaultName} --name ${secret.storeInKeyVault.secretName} --value $${secretVar}`;
+                commands.push({
+                    command: 'bash',
+                    args: ['-c', [
+                        ...checkAndCreateArgs,
+                        `  ${secretVar}=$(${credCommand})`,
+                        `  ${kvSetCommand}`,
+                        `fi`,
+                    ].join('\n')],
+                });
+            } else {
+                // Create credential only (no Key Vault storage)
+                commands.push({
+                    command: 'bash',
+                    args: ['-c', [
+                        ...checkAndCreateArgs,
+                        `  ${secretVar}=$(${credCommand})`,
+                        `fi`,
+                    ].join('\n')],
+                });
+            }
+        }
+
         return commands;
     }
 }

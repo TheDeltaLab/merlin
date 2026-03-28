@@ -387,4 +387,156 @@ describe('AzureADAppRender', () => {
             await expect(render.render(resource)).rejects.toThrow('Failed to get deployed properties');
         });
     });
+
+    // ── 6. renderClientSecrets ────────────────────────────────────────────────
+
+    describe('renderClientSecrets', () => {
+        const APP_ID_VAR = 'MERLIN_AAD_NEW_MERLINTEST_MYAPP_STG_APPID';
+
+        it('returns empty array when no clientSecrets configured', () => {
+            const resource = makeResource();
+            const cmds = render.renderClientSecrets(resource, APP_ID_VAR);
+            expect(cmds).toHaveLength(0);
+        });
+
+        it('returns empty array when clientSecrets is empty array', () => {
+            const resource = makeResource({ clientSecrets: [] });
+            const cmds = render.renderClientSecrets(resource, APP_ID_VAR);
+            expect(cmds).toHaveLength(0);
+        });
+
+        it('generates bash -c command that checks existing credential before creating', () => {
+            const resource = makeResource({
+                clientSecrets: [{
+                    displayName: 'oauth2-proxy',
+                }],
+            });
+            const cmds = render.renderClientSecrets(resource, APP_ID_VAR);
+            expect(cmds).toHaveLength(1);
+            expect(cmds[0].command).toBe('bash');
+            expect(cmds[0].args[0]).toBe('-c');
+
+            const script = cmds[0].args[1];
+            // Should check for existing credential
+            expect(script).toContain('az ad app credential list');
+            expect(script).toContain("displayName=='oauth2-proxy'");
+            // Should conditionally create
+            expect(script).toContain('if [ -z "$EXISTING" ]');
+            expect(script).toContain('az ad app credential reset');
+            expect(script).toContain('--append');
+            expect(script).toContain('--display-name');
+            expect(script).toContain('oauth2-proxy');
+            expect(script).toContain(`$${APP_ID_VAR}`);
+        });
+
+        it('includes --end-date when specified', () => {
+            const resource = makeResource({
+                clientSecrets: [{
+                    displayName: 'my-secret',
+                    endDate: '2027-03-28',
+                }],
+            });
+            const cmds = render.renderClientSecrets(resource, APP_ID_VAR);
+            const script = cmds[0].args[1];
+            expect(script).toContain('--end-date');
+            expect(script).toContain('2027-03-28');
+        });
+
+        it('does not include --end-date when not specified', () => {
+            const resource = makeResource({
+                clientSecrets: [{
+                    displayName: 'my-secret',
+                }],
+            });
+            const cmds = render.renderClientSecrets(resource, APP_ID_VAR);
+            const script = cmds[0].args[1];
+            expect(script).not.toContain('--end-date');
+        });
+
+        it('includes keyvault secret set when storeInKeyVault is configured', () => {
+            const resource = makeResource({
+                clientSecrets: [{
+                    displayName: 'oauth2-proxy',
+                    storeInKeyVault: {
+                        vaultName: 'my-vault',
+                        secretName: 'oauth2-proxy-client-secret',
+                    },
+                }],
+            });
+            const cmds = render.renderClientSecrets(resource, APP_ID_VAR);
+            expect(cmds).toHaveLength(1);
+            const script = cmds[0].args[1];
+            expect(script).toContain('az keyvault secret set');
+            expect(script).toContain('--vault-name my-vault');
+            expect(script).toContain('--name oauth2-proxy-client-secret');
+        });
+
+        it('does not include keyvault secret set when storeInKeyVault is not configured', () => {
+            const resource = makeResource({
+                clientSecrets: [{
+                    displayName: 'my-secret',
+                }],
+            });
+            const cmds = render.renderClientSecrets(resource, APP_ID_VAR);
+            const script = cmds[0].args[1];
+            expect(script).not.toContain('az keyvault secret set');
+        });
+
+        it('generates one command per client secret', () => {
+            const resource = makeResource({
+                clientSecrets: [
+                    { displayName: 'secret-one' },
+                    { displayName: 'secret-two', endDate: '2028-01-01' },
+                ],
+            });
+            const cmds = render.renderClientSecrets(resource, APP_ID_VAR);
+            expect(cmds).toHaveLength(2);
+            expect(cmds[0].args[1]).toContain('secret-one');
+            expect(cmds[1].args[1]).toContain('secret-two');
+            expect(cmds[1].args[1]).toContain('--end-date');
+        });
+
+        it('appends client secret commands after create in full renderCreate', () => {
+            const resource = makeResource({
+                clientSecrets: [{
+                    displayName: 'oauth2-proxy',
+                    storeInKeyVault: {
+                        vaultName: 'my-vault',
+                        secretName: 'oauth2-proxy-client-secret',
+                    },
+                }],
+            });
+            const cmds = render.renderCreate(resource);
+            // Last command should be the bash -c client secret creation
+            const lastCmd = cmds[cmds.length - 1];
+            expect(lastCmd.command).toBe('bash');
+            expect(lastCmd.args[1]).toContain('az ad app credential reset');
+        });
+
+        it('captures appId and appends client secret commands in renderUpdate', () => {
+            const OBJECT_ID = 'object-id-abc';
+            const resource = makeResource({
+                clientSecrets: [{
+                    displayName: 'oauth2-proxy',
+                }],
+            });
+            const cmds = render.renderUpdate(resource, OBJECT_ID);
+            // First command should capture appId (needed for credential commands)
+            expect(cmds[0].envCapture).toBeDefined();
+            expect(cmds[0].envCapture).toContain('APPID');
+            // Last command should be the bash -c client secret creation
+            const lastCmd = cmds[cmds.length - 1];
+            expect(lastCmd.command).toBe('bash');
+            expect(lastCmd.args[1]).toContain('az ad app credential reset');
+        });
+
+        it('does not capture appId in renderUpdate when no clientSecrets and no api://self', () => {
+            const OBJECT_ID = 'object-id-abc';
+            const resource = makeResource();
+            const cmds = render.renderUpdate(resource, OBJECT_ID);
+            // Should just be the update command, no appId capture
+            expect(cmds).toHaveLength(1);
+            expect(cmds[0].envCapture).toBeUndefined();
+        });
+    });
 });

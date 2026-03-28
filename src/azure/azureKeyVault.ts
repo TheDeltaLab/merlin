@@ -21,6 +21,12 @@ export interface AzureKeyVaultConfig extends ResourceSchema {
     enablePurgeProtection?: boolean;
     /** Tags */
     tags?: Record<string, string>;
+    /**
+     * Secrets to set in the vault after creation/update.
+     * Key = secret name, value = secret value (plain string or ${ } expression).
+     * Uses `az keyvault secret set` which is naturally idempotent (creates or updates).
+     */
+    secrets?: Record<string, string>;
 }
 
 export interface AzureKeyVaultResource extends Resource<AzureKeyVaultConfig> {}
@@ -63,6 +69,9 @@ export class AzureKeyVaultRender extends AzureResourceRender {
         } else {
             ret.push(...this.renderUpdate(resource as AzureKeyVaultResource));
         }
+
+        // Append secret-set commands (idempotent — creates or updates)
+        ret.push(...this.renderSecrets(resource as AzureKeyVaultResource));
 
         return ret;
     }
@@ -172,5 +181,23 @@ export class AzureKeyVaultRender extends AzureResourceRender {
         // Note: az keyvault update does not support --sku or --tags
 
         return [{ command: 'az', args }];
+    }
+
+    /**
+     * Render `az keyvault secret set` commands for each entry in config.secrets.
+     * Naturally idempotent — creates or updates the secret value.
+     */
+    renderSecrets(resource: AzureKeyVaultResource): Command[] {
+        const config = resource.config;
+        if (!config.secrets || Object.keys(config.secrets).length === 0) return [];
+
+        const vaultName = this.getResourceName(resource);
+        return Object.entries(config.secrets).map(([name, value]) => ({
+            command: 'az',
+            args: ['keyvault', 'secret', 'set',
+                   '--vault-name', vaultName,
+                   '--name', name,
+                   '--value', value],
+        }));
     }
 }
