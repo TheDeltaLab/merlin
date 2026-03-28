@@ -113,8 +113,12 @@ export class Compiler {
             // 5. Transform resources (expand ring/region)
             const expandedResources = this.transformResources(expandedYAMLs);
 
-            // 5. Generate TypeScript code
-            const generated = this.generateCode(expandedResources);
+            // 5.5. Merge resources from the same source file (e.g. KubernetesApp expands
+            // into multiple resource types, all originating from the same YAML file)
+            const mergedResources = this.mergeBySource(expandedResources);
+
+            // 6. Generate TypeScript code
+            const generated = this.generateCode(mergedResources);
 
             // 6. Write all files to disk
             await this.writeGeneratedFiles(generated, options.outputPath, generatedFiles);
@@ -261,6 +265,26 @@ export class Compiler {
     }
 
     /**
+     * Merges expanded resources that share the same source file.
+     * This is needed after composite type expansion (e.g. KubernetesApp → Deployment + Service + Ingress)
+     * where multiple resource entries originate from the same YAML file and must be written to one .ts file.
+     */
+    private mergeBySource(
+        resources: Array<{ source: string; resources: ExpandedResource[] }>
+    ): Array<{ source: string; resources: ExpandedResource[] }> {
+        const map = new Map<string, ExpandedResource[]>();
+        for (const { source, resources: res } of resources) {
+            const existing = map.get(source);
+            if (existing) {
+                existing.push(...res);
+            } else {
+                map.set(source, [...res]);
+            }
+        }
+        return [...map.entries()].map(([source, resources]) => ({ source, resources }));
+    }
+
+    /**
      * Discovers merlin.yml project configs in each directory
      */
     private discoverProjectConfigs(dirs: string[]): Map<string, ProjectConfig> {
@@ -364,6 +388,8 @@ export class Compiler {
      * Handles a single file input
      */
     private handleSingleFile(filePath: string): string[] {
+        const name = path.basename(filePath);
+        if (name === 'merlin.yml' || name === 'merlin.yaml') return [];
         if (filePath.endsWith('.yml') || filePath.endsWith('.yaml')) {
             return [filePath];
         }
@@ -401,9 +427,10 @@ export class Compiler {
     }
 
     /**
-     * Checks if a file is a YAML file
+     * Checks if a file is a YAML resource file (excludes merlin.yml project config)
      */
     private isYAMLFile(name: string): boolean {
+        if (name === 'merlin.yml' || name === 'merlin.yaml') return false;
         return name.endsWith('.yml') || name.endsWith('.yaml');
     }
 
