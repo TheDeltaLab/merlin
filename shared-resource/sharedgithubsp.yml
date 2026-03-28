@@ -44,6 +44,16 @@ specificConfig:
       # ACR — eastasia
       - role: AcrPush
         scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-tst-eas/providers/Microsoft.ContainerRegistry/registries/merlinsharedtsteasacr
+      # AKS — kubectl access for merlin K8s deploys (shared RG)
+      - role: Azure Kubernetes Service Cluster User Role
+        scope: /subscriptions/{subscriptionId}/resourceGroups/shared-rg-tst-krc
+      - role: Azure Kubernetes Service Cluster User Role
+        scope: /subscriptions/{subscriptionId}/resourceGroups/shared-rg-tst-eas
+      # AKS — K8s RBAC write for kubectl apply (Deployments, Services, Ingress, ConfigMaps, etc.)
+      - role: Azure Kubernetes Service RBAC Writer
+        scope: /subscriptions/{subscriptionId}/resourceGroups/shared-rg-tst-krc
+      - role: Azure Kubernetes Service RBAC Writer
+        scope: /subscriptions/{subscriptionId}/resourceGroups/shared-rg-tst-eas
 
   - ring: staging
     displayName: merlin-github-stg
