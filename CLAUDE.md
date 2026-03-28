@@ -442,6 +442,7 @@ When `ring` and `region` are arrays, Merlin generates a cartesian product (e.g.,
 
 ## Important Development Notes
 
+- **Never commit directly to main** — always create a feature branch and submit a PR. Merlin uses release-please for automated versioning; direct pushes to main bypass code review and can cause unintended releases.
 - **Do not commit `.merlin/`** - it's generated output (in `.gitignore`)
 - **Import `init.js` before `runtime.js`** - ensures providers are registered before resources load
 - **Registry initialization is side-effectful** - `src/init.ts` registers providers on import
@@ -530,6 +531,6 @@ All application images (except Synapse) are stored in the shared ACR (`merlinsha
 ### Known Issues / TODO
 
 - **trinity-lance Redis auth**: `WRONGPASS invalid username-password pair` — Redis Enterprise connection needs correct credentials
-- **Admin Easy Auth**: `admin.staging.thebrainly.dev` needs Azure AD authentication (like ACA Easy Auth). Plan: deploy oauth2-proxy + configure nginx ingress auth annotations. Original ACA auth used Azure AD App `f33ed582-6f07-4c57-86b5-86cb2f76da8f` with tenant `2c10b0b9-d9c1-4c81-85ee-6a2297ed77f4`
+- **Admin Easy Auth**: ~~Resolved~~ — oauth2-proxy deployed as OIDC auth layer on nginx ingress. Azure AD App `f33ed582-6f07-4c57-86b5-86cb2f76da8f`, secrets in Key Vault (`oauth2-proxy-client-secret`, `oauth2-proxy-cookie-secret`). Resources in `trinity/merlin-resources/oauth2proxy*.yml`.
 - **AzureRedisEnterprise / AzurePostgreSQLFlexible / AzureFunctionApp renders**: Currently stub implementations (return empty commands). Need full implementation before old Azure resources can be deleted
 - **Centralized logging**: No log aggregation configured yet. Options: Azure Monitor Container Insights (simplest), Grafana + Loki, or EFK stack
