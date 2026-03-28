@@ -125,4 +125,38 @@ describe('KubernetesHelmReleaseRender', () => {
         const commands = await render.render(makeResource());
         expect(commands).toHaveLength(3);
     });
+
+    it('includes --values with fileContent when values object is provided', async () => {
+        const commands = await render.render(makeResource({
+            values: {
+                controller: {
+                    service: {
+                        annotations: {
+                            'service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path': '/healthz',
+                        },
+                    },
+                },
+            },
+        }));
+        const installCmd = commands[2];
+        expect(installCmd.args).toContain('--values');
+        expect(installCmd.args).toContain('__MERLIN_YAML_FILE__');
+        expect(installCmd.fileContent).toBeDefined();
+        expect(installCmd.fileContent).toContain('controller:');
+        expect(installCmd.fileContent).toContain('/healthz');
+    });
+
+    it('omits --values when values is empty object', async () => {
+        const commands = await render.render(makeResource({ values: {} }));
+        const installCmd = commands[2];
+        expect(installCmd.args).not.toContain('--values');
+        expect(installCmd.fileContent).toBeUndefined();
+    });
+
+    it('omits --values when values is not set', async () => {
+        const commands = await render.render(makeResource());
+        const installCmd = commands[2];
+        expect(installCmd.args).not.toContain('--values');
+        expect(installCmd.fileContent).toBeUndefined();
+    });
 });

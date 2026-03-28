@@ -1,5 +1,6 @@
 import { Resource, ResourceSchema, Command, Render, RenderContext } from '../common/resource.js';
 import { resolveConfig } from '../common/paramResolver.js';
+import { manifestToYaml } from './kubernetesNamespace.js';
 
 export const KUBERNETES_HELM_RELEASE_TYPE = 'KubernetesHelmRelease';
 
@@ -39,6 +40,11 @@ export interface KubernetesHelmReleaseConfig extends ResourceSchema {
      * Each command is wrapped in `bash -c '... || true'` to be idempotent.
      */
     preCommands?: string[];
+    /**
+     * Values object — serialized to a temp YAML file and passed via --values.
+     * Use this for complex nested Helm values that are unwieldy as --set pairs.
+     */
+    values?: Record<string, unknown>;
 }
 
 export interface KubernetesHelmReleaseResource extends Resource<KubernetesHelmReleaseConfig> {}
@@ -139,7 +145,14 @@ export class KubernetesHelmReleaseRender implements Render {
             }
         }
 
-        commands.push({ command: 'helm', args });
+        // If values object is provided, serialize to YAML and pass via --values
+        if (config.values && Object.keys(config.values).length > 0) {
+            const valuesYaml = manifestToYaml(config.values);
+            args.push('--values', '__MERLIN_YAML_FILE__');
+            commands.push({ command: 'helm', args, fileContent: valuesYaml });
+        } else {
+            commands.push({ command: 'helm', args });
+        }
 
         return commands;
     }
