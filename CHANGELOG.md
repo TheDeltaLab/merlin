@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1](https://github.com/TheDeltaLab/merlin/compare/v1.2.0...v1.2.1) (2026-03-30)
+
+
+### Bug Fixes
+
+* copy .npmrc into .merlin/ for private registry auth ([#32](https://github.com/TheDeltaLab/merlin/issues/32)) ([2a2d58b](https://github.com/TheDeltaLab/merlin/commit/2a2d58b3c107318a7e6ac63a193b10d08f7f5640))
+
 ## [1.2.0](https://github.com/TheDeltaLab/merlin/compare/v1.1.0...v1.2.0) (2026-03-30)
 
 
