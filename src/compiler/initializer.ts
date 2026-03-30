@@ -2,7 +2,7 @@
  * Initializes the output directory as a pnpm + tsup project
  */
 
-import { writeFile, access, mkdir, readFile } from 'fs/promises';
+import { writeFile, access, mkdir, readFile, copyFile } from 'fs/promises';
 import * as path from 'path';
 import { execaCommand } from 'execa';
 import { MERLIN_PACKAGE_NAME, MERLIN_PACKAGE_VERSION } from '../common/constants.js';
@@ -53,6 +53,9 @@ export async function initializeOutputDirectory(options: InitOptions): Promise<I
 
         // Create deploy script
         await createDeployScript(path.join(outputPath, 'deploy.ts'));
+
+        // Copy .npmrc from project root if it exists (needed for private registry auth)
+        await copyNpmrc(outputPath);
 
         // Run pnpm install
         await installDependencies(outputPath);
@@ -150,6 +153,23 @@ dist/
 async function createDeployScript(filePath: string): Promise<void> {
     const content = generateDeployScript();
     await writeFile(filePath, content, 'utf-8');
+}
+
+/**
+ * Copies .npmrc from the project root (parent of .merlin/) into the output directory.
+ * This is needed so that .merlin/pnpm install can authenticate to private registries
+ * (e.g. GitHub Packages for @thedeltalab/merlin).
+ */
+async function copyNpmrc(outputPath: string): Promise<void> {
+    const projectRoot = path.dirname(outputPath);
+    const source = path.join(projectRoot, '.npmrc');
+    const dest = path.join(outputPath, '.npmrc');
+    try {
+        await access(source);
+        await copyFile(source, dest);
+    } catch {
+        // No .npmrc in project root — nothing to copy
+    }
 }
 
 async function installDependencies(cwd: string): Promise<void> {
