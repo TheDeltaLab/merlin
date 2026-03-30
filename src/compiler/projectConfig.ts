@@ -79,7 +79,8 @@ export function applyProjectDefaults(
         ...data,
         project: data.project ?? projectConfig.project,
         ring: data.ring ?? projectConfig.ring,
-        region: data.region ?? projectConfig.region,
+        // 'none' is an explicit opt-out — don't override it with project defaults
+        region: data.region === 'none' ? 'none' : (data.region ?? projectConfig.region),
         authProvider: data.authProvider ?? projectConfig.authProvider,
     };
 }

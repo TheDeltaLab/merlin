@@ -72,7 +72,7 @@ function performSemanticValidation(data: any, source: string): CompilationError[
 
     // Validate specificConfig rings/regions match declared rings/regions
     const declaredRings = Array.isArray(data.ring) ? data.ring : [data.ring];
-    const declaredRegions = data.region
+    const declaredRegions = (data.region && data.region !== 'none')
         ? (Array.isArray(data.region) ? data.region : [data.region])
         : [];
 
@@ -120,7 +120,7 @@ function performSemanticValidation(data: any, source: string): CompilationError[
 function validateParamRefs(data: any, source: string): CompilationError[] {
     const errors: CompilationError[] = [];
     const declaredDeps = new Set<string>(data.dependencies.map((d: any) => d.resource));
-    const hasRegions = !!data.region;
+    const hasRegions = !!data.region && data.region !== 'none';
 
     const configsToCheck: Array<{ config: Record<string, unknown>; path: string }> = [
         { config: data.defaultConfig, path: 'defaultConfig' },

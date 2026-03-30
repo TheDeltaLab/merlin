@@ -91,6 +91,7 @@ export const ResourceYAMLSchema = z.object({
     ]).optional(),
 
     region: z.union([
+        z.literal('none'),  // Explicit opt-out: skip region defaults from merlin.yml (for global resources like AzureServicePrincipal)
         RegionSchema,
         z.array(RegionSchema).min(1, 'Region array cannot be empty')
     ]).optional(),

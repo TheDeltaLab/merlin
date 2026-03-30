@@ -13,9 +13,10 @@ import { parseConfigParams } from './interpolation.js';
 export function expand(resource: ResourceYAML): ExpandedResource[] {
     // Normalize to arrays
     const rings: Ring[] = Array.isArray(resource.ring) ? resource.ring : [resource.ring];
-    const regions: (Region | undefined)[] = resource.region
-        ? (Array.isArray(resource.region) ? resource.region : [resource.region])
-        : [undefined];  // User preference: undefined region generates one resource per ring
+    // 'none' is an explicit opt-out from region expansion (for global resources)
+    const regions: (Region | undefined)[] = (!resource.region || resource.region === 'none')
+        ? [undefined]
+        : (Array.isArray(resource.region) ? resource.region : [resource.region]);
 
     // Cartesian product: rings × regions
     const combinations = rings.flatMap(ring =>
