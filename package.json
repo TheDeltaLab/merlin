@@ -1,6 +1,6 @@
 {
   "name": "@thedeltalab/merlin",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "CLI tool for Infrastructure as Code deployment and management",
   "type": "module",
   "bin": {
