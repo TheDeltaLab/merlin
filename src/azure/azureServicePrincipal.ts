@@ -69,6 +69,13 @@ export interface ApiPermission {
     resourceAccess: { id: string; type: 'Scope' | 'Role' }[];
 }
 
+export interface CookieSecretKeyVault {
+    /** Key Vault names to store the cookie secret in (supports multiple for multi-region) */
+    vaultNames: string[];
+    /** Secret name in Key Vault (e.g. "alluneed-oauth2-proxy-cookie-secret") */
+    secretName: string;
+}
+
 export interface AzureServicePrincipalConfig extends ResourceSchema {
     /**
      * Display name for the underlying AD App Registration.
@@ -84,6 +91,13 @@ export interface AzureServicePrincipalConfig extends ResourceSchema {
      * Only runs on create — does NOT rotate on update (to avoid breaking running services).
      */
     clientSecretKeyVault?: ClientSecretKeyVault;
+
+    /**
+     * Auto-generate a random cookie secret (for oauth2-proxy) and store in Key Vault.
+     * Idempotent: only creates if the secret doesn't already exist in the first vault.
+     * Runs on both create and update (unlike clientSecret which is create-only).
+     */
+    cookieSecretKeyVault?: CookieSecretKeyVault;
 
     /**
      * Require user/group assignment before they can sign in.
@@ -221,10 +235,13 @@ export class AzureServicePrincipalRender extends AzureResourceRender {
         // 5. Client secret → Key Vault (create-only, not on update to avoid breaking running services)
         commands.push(...this.renderClientSecret(resource, appIdVar));
 
-        // 6. Federated credentials
+        // 6. Cookie secret → Key Vault (idempotent — only creates if missing)
+        commands.push(...this.renderCookieSecret(resource));
+
+        // 7. Federated credentials
         commands.push(...this.renderFederatedCredentials(resource, appIdVar));
 
-        // 7. Role assignments
+        // 8. Role assignments
         commands.push(...this.renderRoleAssignments(resource, appIdVar));
 
         return commands;
@@ -257,6 +274,9 @@ export class AzureServicePrincipalRender extends AzureResourceRender {
 
         // Update API permissions (idempotent — always sets the full list)
         commands.push(...this.renderApiPermissions(resource, appIdVar));
+
+        // Cookie secret → Key Vault (idempotent — only creates if missing)
+        commands.push(...this.renderCookieSecret(resource));
 
         commands.push(...this.renderFederatedCredentials(resource, appIdVar));
         commands.push(...this.renderRoleAssignments(resource, appIdVar));
@@ -332,6 +352,42 @@ export class AzureServicePrincipalRender extends AzureResourceRender {
             commands.push({
                 command: 'az',
                 args: ['keyvault', 'secret', 'set', '--vault-name', vaultName, '--name', kvConfig.secretName, '--value', `$${secretVar}`],
+            });
+        }
+
+        return commands;
+    }
+
+    // ── Cookie secret → Key Vault (idempotent) ─────────────────────────────
+
+    /**
+     * Generate a random cookie secret (for oauth2-proxy) and store it in Key Vault.
+     * Idempotent: checks the first vault — if the secret already exists, reuses it.
+     * Generates once and stores in all vaults to ensure multi-region consistency.
+     */
+    renderCookieSecret(resource: AzureServicePrincipalResource): Command[] {
+        const kvConfig = resource.config.cookieSecretKeyVault;
+        if (!kvConfig) return [];
+
+        const cookieVar = this.envVarName(resource, 'COOKIE_SECRET');
+        const commands: Command[] = [
+            // Check if cookie secret already exists in first vault; if not, generate new one
+            {
+                command: 'bash',
+                args: ['-c', [
+                    `EXISTING=$(az keyvault secret show --vault-name ${kvConfig.vaultNames[0]} --name ${kvConfig.secretName} --query value -o tsv 2>/dev/null || true)`,
+                    `if [ -n "$EXISTING" ]; then echo "$EXISTING"; else openssl rand -base64 32 | tr -d '\\n'; fi`,
+                ].join('\n')],
+                envCapture: cookieVar,
+            },
+        ];
+
+        // Store in every Key Vault (idempotent — overwrites with same value if exists)
+        for (const vaultName of kvConfig.vaultNames) {
+            commands.push({
+                command: 'az',
+                args: ['keyvault', 'secret', 'set', '--vault-name', vaultName,
+                       '--name', kvConfig.secretName, '--value', `$${cookieVar}`],
             });
         }
 
