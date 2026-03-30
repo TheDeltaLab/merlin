@@ -76,6 +76,28 @@ export interface CookieSecretKeyVault {
     secretName: string;
 }
 
+// ── Well-known constants ─────────────────────────────────────────────────────
+
+/** Microsoft Graph API application ID (same across all Azure AD tenants) */
+export const MICROSOFT_GRAPH_APP_ID = '00000003-0000-0000-c000-000000000000';
+
+/**
+ * Standard OIDC delegated permissions for Microsoft Graph.
+ * Includes: User.Read, email, profile, openid
+ * Used as the default when `apiPermissions: 'oidc'` is set.
+ */
+export const DEFAULT_OIDC_API_PERMISSIONS: ApiPermission[] = [
+    {
+        resourceAppId: MICROSOFT_GRAPH_APP_ID,
+        resourceAccess: [
+            { id: 'e1fe6dd8-ba31-4d61-89e7-88639da4683d', type: 'Scope' }, // User.Read
+            { id: '64a6cdd6-aab1-4aaf-94b8-3cc8405e90d0', type: 'Scope' }, // email
+            { id: '14dad69e-099b-42c9-810b-d002981feec1', type: 'Scope' }, // profile
+            { id: '37f7f235-527c-4136-accd-4a02d197296e', type: 'Scope' }, // openid
+        ],
+    },
+];
+
 export interface AzureServicePrincipalConfig extends ResourceSchema {
     /**
      * Display name for the underlying AD App Registration.
@@ -111,10 +133,15 @@ export interface AzureServicePrincipalConfig extends ResourceSchema {
      * These are the permissions the app requests when users sign in.
      * Equivalent to Azure Portal → App registrations → API permissions.
      *
+     * Can be:
+     *   - `'oidc'`  — shorthand for standard OIDC permissions (User.Read + openid + profile + email)
+     *   - Custom array of ApiPermission objects for fine-grained control
+     *   - Omitted — no permissions are set
+     *
      * Note: After setting permissions, an admin must still grant admin consent
      * (either via Portal or `az ad app permission admin-consent`).
      */
-    apiPermissions?: ApiPermission[];
+    apiPermissions?: 'oidc' | ApiPermission[];
 
     /** Federated credentials (OIDC trust relationships, e.g. GitHub Actions) */
     federatedCredentials?: FederatedCredential[];
@@ -287,7 +314,11 @@ export class AzureServicePrincipalRender extends AzureResourceRender {
     // ── API permissions (requiredResourceAccess) ─────────────────────────
 
     renderApiPermissions(resource: AzureServicePrincipalResource, appIdVar: string): Command[] {
-        const permissions = resource.config.apiPermissions ?? [];
+        const raw = resource.config.apiPermissions;
+        if (!raw) return [];
+
+        // Resolve 'oidc' shorthand to the standard OIDC permission set
+        const permissions: ApiPermission[] = raw === 'oidc' ? DEFAULT_OIDC_API_PERMISSIONS : raw;
         if (permissions.length === 0) return [];
 
         // az ad app update --required-resource-accesses expects a JSON array
