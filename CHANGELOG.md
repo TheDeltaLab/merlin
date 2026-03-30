@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/TheDeltaLab/merlin/compare/v1.1.0...v1.2.0) (2026-03-30)
+
+
+### Features
+
+* add cookieSecretKeyVault for automated cookie secret generation ([#30](https://github.com/TheDeltaLab/merlin/issues/30)) ([024a7ed](https://github.com/TheDeltaLab/merlin/commit/024a7ede9207bbf06bee8acdf6868fa4edbedfb4))
+
 ## [1.1.0](https://github.com/TheDeltaLab/merlin/compare/v1.0.0...v1.1.0) (2026-03-30)
 
 
