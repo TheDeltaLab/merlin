@@ -55,12 +55,24 @@ export function validate(parsed: ParsedYAML): ValidationResult {
 function performSemanticValidation(data: any, source: string): CompilationError[] {
     const errors: CompilationError[] = [];
 
+    // ring is required for resource expansion — must be present after project defaults are applied
+    if (!data.ring) {
+        errors.push({
+            severity: ErrorSeverity.ERROR,
+            message: 'Resource must have a "ring" field (either directly or inherited from merlin.yml)',
+            source,
+            path: 'ring',
+            hint: 'Add ring: [test, staging] to this resource, or create a merlin.yml in the same directory with a ring field'
+        });
+        return errors; // Can't continue without ring
+    }
+
     // Note: We'll check authProvider registration at runtime rather than compile-time
     // This allows for flexible plugin loading and avoids circular dependencies
 
     // Validate specificConfig rings/regions match declared rings/regions
     const declaredRings = Array.isArray(data.ring) ? data.ring : [data.ring];
-    const declaredRegions = data.region
+    const declaredRegions = (data.region && data.region !== 'none')
         ? (Array.isArray(data.region) ? data.region : [data.region])
         : [];
 
@@ -108,7 +120,7 @@ function performSemanticValidation(data: any, source: string): CompilationError[
 function validateParamRefs(data: any, source: string): CompilationError[] {
     const errors: CompilationError[] = [];
     const declaredDeps = new Set<string>(data.dependencies.map((d: any) => d.resource));
-    const hasRegions = !!data.region;
+    const hasRegions = !!data.region && data.region !== 'none';
 
     const configsToCheck: Array<{ config: Record<string, unknown>; path: string }> = [
         { config: data.defaultConfig, path: 'defaultConfig' },

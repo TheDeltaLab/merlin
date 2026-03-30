@@ -66,7 +66,11 @@ export const ExportSchema = z.union([
 ]);
 
 /**
- * Main resource YAML schema
+ * Main resource YAML schema.
+ *
+ * `ring` is optional here — it can be inherited from a project-level `merlin.yml`.
+ * The compiler validates that ring is present (either directly or via project config)
+ * before proceeding to the transform stage.
  */
 export const ResourceYAMLSchema = z.object({
     name: z.string().min(1, 'Resource name is required').refine(
@@ -80,13 +84,14 @@ export const ResourceYAMLSchema = z.object({
         'Parent must be in "Type.name" format (e.g., "AzureContainerAppEnvironment.chuangacenv")'
     ).optional(),
 
-    // Can be single value or array
+    // Can be single value or array; optional when inherited from merlin.yml
     ring: z.union([
         RingSchema,
         z.array(RingSchema).min(1, 'At least one ring is required')
-    ]),
+    ]).optional(),
 
     region: z.union([
+        z.literal('none'),  // Explicit opt-out: skip region defaults from merlin.yml (for global resources like AzureServicePrincipal)
         RegionSchema,
         z.array(RegionSchema).min(1, 'Region array cannot be empty')
     ]).optional(),
@@ -99,7 +104,7 @@ export const ResourceYAMLSchema = z.object({
 
     dependencies: z.array(DependencySchema).optional().default([]),
 
-    defaultConfig: z.record(z.string(), z.unknown()),
+    defaultConfig: z.record(z.string(), z.unknown()).optional().default({}),
 
     specificConfig: z.array(SpecificConfigSchema).optional().default([]),
 
@@ -107,3 +112,28 @@ export const ResourceYAMLSchema = z.object({
 });
 
 export type ResourceYAML = z.infer<typeof ResourceYAMLSchema>;
+
+/**
+ * Project-level config schema (merlin.yml).
+ * Provides defaults for project, ring, region, authProvider.
+ */
+export const ProjectConfigSchema = z.object({
+    project: z.string().optional(),
+    ring: z.union([
+        RingSchema,
+        z.array(RingSchema).min(1)
+    ]).optional(),
+    region: z.union([
+        RegionSchema,
+        z.array(RegionSchema).min(1)
+    ]).optional(),
+    authProvider: z.union([
+        z.string().min(1),
+        AuthProviderObjectSchema
+    ]).optional(),
+});
+
+/**
+ * Composite type constant — KubernetesApp expands to Deployment + Service + Ingress at compile time.
+ */
+export const KUBERNETES_APP_TYPE = 'KubernetesApp';

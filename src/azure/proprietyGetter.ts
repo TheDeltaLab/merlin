@@ -3,6 +3,7 @@ import { resolveConfig } from "../common/paramResolver.js";
 import { AzureResourceRender } from "./render.js";
 import { AzureDnsZoneRender, AzureDnsZoneResource } from "./azureDnsZone.js";
 import { AzureADAppRender, AzureADAppResource } from "./azureADApp.js";
+import { AzureServicePrincipalRender, AzureServicePrincipalResource } from "./azureServicePrincipal.js";
 
 /**
  * ProprietyGetter for Azure Resource Managed Identity,
@@ -225,7 +226,9 @@ export class AzureServicePrincipalClientIdGetter implements ProprietyGetter {
 
     async get(resource: Resource, _args: Record<string, string>): Promise<Command[]> {
         const render = getRender(resource.type) as AzureServicePrincipalRender;
-        const displayName = render.getDisplayName(resource as AzureServicePrincipalResource);
+        // config.displayName may be an unresolved param expression — resolve it first.
+        const { resource: resolved } = await resolveConfig(resource as AzureServicePrincipalResource);
+        const displayName = render.getDisplayName(resolved as AzureServicePrincipalResource);
 
         return [{
             command: 'az',

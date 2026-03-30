@@ -20,6 +20,9 @@ import {
 } from '../compiler/types.js';
 import { initializeOutputDirectory, checkPnpmAvailable } from '../compiler/initializer.js';
 import { computeYAMLHash, checkCache, writeCacheFile, invalidateCache } from '../compiler/cache.js';
+import { loadProjectConfig, applyProjectDefaults, ProjectConfig } from '../compiler/projectConfig.js';
+import { expandKubernetesApp } from '../compiler/kubernetesAppExpander.js';
+import { KUBERNETES_APP_TYPE } from '../compiler/schemas.js';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { execaCommand } from 'execa';
@@ -62,8 +65,13 @@ export class Compiler {
                 return { success: false, errors, warnings, generatedFiles };
             }
 
+            // 2.5. Discover project configs (merlin.yml) and apply defaults
+            const inputDirs = this.getUniqueDirs(parsedFiles);
+            const projectConfigMap = this.discoverProjectConfigs(inputDirs);
+            const filesWithDefaults = this.applyProjectDefaultsToAll(parsedFiles, projectConfigMap);
+
             // 3. Validate all files
-            const validatedResources = this.validateAllFiles(parsedFiles, errors, warnings);
+            const validatedResources = this.validateAllFiles(filesWithDefaults, errors, warnings);
             if (errors.length > 0) {
                 return { success: false, errors, warnings, generatedFiles };
             }
@@ -99,11 +107,18 @@ export class Compiler {
                 }
             }
 
-            // 4. Transform resources (expand ring/region)
-            const expandedResources = this.transformResources(validatedResources);
+            // 4. Expand composite resource types (e.g. KubernetesApp → Deployment + Service + Ingress)
+            const expandedYAMLs = this.expandCompositeResources(validatedResources);
 
-            // 5. Generate TypeScript code
-            const generated = this.generateCode(expandedResources);
+            // 5. Transform resources (expand ring/region)
+            const expandedResources = this.transformResources(expandedYAMLs);
+
+            // 5.5. Merge resources from the same source file (e.g. KubernetesApp expands
+            // into multiple resource types, all originating from the same YAML file)
+            const mergedResources = this.mergeBySource(expandedResources);
+
+            // 6. Generate TypeScript code
+            const generated = this.generateCode(mergedResources);
 
             // 6. Write all files to disk
             await this.writeGeneratedFiles(generated, options.outputPath, generatedFiles);
@@ -242,6 +257,88 @@ export class Compiler {
     }
 
     /**
+     * Extracts unique directory paths from parsed files
+     */
+    private getUniqueDirs(parsedFiles: ParsedYAML[]): string[] {
+        const dirs = new Set(parsedFiles.map(p => path.dirname(p.source)));
+        return [...dirs];
+    }
+
+    /**
+     * Merges expanded resources that share the same source file.
+     * This is needed after composite type expansion (e.g. KubernetesApp → Deployment + Service + Ingress)
+     * where multiple resource entries originate from the same YAML file and must be written to one .ts file.
+     */
+    private mergeBySource(
+        resources: Array<{ source: string; resources: ExpandedResource[] }>
+    ): Array<{ source: string; resources: ExpandedResource[] }> {
+        const map = new Map<string, ExpandedResource[]>();
+        for (const { source, resources: res } of resources) {
+            const existing = map.get(source);
+            if (existing) {
+                existing.push(...res);
+            } else {
+                map.set(source, [...res]);
+            }
+        }
+        return [...map.entries()].map(([source, resources]) => ({ source, resources }));
+    }
+
+    /**
+     * Discovers merlin.yml project configs in each directory
+     */
+    private discoverProjectConfigs(dirs: string[]): Map<string, ProjectConfig> {
+        const configMap = new Map<string, ProjectConfig>();
+        for (const dir of dirs) {
+            const config = loadProjectConfig(dir);
+            if (config) {
+                configMap.set(dir, config);
+            }
+        }
+        return configMap;
+    }
+
+    /**
+     * Applies project-level defaults from merlin.yml to all parsed files.
+     * Resource-level fields take precedence over project defaults.
+     */
+    private applyProjectDefaultsToAll(
+        parsedFiles: ParsedYAML[],
+        projectConfigMap: Map<string, ProjectConfig>
+    ): ParsedYAML[] {
+        return parsedFiles.map(parsed => {
+            const dir = path.dirname(parsed.source);
+            const projectConfig = projectConfigMap.get(dir);
+            if (!projectConfig) return parsed;
+
+            const data = parsed.data as Record<string, unknown>;
+            return {
+                ...parsed,
+                data: applyProjectDefaults(data, projectConfig),
+            };
+        });
+    }
+
+    /**
+     * Expands composite resource types (e.g. KubernetesApp) into standard resources.
+     * This runs after validation but before ring/region expansion.
+     */
+    private expandCompositeResources(
+        resources: Array<{ source: string; data: ResourceYAML }>
+    ): Array<{ source: string; data: ResourceYAML }> {
+        const result: Array<{ source: string; data: ResourceYAML }> = [];
+        for (const { source, data } of resources) {
+            if (data.type === KUBERNETES_APP_TYPE) {
+                const expanded = expandKubernetesApp(data);
+                result.push(...expanded.map(r => ({ source, data: r })));
+            } else {
+                result.push({ source, data });
+            }
+        }
+        return result;
+    }
+
+    /**
      * Creates an error for no files found
      */
     private createNoFilesError(inputPath: string): CompilationResult {
@@ -291,6 +388,8 @@ export class Compiler {
      * Handles a single file input
      */
     private handleSingleFile(filePath: string): string[] {
+        const name = path.basename(filePath);
+        if (name === 'merlin.yml' || name === 'merlin.yaml') return [];
         if (filePath.endsWith('.yml') || filePath.endsWith('.yaml')) {
             return [filePath];
         }
@@ -328,9 +427,10 @@ export class Compiler {
     }
 
     /**
-     * Checks if a file is a YAML file
+     * Checks if a file is a YAML resource file (excludes merlin.yml project config)
      */
     private isYAMLFile(name: string): boolean {
+        if (name === 'merlin.yml' || name === 'merlin.yaml') return false;
         return name.endsWith('.yml') || name.endsWith('.yaml');
     }
 

@@ -62,14 +62,14 @@ describe('Validator', () => {
                 expect(result.valid).toBe(true);
             });
 
-            test('should reject resource missing defaultConfig', () => {
+            test('should accept resource with missing defaultConfig (defaults to {})', () => {
                 const data = { ...createResourceYAML(), defaultConfig: undefined };
                 const parsed = createParsedYAML(data);
 
                 const result = validate(parsed);
 
-                expect(result.valid).toBe(false);
-                expect(result.errors.some(e => e.path === 'defaultConfig')).toBe(true);
+                // defaultConfig is now optional with a default of {}
+                expect(result.valid).toBe(true);
             });
         });
 
@@ -459,14 +459,14 @@ describe('Validator', () => {
             const data = {
                 name: '',
                 ring: 'invalid',
-                // Missing: type, authProvider, defaultConfig
+                // Missing: type, authProvider (defaultConfig now optional)
             };
             const parsed = createParsedYAML(data);
 
             const result = validate(parsed);
 
             expect(result.valid).toBe(false);
-            expect(result.errors.length).toBeGreaterThan(3);
+            expect(result.errors.length).toBeGreaterThanOrEqual(3);
         });
 
         test('should include source in all errors', () => {

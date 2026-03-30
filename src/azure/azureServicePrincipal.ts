@@ -40,12 +40,67 @@ export interface RoleAssignment {
     scope: string;
 }
 
+export interface ClientSecretKeyVault {
+    /** Key Vault names to store the client secret in (supports multiple for multi-region) */
+    vaultNames: string[];
+    /** Secret name in Key Vault (e.g. "oauth2-proxy-client-secret") */
+    secretName: string;
+}
+
+export interface ApiPermission {
+    /**
+     * The resource (API) application ID.
+     * Well-known IDs:
+     *   - Microsoft Graph: "00000003-0000-0000-c000-000000000000"
+     */
+    resourceAppId: string;
+    /**
+     * List of permission entries on this resource.
+     * Each entry has an `id` (the permission GUID) and a `type`:
+     *   - "Scope"  = delegated permission (user context)
+     *   - "Role"   = application permission (app context)
+     *
+     * Common Microsoft Graph permission IDs:
+     *   - User.Read (delegated): "e1fe6dd8-ba31-4d61-89e7-88639da4683d"
+     *   - openid (delegated):    "37f7f235-527c-4136-accd-4a02d197296e"
+     *   - profile (delegated):   "14dad69e-099b-42c9-810b-d002981feec1"
+     *   - email (delegated):     "64a6cdd6-aab1-4aaf-94b8-3cc8405e90d0"
+     */
+    resourceAccess: { id: string; type: 'Scope' | 'Role' }[];
+}
+
 export interface AzureServicePrincipalConfig extends ResourceSchema {
     /**
      * Display name for the underlying AD App Registration.
      * If omitted, auto-generated as `[project-]<name>[-ring]`.
      */
     displayName?: string;
+
+    /** Web platform redirect URIs for OAuth2/OIDC callback */
+    webRedirectUris?: string[];
+
+    /**
+     * Auto-generate a client secret and store it in Azure Key Vault.
+     * Only runs on create — does NOT rotate on update (to avoid breaking running services).
+     */
+    clientSecretKeyVault?: ClientSecretKeyVault;
+
+    /**
+     * Require user/group assignment before they can sign in.
+     * When true, only users/groups explicitly assigned to the Enterprise Application can log in.
+     * Default: false (any user in the tenant can sign in).
+     */
+    assignmentRequired?: boolean;
+
+    /**
+     * API permissions (requiredResourceAccess) for the AD App Registration.
+     * These are the permissions the app requests when users sign in.
+     * Equivalent to Azure Portal → App registrations → API permissions.
+     *
+     * Note: After setting permissions, an admin must still grant admin consent
+     * (either via Portal or `az ad app permission admin-consent`).
+     */
+    apiPermissions?: ApiPermission[];
 
     /** Federated credentials (OIDC trust relationships, e.g. GitHub Actions) */
     federatedCredentials?: FederatedCredential[];
@@ -136,10 +191,12 @@ export class AzureServicePrincipalRender extends AzureResourceRender {
         const commands: Command[] = [];
 
         // 1. Create AD App Registration
-        commands.push({
-            command: 'az',
-            args: ['ad', 'app', 'create', '--display-name', this.getDisplayName(resource)],
-        });
+        const createArgs = ['ad', 'app', 'create', '--display-name', this.getDisplayName(resource)];
+        const redirectUris = resource.config.webRedirectUris ?? [];
+        if (redirectUris.length > 0) {
+            createArgs.push('--web-redirect-uris', ...redirectUris);
+        }
+        commands.push({ command: 'az', args: createArgs });
 
         // 2. Capture the new appId
         const appIdVar = this.envVarName(resource, 'APP_ID');
@@ -155,10 +212,19 @@ export class AzureServicePrincipalRender extends AzureResourceRender {
             args: ['ad', 'sp', 'create', '--id', `$${appIdVar}`],
         });
 
-        // 4. Federated credentials
+        // 4. API permissions (requiredResourceAccess)
+        commands.push(...this.renderApiPermissions(resource, appIdVar));
+
+        // 5. Configure assignment required (access control)
+        commands.push(...this.renderAssignmentRequired(resource, appIdVar));
+
+        // 5. Client secret → Key Vault (create-only, not on update to avoid breaking running services)
+        commands.push(...this.renderClientSecret(resource, appIdVar));
+
+        // 6. Federated credentials
         commands.push(...this.renderFederatedCredentials(resource, appIdVar));
 
-        // 5. Role assignments
+        // 7. Role assignments
         commands.push(...this.renderRoleAssignments(resource, appIdVar));
 
         return commands;
@@ -177,8 +243,97 @@ export class AzureServicePrincipalRender extends AzureResourceRender {
             envCapture: appIdVar,
         });
 
+        // Update redirect URIs (idempotent — always sets the full list)
+        const redirectUris = resource.config.webRedirectUris ?? [];
+        if (redirectUris.length > 0) {
+            commands.push({
+                command: 'az',
+                args: ['ad', 'app', 'update', '--id', `$${appIdVar}`, '--web-redirect-uris', ...redirectUris],
+            });
+        }
+
+        // Update assignment required setting
+        commands.push(...this.renderAssignmentRequired(resource, appIdVar));
+
+        // Update API permissions (idempotent — always sets the full list)
+        commands.push(...this.renderApiPermissions(resource, appIdVar));
+
         commands.push(...this.renderFederatedCredentials(resource, appIdVar));
         commands.push(...this.renderRoleAssignments(resource, appIdVar));
+
+        return commands;
+    }
+
+    // ── API permissions (requiredResourceAccess) ─────────────────────────
+
+    renderApiPermissions(resource: AzureServicePrincipalResource, appIdVar: string): Command[] {
+        const permissions = resource.config.apiPermissions ?? [];
+        if (permissions.length === 0) return [];
+
+        // az ad app update --required-resource-accesses expects a JSON array
+        const payload = JSON.stringify(permissions.map(p => ({
+            resourceAppId: p.resourceAppId,
+            resourceAccess: p.resourceAccess,
+        })));
+
+        return [
+            {
+                command: 'az',
+                args: ['ad', 'app', 'update', '--id', `$${appIdVar}`, '--required-resource-accesses', payload],
+            },
+            // Auto-grant admin consent (mimics what Azure Portal does on manual creation)
+            {
+                command: 'bash',
+                args: ['-c', `az ad app permission admin-consent --id $${appIdVar} || true`],
+            },
+        ];
+    }
+
+    // ── Assignment required (access control) ─────────────────────────────
+
+    renderAssignmentRequired(resource: AzureServicePrincipalResource, appIdVar: string): Command[] {
+        if (resource.config.assignmentRequired === undefined) return [];
+
+        const spObjectIdVar = this.envVarName(resource, 'SP_OBJECT_ID');
+        const value = resource.config.assignmentRequired ? 'true' : 'false';
+        return [
+            // Capture the SP's object ID (different from appId)
+            {
+                command: 'az',
+                args: ['ad', 'sp', 'list', '--filter', `appId eq '$${appIdVar}'`, '--query', '[0].id', '-o', 'tsv'],
+                envCapture: spObjectIdVar,
+            },
+            // Set appRoleAssignmentRequired on the Service Principal
+            {
+                command: 'az',
+                args: ['ad', 'sp', 'update', '--id', `$${spObjectIdVar}`, '--set', `appRoleAssignmentRequired=${value}`],
+            },
+        ];
+    }
+
+    // ── Client secret → Key Vault ─────────────────────────────────────────
+
+    renderClientSecret(resource: AzureServicePrincipalResource, appIdVar: string): Command[] {
+        const kvConfig = resource.config.clientSecretKeyVault;
+        if (!kvConfig) return [];
+
+        const secretVar = this.envVarName(resource, 'CLIENT_SECRET');
+        const commands: Command[] = [
+            // Generate a new client secret and capture its value
+            {
+                command: 'az',
+                args: ['ad', 'app', 'credential', 'reset', '--id', `$${appIdVar}`, '--query', 'password', '-o', 'tsv'],
+                envCapture: secretVar,
+            },
+        ];
+
+        // Store it in every Key Vault (for multi-region setups)
+        for (const vaultName of kvConfig.vaultNames) {
+            commands.push({
+                command: 'az',
+                args: ['keyvault', 'secret', 'set', '--vault-name', vaultName, '--name', kvConfig.secretName, '--value', `$${secretVar}`],
+            });
+        }
 
         return commands;
     }
