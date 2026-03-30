@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.1.0](https://github.com/TheDeltaLab/merlin/compare/v1.0.0...v1.1.0) (2026-03-30)
+
+
+### Features
+
+* add AKS RBAC Writer role for GitHub SP and update docs ([50ca854](https://github.com/TheDeltaLab/merlin/commit/50ca854eee15ff3b76e3a1b6adf7236693288217))
+* add AKS roles to test SP for nightly K8s deploys ([d4b1de1](https://github.com/TheDeltaLab/merlin/commit/d4b1de1bf7590cb88f133759be1d4ce765b1edb1))
+* Add declarative client secrets and Key Vault secrets ([2677627](https://github.com/TheDeltaLab/merlin/commit/2677627223fbb840f7d1ea69167131b66b62e1a1))
+* add declarative client secrets and Key Vault secrets support ([155d992](https://github.com/TheDeltaLab/merlin/commit/155d992e0fc8366aec6f53663647409dd0f1c4cc)), closes [#26](https://github.com/TheDeltaLab/merlin/issues/26)
+* add values object support to KubernetesHelmRelease ([47805e9](https://github.com/TheDeltaLab/merlin/commit/47805e96fd0541b4b772ea85373649244f5e3ece))
+* support region:none, KubernetesApp composite type, and enhanced AzureServicePrincipal ([bd0a707](https://github.com/TheDeltaLab/merlin/commit/bd0a707e902d31660c355c55f694d9b6de751958))
+
 ## 1.0.0 (2026-03-28)
 
 
