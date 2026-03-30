@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/TheDeltaLab/merlin/compare/v1.2.1...v1.3.0) (2026-03-30)
+
+
+### Features
+
+* add 'oidc' shorthand for apiPermissions in AzureServicePrincipal ([#35](https://github.com/TheDeltaLab/merlin/issues/35)) ([fd392b2](https://github.com/TheDeltaLab/merlin/commit/fd392b24fd82232b048d484dead097f487f0573b)), closes [#34](https://github.com/TheDeltaLab/merlin/issues/34)
+
 ## [1.2.1](https://github.com/TheDeltaLab/merlin/compare/v1.2.0...v1.2.1) (2026-03-30)
 
 
