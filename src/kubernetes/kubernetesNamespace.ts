@@ -3,6 +3,18 @@ import { resolveConfig } from '../common/paramResolver.js';
 
 export const KUBERNETES_NAMESPACE_TYPE = 'KubernetesNamespace';
 
+/**
+ * Returns a Command that idempotently ensures a K8s namespace exists.
+ * Uses `kubectl create namespace --dry-run=client -o yaml | kubectl apply -f -`
+ * which is safe to run repeatedly (no-op if namespace already exists).
+ */
+export function ensureNamespaceCommand(namespace: string): Command {
+    return {
+        command: 'bash',
+        args: ['-c', `kubectl create namespace ${namespace} --dry-run=client -o yaml | kubectl apply -f -`],
+    };
+}
+
 export interface KubernetesNamespaceConfig extends ResourceSchema {
     /** The namespace name. Defaults to resource.name if omitted. */
     namespaceName?: string;

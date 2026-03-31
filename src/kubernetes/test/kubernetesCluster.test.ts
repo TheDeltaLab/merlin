@@ -201,13 +201,11 @@ describe('AzureAKSRender', () => {
             expect(credsCmd!.args).toContain('--overwrite-existing');
         });
 
-        it('emits kubectl create namespace for each configured namespace', async () => {
+        it('does not emit namespace commands (namespace creation moved to individual resource renders)', async () => {
             const resource = makeResource({ namespaces: ['trinity', 'alluneed'] });
             const commands = await render.render(resource);
-            const trinityCmds = commands.filter(c => c.command === 'bash' && c.args.some(a => a.includes('trinity')));
-            expect(trinityCmds).toHaveLength(1);
-            const alluneedCmds = commands.filter(c => c.command === 'bash' && c.args.some(a => a.includes('alluneed')));
-            expect(alluneedCmds).toHaveLength(1);
+            const nsCmds = commands.filter(c => c.command === 'bash' && c.args.some(a => a.includes('create namespace')));
+            expect(nsCmds).toHaveLength(0);
         });
 
         it('does not emit namespace commands when namespaces is empty', async () => {
