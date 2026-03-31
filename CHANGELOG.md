@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/TheDeltaLab/merlin/compare/v1.3.0...v1.4.0) (2026-03-31)
+
+
+### Features
+
+* simplify CLI with merlin init, short names, deploy safety, and rename project ([#38](https://github.com/TheDeltaLab/merlin/issues/38)) ([1747903](https://github.com/TheDeltaLab/merlin/commit/174790397f21df0943a5b125daf751610a25adf6)), closes [#37](https://github.com/TheDeltaLab/merlin/issues/37)
+
 ## [1.3.0](https://github.com/TheDeltaLab/merlin/compare/v1.2.1...v1.3.0) (2026-03-30)
 
 
