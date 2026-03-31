@@ -1,6 +1,6 @@
 name: shared
 type: AzureRedisEnterprise
-project: merlin
+project: brainly
 ring:
   - test
   - staging

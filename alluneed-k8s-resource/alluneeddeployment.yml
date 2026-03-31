@@ -1,6 +1,6 @@
 name: alluneed
 type: KubernetesDeployment
-project: merlin
+project: alluneed
 ring:
   - test
   - staging
@@ -23,7 +23,7 @@ defaultConfig:
 
   containers:
     - name: alluneed
-      image: merlinsharedstgkrcacr.azurecr.io/alluneed:latest
+      image: brainlysharedstgkrcacr.azurecr.io/alluneed:latest
       imagePullPolicy: IfNotPresent
       port: 8000
       cpuRequest: "1000m"

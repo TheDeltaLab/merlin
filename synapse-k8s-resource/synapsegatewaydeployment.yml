@@ -1,6 +1,6 @@
 name: synapse-gateway
 type: KubernetesDeployment
-project: merlin
+project: synapse
 ring:
   - test
   - staging

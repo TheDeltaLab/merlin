@@ -1,6 +1,6 @@
 name: synapse-shared-config
 type: KubernetesConfigMap
-project: merlin
+project: synapse
 ring:
   - test
   - staging

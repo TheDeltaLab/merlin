@@ -1,6 +1,6 @@
 name: github
 type: AzureServicePrincipal
-project: merlin
+project: brainly
 ring:
   - test
   - staging
@@ -19,7 +19,7 @@ defaultConfig:
 
 specificConfig:
   - ring: test
-    displayName: merlin-github-tst
+    displayName: brainly-github-tst
     federatedCredentials:
       - name: trinity-github-nightly
         subject: repo:TheDeltaLab/trinity:environment:nightly
@@ -28,23 +28,23 @@ specificConfig:
     roleAssignments:
       # Trinity RG — koreacentral (Container Apps Contributor)
       - role: Container Apps Contributor
-        scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-tst-krc
+        scope: /subscriptions/{subscriptionId}/resourceGroups/brainly-rg-tst-krc
       # Trinity RG — eastasia
       - role: Container Apps Contributor
-        scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-tst-eas
+        scope: /subscriptions/{subscriptionId}/resourceGroups/brainly-rg-tst-eas
       # Alluneed RG — koreacentral
       - role: Container Apps Contributor
-        scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-tst-krc
+        scope: /subscriptions/{subscriptionId}/resourceGroups/brainly-rg-tst-krc
       # Alluneed RG — eastasia
       - role: Container Apps Contributor
-        scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-tst-eas
+        scope: /subscriptions/{subscriptionId}/resourceGroups/brainly-rg-tst-eas
       # ACR — koreacentral
       - role: AcrPush
-        scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-tst-krc/providers/Microsoft.ContainerRegistry/registries/merlinsharedtstkrcacr
+        scope: /subscriptions/{subscriptionId}/resourceGroups/brainly-rg-tst-krc/providers/Microsoft.ContainerRegistry/registries/brainlysharedtstkrcacr
       # ACR — eastasia
       - role: AcrPush
-        scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-tst-eas/providers/Microsoft.ContainerRegistry/registries/merlinsharedtsteasacr
-      # AKS — kubectl access for merlin K8s deploys (shared RG)
+        scope: /subscriptions/{subscriptionId}/resourceGroups/brainly-rg-tst-eas/providers/Microsoft.ContainerRegistry/registries/brainlysharedtsteasacr
+      # AKS — kubectl access for K8s deploys (shared RG)
       - role: Azure Kubernetes Service Cluster User Role
         scope: /subscriptions/{subscriptionId}/resourceGroups/shared-rg-tst-krc
       - role: Azure Kubernetes Service Cluster User Role
@@ -56,7 +56,7 @@ specificConfig:
         scope: /subscriptions/{subscriptionId}/resourceGroups/shared-rg-tst-eas
 
   - ring: staging
-    displayName: merlin-github-stg
+    displayName: brainly-github-stg
     federatedCredentials:
       - name: trinity-github-staging
         subject: repo:TheDeltaLab/trinity:environment:staging
@@ -65,23 +65,23 @@ specificConfig:
     roleAssignments:
       # Trinity RG — koreacentral
       - role: Container Apps Contributor
-        scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-stg-krc
+        scope: /subscriptions/{subscriptionId}/resourceGroups/brainly-rg-stg-krc
       # Trinity RG — eastasia
       - role: Container Apps Contributor
-        scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-stg-eas
+        scope: /subscriptions/{subscriptionId}/resourceGroups/brainly-rg-stg-eas
       # Alluneed RG — koreacentral
       - role: Container Apps Contributor
-        scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-stg-krc
+        scope: /subscriptions/{subscriptionId}/resourceGroups/brainly-rg-stg-krc
       # Alluneed RG — eastasia
       - role: Container Apps Contributor
-        scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-stg-eas
+        scope: /subscriptions/{subscriptionId}/resourceGroups/brainly-rg-stg-eas
       # ACR — koreacentral
       - role: AcrPush
-        scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-stg-krc/providers/Microsoft.ContainerRegistry/registries/merlinsharedstgkrcacr
+        scope: /subscriptions/{subscriptionId}/resourceGroups/brainly-rg-stg-krc/providers/Microsoft.ContainerRegistry/registries/brainlysharedstgkrcacr
       # ACR — eastasia
       - role: AcrPush
-        scope: /subscriptions/{subscriptionId}/resourceGroups/merlin-rg-stg-eas/providers/Microsoft.ContainerRegistry/registries/merlinsharedstgeasacr
-      # AKS — kubectl access for merlin K8s deploys (shared RG)
+        scope: /subscriptions/{subscriptionId}/resourceGroups/brainly-rg-stg-eas/providers/Microsoft.ContainerRegistry/registries/brainlysharedstgeasacr
+      # AKS — kubectl access for K8s deploys (shared RG)
       - role: Azure Kubernetes Service Cluster User Role
         scope: /subscriptions/{subscriptionId}/resourceGroups/shared-rg-stg-krc
       - role: Azure Kubernetes Service Cluster User Role

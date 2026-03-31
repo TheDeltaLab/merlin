@@ -1,6 +1,6 @@
 name: shared
 type: AzureContainerRegistry
-project: merlin
+project: brainly
 ring:
   - test
   - staging
