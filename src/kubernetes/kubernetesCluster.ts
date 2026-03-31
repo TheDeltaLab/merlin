@@ -46,13 +46,6 @@ export interface KubernetesClusterConfig extends ResourceSchema {
     enableCsiSecretProvider?: boolean;      // --enable-addons azure-keyvault-secrets-provider
     enableSecretRotation?: boolean;         // --enable-secret-rotation (CSI addon)
 
-    // ── Namespaces to create after cluster provisioning ───────────────────────
-    /**
-     * List of Kubernetes namespaces to create after the cluster is provisioned.
-     * Each entry is a namespace name (e.g. 'trinity', 'alluneed', 'synapse').
-     */
-    namespaces?: string[];
-
     // ── ACR integration ─────────────────────────────────────────────────────
     /**
      * ACR resource name or ID to attach for image pulling.
@@ -121,16 +114,6 @@ export class AzureAKSRender extends AzureResourceRender {
                 command: 'bash',
                 args: ['-c', `az aks update --name ${this.getResourceName(resource)} --resource-group ${this.getResourceGroupName(resource)} --attach-acr ${config.attachAcr} || true`],
             });
-        }
-
-        // Create namespaces after provisioning
-        if (config.namespaces && config.namespaces.length > 0) {
-            for (const ns of config.namespaces) {
-                ret.push({
-                    command: 'bash',
-                    args: ['-c', `kubectl create namespace ${ns} --dry-run=client -o yaml | kubectl apply -f -`],
-                });
-            }
         }
 
         return ret;

@@ -44,17 +44,18 @@ describe('KubernetesIngressRender', () => {
     it('renders kubectl apply with Ingress manifest', async () => {
         const resource = makeIngressResource();
         const commands = await render.render(resource);
-        expect(commands[0].command).toBe('kubectl');
-        expect(commands[0].args).toContain('apply');
-        expect(commands[0].fileContent).toContain('kind: Ingress');
-        expect(commands[0].fileContent).toContain('name: trinity-web');
-        expect(commands[0].fileContent).toContain('namespace: trinity');
+        expect(commands[0].command).toBe('bash');
+        expect(commands[1].command).toBe('kubectl');
+        expect(commands[1].args).toContain('apply');
+        expect(commands[1].fileContent).toContain('kind: Ingress');
+        expect(commands[1].fileContent).toContain('name: trinity-web');
+        expect(commands[1].fileContent).toContain('namespace: trinity');
     });
 
     it('includes cert-manager annotation when clusterIssuer is set', async () => {
         const resource = makeIngressResource();
         const commands = await render.render(resource);
-        expect(commands[0].fileContent).toContain('cert-manager.io/cluster-issuer: letsencrypt-prod');
+        expect(commands[1].fileContent).toContain('cert-manager.io/cluster-issuer: letsencrypt-prod');
     });
 
     it('throws for wrong resource type', async () => {
@@ -68,9 +69,10 @@ describe('KubernetesIngressRender', () => {
     it('does not generate DNS commands when bindDnsZone is not configured', async () => {
         const resource = makeIngressResource();
         const commands = await render.render(resource);
-        // Only the kubectl apply command
-        expect(commands).toHaveLength(1);
-        expect(commands[0].command).toBe('kubectl');
+        // 1 namespace ensure + 1 kubectl apply command
+        expect(commands).toHaveLength(2);
+        expect(commands[0].command).toBe('bash');
+        expect(commands[1].command).toBe('kubectl');
     });
 
     it('generates DNS commands when bindDnsZone is configured', async () => {
@@ -79,31 +81,34 @@ describe('KubernetesIngressRender', () => {
         });
         const commands = await render.render(resource);
 
-        // 1 kubectl apply + 1 LB IP capture + 1 DNS zone RG capture + 1 A record = 4
-        expect(commands).toHaveLength(4);
+        // 1 namespace ensure + 1 kubectl apply + 1 LB IP capture + 1 DNS zone RG capture + 1 A record = 5
+        expect(commands).toHaveLength(5);
 
-        // Command 0: kubectl apply
-        expect(commands[0].command).toBe('kubectl');
+        // Command 0: namespace ensure (bash)
+        expect(commands[0].command).toBe('bash');
 
-        // Command 1: capture LB IP
+        // Command 1: kubectl apply
         expect(commands[1].command).toBe('kubectl');
-        expect(commands[1].args).toContain('get');
-        expect(commands[1].args).toContain('svc');
-        expect(commands[1].args).toContain('ingress-nginx-controller');
-        expect(commands[1].args).toContain('-n');
-        expect(commands[1].args).toContain('ingress-nginx');
-        expect(commands[1].envCapture).toContain('LB_IP');
 
-        // Command 2: capture DNS zone RG
-        expect(commands[2].command).toBe('az');
-        expect(commands[2].args).toContain('dns');
-        expect(commands[2].args).toContain('zone');
-        expect(commands[2].args).toContain('list');
-        expect(commands[2].envCapture).toContain('DNS_ZONE_RG');
+        // Command 2: capture LB IP
+        expect(commands[2].command).toBe('kubectl');
+        expect(commands[2].args).toContain('get');
+        expect(commands[2].args).toContain('svc');
+        expect(commands[2].args).toContain('ingress-nginx-controller');
+        expect(commands[2].args).toContain('-n');
+        expect(commands[2].args).toContain('ingress-nginx');
+        expect(commands[2].envCapture).toContain('LB_IP');
 
-        // Command 3: create A record
-        expect(commands[3].command).toBe('bash');
-        const bashCmd = commands[3].args[1];
+        // Command 3: capture DNS zone RG
+        expect(commands[3].command).toBe('az');
+        expect(commands[3].args).toContain('dns');
+        expect(commands[3].args).toContain('zone');
+        expect(commands[3].args).toContain('list');
+        expect(commands[3].envCapture).toContain('DNS_ZONE_RG');
+
+        // Command 4: create A record
+        expect(commands[4].command).toBe('bash');
+        const bashCmd = commands[4].args[1];
         expect(bashCmd).toContain('add-record');
         expect(bashCmd).toContain('web.staging');
         expect(bashCmd).toContain('thebrainly.dev');
@@ -125,11 +130,11 @@ describe('KubernetesIngressRender', () => {
         });
         const commands = await render.render(resource);
 
-        // 1 kubectl + 1 LB IP + 1 DNS RG + 2 A records = 5
-        expect(commands).toHaveLength(5);
+        // 1 namespace ensure + 1 kubectl + 1 LB IP + 1 DNS RG + 2 A records = 6
+        expect(commands).toHaveLength(6);
 
-        // Two bash commands for DNS records
-        const dnsCommands = commands.filter(c => c.command === 'bash');
+        // Two bash commands for DNS records (skip commands[0] which is namespace ensure)
+        const dnsCommands = commands.filter((c, i) => i > 0 && c.command === 'bash');
         expect(dnsCommands).toHaveLength(2);
         expect(dnsCommands[0].args[1]).toContain('web.staging');
         expect(dnsCommands[1].args[1]).toContain('api.staging');
@@ -151,8 +156,8 @@ describe('KubernetesIngressRender', () => {
         });
         const commands = await render.render(resource);
 
-        // 1 kubectl + 1 LB IP + 1 DNS RG + 1 A record (deduplicated) = 4
-        expect(commands).toHaveLength(4);
+        // 1 namespace ensure + 1 kubectl + 1 LB IP + 1 DNS RG + 1 A record (deduplicated) = 5
+        expect(commands).toHaveLength(5);
     });
 
     it('throws when host does not end with dnsZone', async () => {
@@ -179,7 +184,7 @@ describe('KubernetesIngressRender', () => {
         const commands = await render.render(resource);
 
         // LB IP capture command should use custom service name/namespace
-        expect(commands[1].args).toContain('my-nginx');
-        expect(commands[1].args).toContain('custom-ns');
+        expect(commands[2].args).toContain('my-nginx');
+        expect(commands[2].args).toContain('custom-ns');
     });
 });

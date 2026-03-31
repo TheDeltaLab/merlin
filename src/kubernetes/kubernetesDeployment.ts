@@ -1,6 +1,6 @@
 import { Resource, ResourceSchema, Command, Render, RenderContext } from '../common/resource.js';
 import { resolveConfig } from '../common/paramResolver.js';
-import { manifestToYaml } from './kubernetesNamespace.js';
+import { manifestToYaml, ensureNamespaceCommand } from './kubernetesNamespace.js';
 
 export const KUBERNETES_DEPLOYMENT_TYPE = 'KubernetesDeployment';
 
@@ -117,7 +117,9 @@ export class KubernetesDeploymentRender implements Render {
     async render(resource: Resource, context?: RenderContext): Promise<Command[]> {
         const { resource: resolved, captureCommands } = await resolveConfig(resource);
         const renderCommands = await this.renderImpl(resolved, context);
-        return [...captureCommands, ...renderCommands];
+        const ns = (resolved.config as Record<string, unknown>)?.namespace as string | undefined;
+        const nsCmd = ns ? [ensureNamespaceCommand(ns)] : [];
+        return [...captureCommands, ...nsCmd, ...renderCommands];
     }
 
     async renderImpl(resource: Resource, _context?: RenderContext): Promise<Command[]> {

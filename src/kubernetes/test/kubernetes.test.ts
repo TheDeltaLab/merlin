@@ -129,36 +129,37 @@ describe('KubernetesDeploymentRender', () => {
     it('renders kubectl apply with Deployment manifest', async () => {
         const resource = makeDeploymentResource();
         const commands = await render.render(resource);
-        expect(commands).toHaveLength(1);
-        expect(commands[0].command).toBe('kubectl');
-        expect(commands[0].fileContent).toContain('kind: Deployment');
-        expect(commands[0].fileContent).toContain('name: trinity-gateway');
-        expect(commands[0].fileContent).toContain('namespace: trinity');
+        expect(commands).toHaveLength(2);
+        expect(commands[0].command).toBe('bash');
+        expect(commands[1].command).toBe('kubectl');
+        expect(commands[1].fileContent).toContain('kind: Deployment');
+        expect(commands[1].fileContent).toContain('name: trinity-gateway');
+        expect(commands[1].fileContent).toContain('namespace: trinity');
     });
 
     it('sets replicas in manifest', async () => {
         const resource = makeDeploymentResource({ replicas: 3 });
         const commands = await render.render(resource);
-        expect(commands[0].fileContent).toContain('replicas: 3');
+        expect(commands[1].fileContent).toContain('replicas: 3');
     });
 
     it('defaults replicas to 1', async () => {
         const resource = makeDeploymentResource();
         const commands = await render.render(resource);
-        expect(commands[0].fileContent).toContain('replicas: 1');
+        expect(commands[1].fileContent).toContain('replicas: 1');
     });
 
     it('includes container image', async () => {
         const resource = makeDeploymentResource();
         const commands = await render.render(resource);
         // URLs with colons/slashes get quoted in YAML
-        expect(commands[0].fileContent).toContain('ghcr.io/example/gateway:latest');
+        expect(commands[1].fileContent).toContain('ghcr.io/example/gateway:latest');
     });
 
     it('includes containerPort when port is set', async () => {
         const resource = makeDeploymentResource();
         const commands = await render.render(resource);
-        expect(commands[0].fileContent).toContain('containerPort: 3000');
+        expect(commands[1].fileContent).toContain('containerPort: 3000');
     });
 
     it('converts envVars KEY=VALUE strings to env entries', async () => {
@@ -170,10 +171,10 @@ describe('KubernetesDeploymentRender', () => {
             }],
         });
         const commands = await render.render(resource);
-        expect(commands[0].fileContent).toContain('name: NODE_ENV');
-        expect(commands[0].fileContent).toContain('value: staging');
-        expect(commands[0].fileContent).toContain('name: PORT');
-        expect(commands[0].fileContent).toContain('value: "3000"');
+        expect(commands[1].fileContent).toContain('name: NODE_ENV');
+        expect(commands[1].fileContent).toContain('value: staging');
+        expect(commands[1].fileContent).toContain('name: PORT');
+        expect(commands[1].fileContent).toContain('value: "3000"');
     });
 
     it('includes resource requests/limits', async () => {
@@ -188,7 +189,7 @@ describe('KubernetesDeploymentRender', () => {
             }],
         });
         const commands = await render.render(resource);
-        const yaml = commands[0].fileContent!;
+        const yaml = commands[1].fileContent!;
         expect(yaml).toContain('cpu: 250m');
         expect(yaml).toContain('memory: 256Mi');
         expect(yaml).toContain('cpu: 500m');
@@ -208,23 +209,23 @@ describe('KubernetesDeploymentRender', () => {
             }],
         });
         const commands = await render.render(resource);
-        expect(commands[0].fileContent).toContain('livenessProbe:');
-        expect(commands[0].fileContent).toContain('path: /health');
-        expect(commands[0].fileContent).toContain('periodSeconds: 10');
+        expect(commands[1].fileContent).toContain('livenessProbe:');
+        expect(commands[1].fileContent).toContain('path: /health');
+        expect(commands[1].fileContent).toContain('periodSeconds: 10');
     });
 
     it('includes imagePullSecrets when set', async () => {
         const resource = makeDeploymentResource({ imagePullSecrets: ['acr-secret'] });
         const commands = await render.render(resource);
-        expect(commands[0].fileContent).toContain('imagePullSecrets:');
-        expect(commands[0].fileContent).toContain('name: acr-secret');
+        expect(commands[1].fileContent).toContain('imagePullSecrets:');
+        expect(commands[1].fileContent).toContain('name: acr-secret');
     });
 
     it('sets correct selector matchLabels', async () => {
         const resource = makeDeploymentResource();
         const commands = await render.render(resource);
-        expect(commands[0].fileContent).toContain('matchLabels:');
-        expect(commands[0].fileContent).toContain('app: trinity-gateway');
+        expect(commands[1].fileContent).toContain('matchLabels:');
+        expect(commands[1].fileContent).toContain('app: trinity-gateway');
     });
 
     // ── envFrom ─────────────────────────────────────────────────────────────
@@ -238,9 +239,9 @@ describe('KubernetesDeploymentRender', () => {
             }],
         });
         const commands = await render.render(resource);
-        expect(commands[0].fileContent).toContain('envFrom:');
-        expect(commands[0].fileContent).toContain('configMapRef:');
-        expect(commands[0].fileContent).toContain('name: trinity-shared-config');
+        expect(commands[1].fileContent).toContain('envFrom:');
+        expect(commands[1].fileContent).toContain('configMapRef:');
+        expect(commands[1].fileContent).toContain('name: trinity-shared-config');
     });
 
     it('renders envFrom with secretRef', async () => {
@@ -252,9 +253,9 @@ describe('KubernetesDeploymentRender', () => {
             }],
         });
         const commands = await render.render(resource);
-        expect(commands[0].fileContent).toContain('envFrom:');
-        expect(commands[0].fileContent).toContain('secretRef:');
-        expect(commands[0].fileContent).toContain('name: trinity-shared-secrets');
+        expect(commands[1].fileContent).toContain('envFrom:');
+        expect(commands[1].fileContent).toContain('secretRef:');
+        expect(commands[1].fileContent).toContain('name: trinity-shared-secrets');
     });
 
     it('renders envFrom with both configMapRef and secretRef entries', async () => {
@@ -269,7 +270,7 @@ describe('KubernetesDeploymentRender', () => {
             }],
         });
         const commands = await render.render(resource);
-        const yaml = commands[0].fileContent!;
+        const yaml = commands[1].fileContent!;
         expect(yaml).toContain('configMapRef:');
         expect(yaml).toContain('secretRef:');
     });
@@ -283,7 +284,7 @@ describe('KubernetesDeploymentRender', () => {
             }],
         });
         const commands = await render.render(resource);
-        expect(commands[0].fileContent).toContain('prefix: APP_');
+        expect(commands[1].fileContent).toContain('prefix: APP_');
     });
 
     it('envFrom appears before env in manifest', async () => {
@@ -296,7 +297,7 @@ describe('KubernetesDeploymentRender', () => {
             }],
         });
         const commands = await render.render(resource);
-        const yaml = commands[0].fileContent!;
+        const yaml = commands[1].fileContent!;
         const envFromIdx = yaml.indexOf('envFrom:');
         const envIdx = yaml.indexOf('env:');
         expect(envFromIdx).toBeGreaterThan(-1);
@@ -310,9 +311,9 @@ describe('KubernetesDeploymentRender', () => {
             podLabels: { 'azure.workload.identity/use': 'true' },
         });
         const commands = await render.render(resource);
-        expect(commands[0].fileContent).toContain('azure.workload.identity/use');
+        expect(commands[1].fileContent).toContain('azure.workload.identity/use');
         // "true" as string gets quoted
-        expect(commands[0].fileContent).toContain('"true"');
+        expect(commands[1].fileContent).toContain('"true"');
     });
 
     it('podLabels merge with default app/ring labels', async () => {
@@ -320,7 +321,7 @@ describe('KubernetesDeploymentRender', () => {
             podLabels: { custom: 'value' },
         });
         const commands = await render.render(resource);
-        const yaml = commands[0].fileContent!;
+        const yaml = commands[1].fileContent!;
         expect(yaml).toContain('app: trinity-gateway');
         expect(yaml).toContain('ring: staging');
         expect(yaml).toContain('custom: value');
@@ -333,7 +334,7 @@ describe('KubernetesDeploymentRender', () => {
             serviceAccountName: 'trinity-workload-sa',
         });
         const commands = await render.render(resource);
-        expect(commands[0].fileContent).toContain('serviceAccountName: trinity-workload-sa');
+        expect(commands[1].fileContent).toContain('serviceAccountName: trinity-workload-sa');
     });
 
     // ── volumes ───────────────────────────────────────────────────────────────
@@ -352,7 +353,7 @@ describe('KubernetesDeploymentRender', () => {
             }],
         });
         const commands = await render.render(resource);
-        const yaml = commands[0].fileContent!;
+        const yaml = commands[1].fileContent!;
         expect(yaml).toContain('name: secrets-store');
         expect(yaml).toContain('driver: secrets-store.csi.k8s.io');
         expect(yaml).toContain('readOnly: true');
@@ -374,7 +375,7 @@ describe('KubernetesDeploymentRender', () => {
             }],
         });
         const commands = await render.render(resource);
-        const yaml = commands[0].fileContent!;
+        const yaml = commands[1].fileContent!;
         expect(yaml).toContain('volumeMounts:');
         expect(yaml).toContain('name: secrets-store');
         expect(yaml).toContain('mountPath: /mnt/secrets-store');
@@ -412,7 +413,7 @@ describe('KubernetesDeploymentRender', () => {
             }],
         });
         const commands = await render.render(resource);
-        const yaml = commands[0].fileContent!;
+        const yaml = commands[1].fileContent!;
 
         // Pod-level
         expect(yaml).toContain('serviceAccountName: trinity-workload-sa');
@@ -457,42 +458,43 @@ describe('KubernetesServiceRender', () => {
     it('renders kubectl apply with Service manifest', async () => {
         const resource = makeServiceResource();
         const commands = await render.render(resource);
-        expect(commands).toHaveLength(1);
-        expect(commands[0].command).toBe('kubectl');
-        expect(commands[0].fileContent).toContain('kind: Service');
-        expect(commands[0].fileContent).toContain('name: trinity-gateway');
+        expect(commands).toHaveLength(2);
+        expect(commands[0].command).toBe('bash');
+        expect(commands[1].command).toBe('kubectl');
+        expect(commands[1].fileContent).toContain('kind: Service');
+        expect(commands[1].fileContent).toContain('name: trinity-gateway');
     });
 
     it('defaults to ClusterIP', async () => {
         const resource = makeServiceResource();
         const commands = await render.render(resource);
-        expect(commands[0].fileContent).toContain('type: ClusterIP');
+        expect(commands[1].fileContent).toContain('type: ClusterIP');
     });
 
     it('sets LoadBalancer type when specified', async () => {
         const resource = makeServiceResource({ serviceType: 'LoadBalancer' });
         const commands = await render.render(resource);
-        expect(commands[0].fileContent).toContain('type: LoadBalancer');
+        expect(commands[1].fileContent).toContain('type: LoadBalancer');
     });
 
     it('adds azure internal LB annotation when internalLoadBalancer is true', async () => {
         const resource = makeServiceResource({ serviceType: 'LoadBalancer', internalLoadBalancer: true });
         const commands = await render.render(resource);
-        expect(commands[0].fileContent).toContain('service.beta.kubernetes.io/azure-load-balancer-internal');
-        expect(commands[0].fileContent).toContain('"true"');
+        expect(commands[1].fileContent).toContain('service.beta.kubernetes.io/azure-load-balancer-internal');
+        expect(commands[1].fileContent).toContain('"true"');
     });
 
     it('uses appName as selector shorthand', async () => {
         const resource = makeServiceResource({ appName: 'trinity-gateway' });
         const commands = await render.render(resource);
-        expect(commands[0].fileContent).toContain('app: trinity-gateway');
+        expect(commands[1].fileContent).toContain('app: trinity-gateway');
     });
 
     it('uses explicit selector over appName', async () => {
         const resource = makeServiceResource({ selector: { 'app.kubernetes.io/name': 'gateway' }, appName: 'ignored' });
         const commands = await render.render(resource);
-        expect(commands[0].fileContent).toContain('app.kubernetes.io/name');
-        expect(commands[0].fileContent).toContain('gateway');
+        expect(commands[1].fileContent).toContain('app.kubernetes.io/name');
+        expect(commands[1].fileContent).toContain('gateway');
     });
 });
 
@@ -533,32 +535,33 @@ describe('KubernetesIngressRender', () => {
     it('renders kubectl apply with Ingress manifest', async () => {
         const resource = makeIngressResource();
         const commands = await render.render(resource);
-        expect(commands).toHaveLength(1);
-        expect(commands[0].command).toBe('kubectl');
-        expect(commands[0].fileContent).toContain('kind: Ingress');
-        expect(commands[0].fileContent).toContain('name: trinity-ingress');
-        expect(commands[0].fileContent).toContain('namespace: trinity');
+        expect(commands).toHaveLength(2);
+        expect(commands[0].command).toBe('bash');
+        expect(commands[1].command).toBe('kubectl');
+        expect(commands[1].fileContent).toContain('kind: Ingress');
+        expect(commands[1].fileContent).toContain('name: trinity-ingress');
+        expect(commands[1].fileContent).toContain('namespace: trinity');
     });
 
     it('sets ingressClassName', async () => {
         const resource = makeIngressResource();
         const commands = await render.render(resource);
-        expect(commands[0].fileContent).toContain('ingressClassName: nginx');
+        expect(commands[1].fileContent).toContain('ingressClassName: nginx');
     });
 
     it('includes host and path rules', async () => {
         const resource = makeIngressResource();
         const commands = await render.render(resource);
-        expect(commands[0].fileContent).toContain('host: api.trinity.example.com');
-        expect(commands[0].fileContent).toContain('path: /');
-        expect(commands[0].fileContent).toContain('name: trinity-gateway');
+        expect(commands[1].fileContent).toContain('host: api.trinity.example.com');
+        expect(commands[1].fileContent).toContain('path: /');
+        expect(commands[1].fileContent).toContain('name: trinity-gateway');
     });
 
     it('adds cert-manager cluster-issuer annotation when clusterIssuer is set', async () => {
         const resource = makeIngressResource({ clusterIssuer: 'letsencrypt-prod' });
         const commands = await render.render(resource);
-        expect(commands[0].fileContent).toContain('cert-manager.io/cluster-issuer');
-        expect(commands[0].fileContent).toContain('letsencrypt-prod');
+        expect(commands[1].fileContent).toContain('cert-manager.io/cluster-issuer');
+        expect(commands[1].fileContent).toContain('letsencrypt-prod');
     });
 
     it('includes TLS section when tls is configured', async () => {
@@ -566,15 +569,15 @@ describe('KubernetesIngressRender', () => {
             tls: [{ hosts: ['api.trinity.example.com'], secretName: 'trinity-tls' }],
         });
         const commands = await render.render(resource);
-        expect(commands[0].fileContent).toContain('tls:');
-        expect(commands[0].fileContent).toContain('secretName: trinity-tls');
-        expect(commands[0].fileContent).toContain('api.trinity.example.com');
+        expect(commands[1].fileContent).toContain('tls:');
+        expect(commands[1].fileContent).toContain('secretName: trinity-tls');
+        expect(commands[1].fileContent).toContain('api.trinity.example.com');
     });
 
     it('uses networking.k8s.io/v1 apiVersion', async () => {
         const resource = makeIngressResource();
         const commands = await render.render(resource);
-        expect(commands[0].fileContent).toContain('apiVersion: networking.k8s.io/v1');
+        expect(commands[1].fileContent).toContain('apiVersion: networking.k8s.io/v1');
     });
 
     it('defaults pathType to Prefix when not specified', async () => {
@@ -585,6 +588,6 @@ describe('KubernetesIngressRender', () => {
             }],
         });
         const commands = await render.render(resource);
-        expect(commands[0].fileContent).toContain('pathType: Prefix');
+        expect(commands[1].fileContent).toContain('pathType: Prefix');
     });
 });
