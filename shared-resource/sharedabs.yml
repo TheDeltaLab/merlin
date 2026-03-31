@@ -1,6 +1,6 @@
 name: shared
 type: AzureBlobStorage
-project: merlin
+project: brainly
 ring:
   - test
   - staging

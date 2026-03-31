@@ -1,6 +1,6 @@
 name: synapse-dashboard
 type: KubernetesIngress
-project: merlin
+project: synapse
 ring:
   - test
   - staging

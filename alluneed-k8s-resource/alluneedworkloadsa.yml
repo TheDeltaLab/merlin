@@ -1,6 +1,6 @@
 name: alluneed-workload-sa
 type: KubernetesServiceAccount
-project: merlin
+project: alluneed
 ring:
   - test
   - staging

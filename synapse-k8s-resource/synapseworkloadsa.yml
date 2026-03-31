@@ -1,6 +1,6 @@
 name: synapse-workload-sa
 type: KubernetesServiceAccount
-project: merlin
+project: synapse
 ring:
   - test
   - staging

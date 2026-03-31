@@ -18,6 +18,17 @@ import {
     ExpandedResource,
     GeneratedFile
 } from '../compiler/types.js';
+
+/**
+ * Options for the list command (extends compile options with filters)
+ */
+export interface ListOptions {
+    inputPath: string;
+    inputPaths?: string[];
+    noShared?: boolean;
+    ring?: string;
+    region?: string;
+}
 import { initializeOutputDirectory, checkPnpmAvailable } from '../compiler/initializer.js';
 import { computeYAMLHash, checkCache, writeCacheFile, invalidateCache } from '../compiler/cache.js';
 import { loadProjectConfig, applyProjectDefaults, ProjectConfig } from '../compiler/projectConfig.js';
@@ -155,6 +166,54 @@ export class Compiler {
      */
     async watch(options: CompilerOptions): Promise<void> {
         throw new Error('Watch mode not yet implemented');
+    }
+
+    /**
+     * Lists all resources after expansion (no code generation or build).
+     * Reuses compile pipeline steps 1-5, then filters by ring/region.
+     */
+    async list(options: ListOptions): Promise<ExpandedResource[]> {
+        // 1. Discover YAML files
+        const sharedPaths = options.noShared ? [] : await this.getSharedResourcePaths();
+        const allInputPaths = [options.inputPath, ...(options.inputPaths ?? []), ...sharedPaths];
+        const yamlFileArrays = await Promise.all(allInputPaths.map(p => this.discoverYAMLFiles(p)));
+        const yamlFiles = [...new Set(yamlFileArrays.flat())];
+        if (yamlFiles.length === 0) return [];
+
+        // 2. Parse
+        const errors: CompilationError[] = [];
+        const parsedFiles = await this.parseAllFiles(yamlFiles, errors);
+        if (parsedFiles.length === 0) return [];
+
+        // 2.5. Project defaults
+        const inputDirs = this.getUniqueDirs(parsedFiles);
+        const projectConfigMap = this.discoverProjectConfigs(inputDirs);
+        const filesWithDefaults = this.applyProjectDefaultsToAll(parsedFiles, projectConfigMap);
+
+        // 3. Validate
+        const warnings: CompilationError[] = [];
+        const validatedResources = this.validateAllFiles(filesWithDefaults, errors, warnings);
+        if (errors.length > 0) {
+            throw new Error(errors.map(e => e.message).join('\n'));
+        }
+
+        // 4. Expand composite types (KubernetesApp → Deployment + Service + Ingress)
+        const expandedYAMLs = this.expandCompositeResources(validatedResources);
+
+        // 5. Transform (ring × region cartesian product)
+        const expandedResources = this.transformResources(expandedYAMLs);
+        const merged = this.mergeBySource(expandedResources);
+        let allResources = merged.flatMap(m => m.resources);
+
+        // 6. Filter by ring/region
+        if (options.ring) {
+            allResources = allResources.filter(r => r.ring === options.ring);
+        }
+        if (options.region) {
+            allResources = allResources.filter(r => r.region === options.region);
+        }
+
+        return allResources;
     }
 
     /**

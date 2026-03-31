@@ -1,6 +1,6 @@
 name: synapse-dashboard
 type: KubernetesService
-project: merlin
+project: synapse
 ring:
   - test
   - staging
