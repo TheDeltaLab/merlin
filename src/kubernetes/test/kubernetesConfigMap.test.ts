@@ -31,39 +31,40 @@ describe('KubernetesConfigMapRender', () => {
     it('renders kubectl apply with ConfigMap manifest', async () => {
         const resource = makeConfigMapResource();
         const commands = await render.render(resource);
-        expect(commands).toHaveLength(1);
-        expect(commands[0].command).toBe('kubectl');
-        expect(commands[0].args).toContain('apply');
-        expect(commands[0].args).toContain('__MERLIN_YAML_FILE__');
-        expect(commands[0].fileContent).toContain('kind: ConfigMap');
-        expect(commands[0].fileContent).toContain('name: trinity-shared-config');
-        expect(commands[0].fileContent).toContain('namespace: trinity');
+        expect(commands).toHaveLength(2);
+        expect(commands[0].command).toBe('bash');
+        expect(commands[1].command).toBe('kubectl');
+        expect(commands[1].args).toContain('apply');
+        expect(commands[1].args).toContain('__MERLIN_YAML_FILE__');
+        expect(commands[1].fileContent).toContain('kind: ConfigMap');
+        expect(commands[1].fileContent).toContain('name: trinity-shared-config');
+        expect(commands[1].fileContent).toContain('namespace: trinity');
     });
 
     it('includes data key-value pairs', async () => {
         const resource = makeConfigMapResource();
         const commands = await render.render(resource);
-        expect(commands[0].fileContent).toContain('REDIS_URL');
-        expect(commands[0].fileContent).toContain('redis://redis.example.com:6380');
-        expect(commands[0].fileContent).toContain('ADMIN_SERVER_URL');
+        expect(commands[1].fileContent).toContain('REDIS_URL');
+        expect(commands[1].fileContent).toContain('redis://redis.example.com:6380');
+        expect(commands[1].fileContent).toContain('ADMIN_SERVER_URL');
     });
 
     it('uses apiVersion v1', async () => {
         const resource = makeConfigMapResource();
         const commands = await render.render(resource);
-        expect(commands[0].fileContent).toContain('apiVersion: v1');
+        expect(commands[1].fileContent).toContain('apiVersion: v1');
     });
 
     it('includes labels when configured', async () => {
         const resource = makeConfigMapResource({ labels: { team: 'platform' } });
         const commands = await render.render(resource);
-        expect(commands[0].fileContent).toContain('team: platform');
+        expect(commands[1].fileContent).toContain('team: platform');
     });
 
     it('includes annotations when configured', async () => {
         const resource = makeConfigMapResource({ annotations: { owner: 'merlin' } });
         const commands = await render.render(resource);
-        expect(commands[0].fileContent).toContain('owner: merlin');
+        expect(commands[1].fileContent).toContain('owner: merlin');
     });
 
     it('throws for wrong resource type', async () => {

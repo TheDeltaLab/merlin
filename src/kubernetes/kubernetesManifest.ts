@@ -1,5 +1,6 @@
 import { Resource, ResourceSchema, Command, Render, RenderContext } from '../common/resource.js';
 import { resolveConfig } from '../common/paramResolver.js';
+import { ensureNamespaceCommand } from './kubernetesNamespace.js';
 
 export const KUBERNETES_MANIFEST_TYPE = 'KubernetesManifest';
 
@@ -53,7 +54,12 @@ export class KubernetesManifestRender implements Render {
     async render(resource: Resource, context?: RenderContext): Promise<Command[]> {
         const { resource: resolved, captureCommands } = await resolveConfig(resource);
         const renderCommands = await this.renderImpl(resolved, context);
-        return [...captureCommands, ...renderCommands];
+        // Extract namespace from config.namespace or from raw manifest content
+        const config = resolved.config as Record<string, unknown>;
+        const ns = (config.namespace as string | undefined)
+            ?? KubernetesManifestRender.extractNamespaceFromManifest(config.manifest as string);
+        const nsCmd = ns ? [ensureNamespaceCommand(ns)] : [];
+        return [...captureCommands, ...nsCmd, ...renderCommands];
     }
 
     async renderImpl(resource: Resource, _context?: RenderContext): Promise<Command[]> {
@@ -72,5 +78,17 @@ export class KubernetesManifestRender implements Render {
 
     private static isKubernetesManifestResource(resource: Resource): resource is KubernetesManifestResource {
         return resource.type === KUBERNETES_MANIFEST_TYPE;
+    }
+
+    /**
+     * Extract namespace from raw manifest YAML content.
+     * Looks for `namespace: <value>` under `metadata:`.
+     * Returns undefined if not found (e.g. cluster-scoped resources like ClusterIssuer).
+     */
+    private static extractNamespaceFromManifest(manifest: string | undefined): string | undefined {
+        if (!manifest) return undefined;
+        // Match `namespace: <value>` that appears after `metadata:` block
+        const match = manifest.match(/\bnamespace:\s*(\S+)/);
+        return match?.[1];
     }
 }

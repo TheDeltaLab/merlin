@@ -27,19 +27,20 @@ describe('KubernetesServiceAccountRender', () => {
     it('renders kubectl apply with ServiceAccount manifest', async () => {
         const resource = makeSAResource();
         const commands = await render.render(resource);
-        expect(commands).toHaveLength(1);
-        expect(commands[0].command).toBe('kubectl');
-        expect(commands[0].args).toContain('apply');
-        expect(commands[0].args).toContain('__MERLIN_YAML_FILE__');
-        expect(commands[0].fileContent).toContain('kind: ServiceAccount');
-        expect(commands[0].fileContent).toContain('name: trinity-workload-sa');
-        expect(commands[0].fileContent).toContain('namespace: trinity');
+        expect(commands).toHaveLength(2);
+        expect(commands[0].command).toBe('bash');
+        expect(commands[1].command).toBe('kubectl');
+        expect(commands[1].args).toContain('apply');
+        expect(commands[1].args).toContain('__MERLIN_YAML_FILE__');
+        expect(commands[1].fileContent).toContain('kind: ServiceAccount');
+        expect(commands[1].fileContent).toContain('name: trinity-workload-sa');
+        expect(commands[1].fileContent).toContain('namespace: trinity');
     });
 
     it('uses apiVersion v1', async () => {
         const resource = makeSAResource();
         const commands = await render.render(resource);
-        expect(commands[0].fileContent).toContain('apiVersion: v1');
+        expect(commands[1].fileContent).toContain('apiVersion: v1');
     });
 
     it('includes annotations when configured', async () => {
@@ -49,14 +50,14 @@ describe('KubernetesServiceAccountRender', () => {
             },
         });
         const commands = await render.render(resource);
-        expect(commands[0].fileContent).toContain('azure.workload.identity/client-id');
-        expect(commands[0].fileContent).toContain('test-client-id-12345');
+        expect(commands[1].fileContent).toContain('azure.workload.identity/client-id');
+        expect(commands[1].fileContent).toContain('test-client-id-12345');
     });
 
     it('includes labels when configured', async () => {
         const resource = makeSAResource({ labels: { team: 'platform' } });
         const commands = await render.render(resource);
-        expect(commands[0].fileContent).toContain('team: platform');
+        expect(commands[1].fileContent).toContain('team: platform');
     });
 
     it('throws for wrong resource type', async () => {

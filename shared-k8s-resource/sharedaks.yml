@@ -29,11 +29,6 @@ defaultConfig:
   tags:
     merlin: "true"
     env: ${ this.ring }
-  # namespaces shared across all projects
-  namespaces:
-    - synapse
-    - trinity
-    - alluneed
 
 specificConfig:
   - region: koreacentral
