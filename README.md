@@ -9,6 +9,12 @@ Merlin follows a **compile-time + runtime** architecture:
 1. **Compile** — YAML resource definitions → TypeScript code (output to `.merlin/`)
 2. **Deploy** — TypeScript is executed to render CLI commands for the target cloud, which are then run (or previewed)
 
+Current architecture notes:
+
+- Cloud-specific registration is centralized per provider, with Azure using `src/azure/register.ts`.
+- The deployer executes dependency-ordered DAG levels and can prepend a cloud-specific pre-deploy level (currently used for Azure resource groups).
+- Azure resource inspection now uses a shared async `execAsync()` helper and common not-found detection, rather than per-render `execSync()` calls.
+
 ## Installation
 
 ### As a dependency (for projects using Merlin)
@@ -50,7 +56,7 @@ In your project's `package.json`:
 ```json
 {
   "devDependencies": {
-    "@thedeltalab/merlin": "^1.0.0"
+    "@thedeltalab/merlin": "^1.4.0"
   }
 }
 ```
@@ -73,6 +79,9 @@ pnpm link:global   # Makes `merlin` command available globally
 # Compile YAML resources to TypeScript
 merlin compile [path]
 
+# Scaffold a new project resource set
+merlin init myapp
+
 # Preview deployment commands (dry-run, default)
 merlin deploy --input [path]
 
@@ -88,6 +97,8 @@ merlin deploy --input [path] --output-file commands.sh
 # Validate resource configuration only
 merlin compile [path] --validate-only
 ```
+
+`merlin init` generates safe placeholders by default, including `example.com`, `myregistry.azurecr.io`, and `YOUR_AZURE_AD_TENANT_ID`. Replace these values before deploying.
 
 ## Resource Configuration
 
@@ -142,7 +153,7 @@ exports:
 | `dependencies` | ✓ | Array of `{resource, isHardDependency?, authProvider?}` |
 | `defaultConfig` | ✓ | Base configuration (resource-specific schema) |
 | `specificConfig` | ✓ | Array of per-ring/region config overrides |
-| `exports` | ✓ | Map of export name → ProprietyGetter name |
+| `exports` | ✓ | Map of export name → PropertyGetter name |
 
 When `ring` and `region` are arrays, Merlin generates a cartesian product (e.g. 2 rings × 2 regions = 4 resources).
 
@@ -182,10 +193,14 @@ Write YAML once, deploy to any cloud by using **cloud-agnostic type names**:
 | `ContainerRegistry` | `AzureContainerRegistry` | ACR |
 | `ContainerAppEnvironment` | `AzureContainerAppEnvironment` | SAE Namespace |
 | `ObjectStorage` | `AzureBlobStorage` | OSS |
+| `KeyValueStore` | `AzureRedisEnterprise` | Tair |
+| `RelationalDatabase` | `AzurePostgreSQLFlexible` | RDS/PolarDB |
+| `SecretVault` | `AzureKeyVault` | KMS |
 | `LogSink` | `AzureLogAnalyticsWorkspace` | SLS |
 | `DnsZone` | `AzureDnsZone` | Alidns |
 | `ServicePrincipal` | `AzureServicePrincipal` | RAM User |
 | `AppRegistration` | `AzureADApp` | RAM Role |
+| `KubernetesCluster` | AKS (`AzureAKSRender`) | ACK |
 
 Existing `Azure*` type names continue to work as-is — no migration required.
 
@@ -197,16 +212,16 @@ Existing `Azure*` type names continue to work as-is — no migration required.
 |------|-------------|
 | `AzureContainerApp` | Container Apps with optional DNS binding and EasyAuth |
 | `AzureContainerAppEnvironment` | Container App Environments |
-| `AzureContainerRegistry` | Container Registries |
+| `AzureContainerRegistry` | Container Registries (with image import and build support) |
 | `AzureLogAnalyticsWorkspace` | Log Analytics Workspaces |
 | `AzureDnsZone` | DNS Zones (with optional NS delegation to parent zone) |
 | `AzureADApp` | Azure AD / Entra ID App Registrations |
 | `AzureServicePrincipal` | Service Principals with Federated Credentials (OIDC) and Role Assignments |
 | `AzureBlobStorage` | Blob Storage Accounts |
-| `AzureKeyVault` | Key Vaults |
-| `AzureRedisEnterprise` | Redis Enterprise (stub) |
-| `AzurePostgreSQLFlexible` | PostgreSQL Flexible Server (stub) |
-| `AzureFunctionApp` | Azure Function Apps (stub) |
+| `AzureKeyVault` | Key Vaults (with secrets management) |
+| `AzureRedisEnterprise` | Redis Enterprise |
+| `AzurePostgreSQLFlexible` | PostgreSQL Flexible Server |
+| `AzureFunctionApp` | Azure Function Apps |
 | `AzureResourceGroup` | Resource Groups (auto-created, deduplicated) |
 
 ### Kubernetes Resources
@@ -214,6 +229,7 @@ Existing `Azure*` type names continue to work as-is — no migration required.
 | Type | Description |
 |------|-------------|
 | `KubernetesCluster` | AKS clusters (with auto-namespace creation, ACR attach, Workload Identity) |
+| `KubernetesApp` | **Composite type** — expands to Deployment + Service + Ingress (optional) at compile time |
 | `KubernetesDeployment` | Deployments (with probes, env vars, CSI secret volumes, workload identity) |
 | `KubernetesService` | ClusterIP Services |
 | `KubernetesIngress` | Ingress resources (with cert-manager TLS, optional DNS A-record binding) |
@@ -222,22 +238,34 @@ Existing `Azure*` type names continue to work as-is — no migration required.
 | `KubernetesServiceAccount` | Service Accounts (with workload identity annotations) |
 | `KubernetesManifest` | Raw Kubernetes manifests (SecretProviderClass, ClusterIssuer, etc.) |
 
+### Other Resources
+
+| Type | Description |
+|------|-------------|
+| `GitHubWorkflow` | Triggers GitHub Actions `workflow_dispatch` events (cloud-neutral) |
+
 ## Repository Structure
 
 ```
 merlin/
 ├── src/
 │   ├── merlin.ts                    # CLI entry point (Commander.js)
-│   ├── deployer.ts                  # Deployment orchestration (DAG executor)
-│   ├── init.ts                      # Registers all providers/renders/getters
+│   ├── deployer.ts                  # Deployment orchestration (DAG-based parallel executor)
+│   ├── init.ts                      # Cloud dispatcher (calls azure/register.ts)
 │   ├── runtime.ts                   # Public API for generated code
+│   ├── cli/
+│   │   ├── confirm.ts              # Interactive confirmation prompts
+│   │   ├── defaults.ts             # Default CLI values
+│   │   └── init.ts                 # CLI init command
 │   ├── common/
 │   │   ├── compiler.ts              # Compiler pipeline orchestration
-│   │   ├── constants.ts             # Package name/version constants
+│   │   ├── constants.ts             # Shared utilities (execAsync, toEnvSlug, etc.)
 │   │   ├── registry.ts              # Resource registry (name:ring:region → Resource)
-│   │   ├── resource.ts              # Core types, render/auth registries, Region enum
 │   │   ├── cloudTypes.ts            # Cloud-agnostic resource type constants
-│   │   └── paramResolver.ts         # Runtime ${ } expression resolver
+│   │   ├── paramResolver.ts         # Runtime ${ } expression resolver
+│   │   ├── resolveNames.ts          # Name resolution utilities
+│   │   ├── resource.ts              # Core types, registries, Ring/Region SSoT maps
+│   │   └── statusChecker.ts         # Deployment status checking
 │   ├── compiler/
 │   │   ├── parser.ts                # YAML → raw resource objects
 │   │   ├── validator.ts             # Zod schema + semantic validation
@@ -245,9 +273,19 @@ merlin/
 │   │   ├── generator.ts             # TypeScript code generation
 │   │   ├── initializer.ts           # .merlin/ pnpm project setup
 │   │   ├── deploy-script-generator.ts # Deploy script generation
-│   │   └── schemas.ts               # Zod schemas for YAML validation
-│   ├── azure/                       # Azure resource renders
-│   ├── kubernetes/                  # Kubernetes resource renders
+│   │   ├── schemas.ts               # Zod schemas for YAML validation
+│   │   ├── cache.ts                 # MD5-based compilation cache
+│   │   ├── interpolation.ts         # Template variable interpolation
+│   │   ├── kubernetesAppExpander.ts  # KubernetesApp composite type expansion
+│   │   ├── projectConfig.ts         # merlin.yml project config discovery
+│   │   └── types.ts                 # Compiler type definitions
+│   ├── azure/                       # Azure resource renders (13 resource types)
+│   │   ├── propertyGetter.ts        # Azure export/property getter implementations
+│   │   ├── preDeployProvider.ts     # Azure pre-deploy provider
+│   │   └── register.ts              # Azure provider registration
+│   ├── kubernetes/                  # Kubernetes resource renders (9 resource types)
+│   ├── github/
+│   │   └── githubWorkflow.ts        # GitHub Actions workflow_dispatch trigger
 │   └── alibaba/                     # Alibaba Cloud provider (Phase 2 placeholder)
 │
 ├── shared-resource/                 # Cross-project shared Azure infrastructure
@@ -266,12 +304,11 @@ merlin/
 │   └── sharedkvsp.yml               # Key Vault workload identity SP
 │
 ├── synapse-k8s-resource/            # Synapse AI gateway (koreacentral only)
-├── alluneed-k8s-resource/           # Alluneed AI inference service
 │
 └── .merlin/                         # Generated TypeScript project (git-ignored)
 ```
 
-> **Note:** Trinity resources have been moved to the [trinity repo](https://github.com/TheDeltaLab/trinity).
+> **Note:** Project-specific resources (Trinity, Alluneed, etc.) have been moved to their respective repos (e.g. [trinity](https://github.com/TheDeltaLab/trinity), [alluneed](https://github.com/TheDeltaLab/alluneed)).
 > Each project maintains its own `merlin-resources/` directory and installs `@thedeltalab/merlin` as a dependency.
 > Shared resources (`shared-resource/`, `shared-k8s-resource/`) are bundled in the npm package and auto-included during compile/deploy.
 
@@ -303,6 +340,8 @@ merlin deploy shared-k8s-resource --execute --ring staging --region koreacentral
 ## Development
 
 ```bash
+pnpm build         # Build dist/
+pnpm build:full    # Build dist/ and rebuild .merlin/ if present
 pnpm test          # Run all tests
 pnpm test:watch    # Watch mode
 pnpm lint          # Lint
@@ -312,9 +351,8 @@ pnpm lint:fix      # Lint and auto-fix
 ### Adding New Resource Types
 
 1. Create `src/azure/azureNewResource.ts` — export type constant + `AzureNewResourceRender extends AzureResourceRender`
-2. Register in `src/init.ts`: `registerRender(AZURE_NEW_RESOURCE_TYPE, new AzureNewResourceRender())`
-3. Add Zod schema entry in `src/compiler/schemas.ts` if needed
-4. Write tests in `src/azure/test/azureNewResource.test.ts`
+2. Register in `src/azure/register.ts` (inside `registerAzureProviders()`): `registerRender(TYPE, new Render())`
+3. Write tests in `src/azure/test/azureNewResource.test.ts`
 
 See `CLAUDE.md` for full architecture details and conventions.
 

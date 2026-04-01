@@ -25,7 +25,7 @@ describe('Generator', () => {
                 const resources = [createExpandedResource()];
                 const result = generate('/test/source.yml', resources);
 
-                expect(result.content).toContain('import { Resource, getAuthProvider, getProprietyGetter, registerResource }');
+                expect(result.content).toContain('import { Resource, getAuthProvider, getPropertyGetter, registerResource }');
             });
 
             test('should generate resource variable names', () => {
@@ -134,7 +134,7 @@ describe('Generator', () => {
                 expect(result.content).toContain('args: {"tenantId":"123"}');
             });
 
-            test('should format exports with getProprietyGetter', () => {
+            test('should format exports with getPropertyGetter', () => {
                 const resource = createExpandedResource({
                     exports: {
                         connectionString: { name: 'getConnectionString', args: { format: 'full' } },
@@ -144,9 +144,9 @@ describe('Generator', () => {
                 const result = generate('/test/source.yml', [resource]);
 
                 expect(result.content).toContain('"connectionString": {');
-                expect(result.content).toContain('getter: getProprietyGetter("getConnectionString")');
+                expect(result.content).toContain('getter: getPropertyGetter("getConnectionString")');
                 expect(result.content).toContain('"endpoint": {');
-                expect(result.content).toContain('getter: getProprietyGetter("getEndpoint")');
+                expect(result.content).toContain('getter: getPropertyGetter("getEndpoint")');
             });
 
             test('should serialize config as JSON', () => {

@@ -34,7 +34,7 @@ ring:
   - test
   - staging
 region:
-  - koreacentral
+  - koreacentral  # TODO: Change to your Azure region (e.g. eastus, eastasia, westus)
 `,
     };
 }
@@ -43,7 +43,7 @@ function appYml(project: string, opts: { ingress: boolean; withAuth: boolean }):
     const ingressBlock = opts.ingress ? `
   ingress:
     subdomain: ${project}
-    dnsZone: thebrainly.dev${opts.withAuth ? `
+    dnsZone: example.com  # TODO: Change to your DNS zone${opts.withAuth ? `
     annotations:
       nginx.ingress.kubernetes.io/auth-url: "https://$host/oauth2/auth"
       nginx.ingress.kubernetes.io/auth-signin: "https://$host/oauth2/start?rd=$escaped_request_uri"
@@ -66,7 +66,7 @@ dependencies:
 
 defaultConfig:
   namespace: ${project}
-  image: brainlysharedacr.azurecr.io/${project}:latest  # TODO: Change to your image
+  image: myregistry.azurecr.io/${project}:latest  # TODO: Change to your ACR and image
   port: 3000  # TODO: Change to your port
   serviceAccountName: ${project}-workload-sa
   secretProvider: ${project}-secret-provider
@@ -133,7 +133,7 @@ defaultConfig:
         useVMManagedIdentity: "false"
         clientID: \${ AzureServicePrincipal.kv-workload.clientId }
         keyvaultName: \${ AzureKeyVault.shared.name }
-        tenantId: "2c10b0b9-d9c1-4c81-85ee-6a2297ed77f4"  # TODO: Change to your tenant ID
+        tenantId: "YOUR_AZURE_AD_TENANT_ID"  # TODO: Change to your Azure AD tenant ID
         objects: |
           array:
             - |
@@ -167,7 +167,7 @@ dependencies:
 defaultConfig:
   displayName: ${project}-aad-\${ this.ring }
   webRedirectUris:
-    - https://${project}.\${ this.ring }.thebrainly.dev/oauth2/callback
+    - https://${project}.\${ this.ring }.example.com/oauth2/callback  # TODO: Change domain
   assignmentRequired: true
   apiPermissions: oidc
 
@@ -175,20 +175,20 @@ specificConfig:
   - ring: test
     clientSecretKeyVault:
       vaultNames:
-        - brainlysharedtstkrcakv
+        - YOUR_TEST_KEYVAULT_NAME  # TODO: Change to your Key Vault name for test ring
       secretName: ${project}-oauth2-proxy-client-secret
     cookieSecretKeyVault:
       vaultNames:
-        - brainlysharedtstkrcakv
+        - YOUR_TEST_KEYVAULT_NAME  # TODO: Change to your Key Vault name for test ring
       secretName: ${project}-oauth2-proxy-cookie-secret
   - ring: staging
     clientSecretKeyVault:
       vaultNames:
-        - brainlysharedstgkrcakv
+        - YOUR_STAGING_KEYVAULT_NAME  # TODO: Change to your Key Vault name for staging ring
       secretName: ${project}-oauth2-proxy-client-secret
     cookieSecretKeyVault:
       vaultNames:
-        - brainlysharedstgkrcakv
+        - YOUR_STAGING_KEYVAULT_NAME  # TODO: Change to your Key Vault name for staging ring
       secretName: ${project}-oauth2-proxy-cookie-secret
 
 exports:
@@ -234,9 +234,9 @@ defaultConfig:
     - secretRef: ${project}-oauth2-proxy-secrets
   envVars:
     - OAUTH2_PROXY_PROVIDER=oidc
-    - OAUTH2_PROXY_OIDC_ISSUER_URL=https://login.microsoftonline.com/2c10b0b9-d9c1-4c81-85ee-6a2297ed77f4/v2.0
+    - OAUTH2_PROXY_OIDC_ISSUER_URL=https://login.microsoftonline.com/YOUR_AZURE_AD_TENANT_ID/v2.0  # TODO: Change tenant ID
     - OAUTH2_PROXY_CLIENT_ID=\${ AzureServicePrincipal.${project}-aad.clientId }
-    - OAUTH2_PROXY_REDIRECT_URL=https://${project}.\${ this.ring }.thebrainly.dev/oauth2/callback
+    - OAUTH2_PROXY_REDIRECT_URL=https://${project}.\${ this.ring }.example.com/oauth2/callback  # TODO: Change domain
     - OAUTH2_PROXY_UPSTREAM=static://202
     - OAUTH2_PROXY_HTTP_ADDRESS=0.0.0.0:4180
     - OAUTH2_PROXY_EMAIL_DOMAINS=*
@@ -245,7 +245,7 @@ defaultConfig:
     - OAUTH2_PROXY_PASS_ACCESS_TOKEN=true
   ingress:
     subdomain: ${project}
-    dnsZone: thebrainly.dev
+    dnsZone: example.com  # TODO: Change to your DNS zone
     path: /oauth2
     bindDnsZone: false
     annotations:
@@ -286,7 +286,7 @@ defaultConfig:
         useVMManagedIdentity: "false"
         clientID: \${ AzureServicePrincipal.kv-workload.clientId }
         keyvaultName: \${ AzureKeyVault.shared.name }
-        tenantId: "2c10b0b9-d9c1-4c81-85ee-6a2297ed77f4"  # TODO: Change to your tenant ID
+        tenantId: "YOUR_AZURE_AD_TENANT_ID"  # TODO: Change to your Azure AD tenant ID
         objects: |
           array:
             - |

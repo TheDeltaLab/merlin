@@ -6,13 +6,14 @@ import {
     AZURE_CONTAINER_REGISTRY_RESOURCE_TYPE,
 } from '../azureContainerRegistry.js';
 
-// Mock child_process so execSync is replaceable in tests
-vi.mock('child_process', () => ({
-    execSync: vi.fn(),
-}));
+// Mock execAsync so it is replaceable in tests
+vi.mock('../../common/constants.js', async (importOriginal) => {
+    const actual = await importOriginal() as any;
+    return { ...actual, execAsync: vi.fn() };
+});
 
-import { execSync } from 'child_process';
-const mockExecSync = vi.mocked(execSync);
+import { execAsync } from '../../common/constants.js';
+const mockExecAsync = vi.mocked(execAsync);
 
 // ── Test helpers ──────────────────────────────────────────────────────────────
 
@@ -48,7 +49,7 @@ function hasParam(args: string[], flag: string, value?: string): boolean {
 
 // Default mock: always throw "not found" (resource doesn't exist)
 function mockNotFound(): void {
-    mockExecSync.mockImplementation(() => {
+    mockExecAsync.mockImplementation(async () => {
         const err: any = new Error('ResourceNotFound');
         err.status = 3;
         throw err;
@@ -57,12 +58,11 @@ function mockNotFound(): void {
 
 // Mock: RG exists, resource exists with given JSON
 function mockResourceExists(showJson: string): void {
-    mockExecSync.mockImplementation((cmd: string) => {
-        const c = String(cmd);
-        if (c.includes('group show')) {
-            return JSON.stringify({ name: 'myproject-rg-stg-eus' }) as any;
+    mockExecAsync.mockImplementation(async (_cmd: string, args: string[]) => {
+        if (args.includes('group') && args.includes('show')) {
+            return JSON.stringify({ name: 'myproject-rg-stg-eus' });
         }
-        return showJson as any;
+        return showJson;
     });
 }
 

@@ -1,6 +1,6 @@
 import { Resource, Command, RenderContext } from '../common/resource.js';
 import { AzureResourceRender } from './render.js';
-import { execSync } from 'child_process';
+import { isResourceNotFoundError, execAsync } from '../common/constants.js';
 
 export const AZURE_RESOURCE_GROUP = 'AzureResourceGroup';
 
@@ -33,11 +33,8 @@ export class AzureResourceGroupRender extends AzureResourceRender {
         const resourceGroupName = this.getResourceGroupName(resource);
 
         try {
-            // Execute az group show command (suppress stderr to avoid printing errors)
-            const result = execSync(
-                `az group show --name ${resourceGroupName} 2>/dev/null`,
-                { encoding: 'utf-8' }
-            );
+            // Execute az group show command (suppress stderr via execa pipe)
+            const result = await execAsync('az', ['group', 'show', '--name', resourceGroupName]);
 
             const deployedProps = JSON.parse(result);
 
@@ -48,25 +45,9 @@ export class AzureResourceGroupRender extends AzureResourceRender {
                 tags: deployedProps.tags
             };
         } catch (error: any) {
-            // If the command failed, it likely means the resource group doesn't exist
-            // The 2>/dev/null suppresses stderr, so we check the error status
-            // Azure CLI returns exit code 3 when resource is not found
-            if (error.status === 3 || error.status === 1) {
+            if (isResourceNotFoundError(error)) {
                 return undefined;
             }
-
-            // For other errors, check if it's a "not found" error
-            const errorMessage = error.message || String(error);
-            const stderr = error.stderr?.toString() || '';
-            const combinedError = errorMessage + ' ' + stderr;
-
-            if (combinedError.includes('ResourceGroupNotFound') ||
-                combinedError.includes('was not found') ||
-                combinedError.includes('could not be found')) {
-                return undefined;
-            }
-
-            // For genuine errors, throw them
             throw new Error(
                 `Failed to get deployed properties for resource group ${resourceGroupName}: ${error}`
             );
@@ -74,9 +55,17 @@ export class AzureResourceGroupRender extends AzureResourceRender {
     }
 
     private renderCreate(resource: Resource): Command[] {
-        // Determine location: resource.region, or config.location, or default to koreacentral
+        // Location must be explicitly set via resource.region or config.location.
+        // No implicit default — callers must provide a region.
         const config = resource.config as Record<string, unknown>;
-        const location = resource.region ?? config?.location as string ?? 'koreacentral';
+        const location = resource.region ?? config?.location as string;
+
+        if (!location) {
+            throw new Error(
+                `Resource group for "${resource.name}" has no location. ` +
+                `Set 'region' on the resource or 'location' in config.`
+            );
+        }
 
         const resourceGroupName = this.getResourceGroupName(resource);
         const args: string[] = [

@@ -1,29 +1,12 @@
 
-export type Ring = 
-    | 'test' 
-    | 'staging' 
-    | 'production';
-    
-export const RING_SHORT_NAME_MAP: Record<Ring, string> = {
+export const RING_SHORT_NAME_MAP = {
     'test': 'tst',
     'staging': 'stg',
-    'production': 'prd'
-};
+    'production': 'prd',
+} as const;
+export type Ring = keyof typeof RING_SHORT_NAME_MAP;
 
-export type Region =
-    | 'eastus'
-    | 'westus'
-    | 'eastasia'
-    | 'koreacentral'
-    | 'koreasouth'
-    // Alibaba Cloud regions
-    | 'cn-hangzhou'
-    | 'cn-shanghai'
-    | 'cn-beijing'
-    | 'ap-southeast-1'
-    ;
-
-export const REGION_SHORT_NAME_MAP: Record<Region, string> = {
+export const REGION_SHORT_NAME_MAP = {
     // Azure
     'eastus': 'eus',
     'westus': 'wus',
@@ -35,7 +18,8 @@ export const REGION_SHORT_NAME_MAP: Record<Region, string> = {
     'cn-shanghai': 'sha',
     'cn-beijing': 'bej',
     'ap-southeast-1': 'sg1',
-};
+} as const;
+export type Region = keyof typeof REGION_SHORT_NAME_MAP;
 
 /**
  * Base interface for resource-specific configuration schemas
@@ -135,7 +119,7 @@ export interface Resource<Schema extends ResourceSchema = ResourceSchema> {
      * Value is the getter function and its arguments
      */
     exports: Record<string, {
-        getter: ProprietyGetter;
+        getter: PropertyGetter;
         args: Record<string, string>;
     }>;
 }
@@ -152,11 +136,11 @@ export interface AuthProvider {
     dependencies: Dependency[];
 }
 
-export interface ProprietyGetter {
+export interface PropertyGetter {
     name: string;
 
     /**
-     * return the commands to get the propriety value
+     * return the commands to get the property value
      */
     get(resource: Resource, args: Record<string, string>): Promise<Command[]>;
 
@@ -225,6 +209,25 @@ export interface Render {
     isGlobalResource?: boolean;
 }
 
+/**
+ * Pre-deployment provider interface.
+ *
+ * Cloud providers implement this to handle resource grouping/scoping that must
+ * happen before individual resources are deployed. For example, Azure needs
+ * resource groups to be created first; other clouds may need projects, VPCs, etc.
+ *
+ * The deployer calls `renderPreDeployLevel()` once per deploy to build
+ * "level 0" — a set of synthetic resources that run before everything else.
+ */
+export interface PreDeployProvider {
+    /**
+     * Inspect the full set of resources to be deployed and return a list of
+     * pre-deployment resource+command pairs (e.g. resource group creation commands).
+     * Implementations should deduplicate internally.
+     */
+    renderPreDeployLevel(resources: Resource[]): Promise<{ resource: Resource; commands: Command[] }[]>;
+}
+
 
 const RESOURCE_TYPE_RENDER_MAP: Map<string, Render> = new Map();
 
@@ -242,17 +245,17 @@ export function getRender(resourceType: string): Render {
 }
 
 
-const PROPRIETY_GETTER_MAP: Map<string, ProprietyGetter> = new Map();
+const PROPERTY_GETTER_MAP: Map<string, PropertyGetter> = new Map();
 
-export function registerProprietyGetter(getter: ProprietyGetter) {
-    PROPRIETY_GETTER_MAP.set(getter.name, getter);
+export function registerPropertyGetter(getter: PropertyGetter) {
+    PROPERTY_GETTER_MAP.set(getter.name, getter);
 }
 
 
-export function getProprietyGetter(name: string): ProprietyGetter {
-    const getter = PROPRIETY_GETTER_MAP.get(name);
+export function getPropertyGetter(name: string): PropertyGetter {
+    const getter = PROPERTY_GETTER_MAP.get(name);
     if (!getter) {
-        throw new Error(`ProprietyGetter not found for name: ${name}`);
+        throw new Error(`PropertyGetter not found for name: ${name}`);
     }
     return getter;
 }
@@ -271,4 +274,26 @@ export function getAuthProvider(name: string): AuthProvider {
         throw new Error(`AuthProvider not found for name: ${name}`);
     }
     return provider;
+}
+
+
+// ── Pre-deploy provider ───────────────────────────────────────────────────────
+
+let preDeployProvider: PreDeployProvider | undefined;
+
+/**
+ * Register the pre-deploy provider for the current cloud.
+ * Called from init.ts during cloud-specific initialization.
+ */
+export function registerPreDeployProvider(provider: PreDeployProvider): void {
+    preDeployProvider = provider;
+}
+
+/**
+ * Get the registered pre-deploy provider, if any.
+ * Returns undefined when no provider is registered (e.g. a cloud that doesn't
+ * need pre-deployment steps).
+ */
+export function getPreDeployProvider(): PreDeployProvider | undefined {
+    return preDeployProvider;
 }

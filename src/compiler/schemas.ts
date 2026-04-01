@@ -3,21 +3,19 @@
  */
 
 import { z } from 'zod';
+import { RING_SHORT_NAME_MAP, REGION_SHORT_NAME_MAP } from '../common/resource.js';
 
 /**
- * Ring enum schema
+ * Ring enum schema — derived from RING_SHORT_NAME_MAP (single source of truth)
  */
-export const RingSchema = z.enum(['test', 'staging', 'production']);
+const RING_VALUES = Object.keys(RING_SHORT_NAME_MAP) as [string, ...string[]];
+export const RingSchema = z.enum(RING_VALUES);
 
 /**
- * Region enum schema
+ * Region enum schema — derived from REGION_SHORT_NAME_MAP (single source of truth)
  */
-export const RegionSchema = z.enum([
-    // Azure
-    'eastus', 'westus', 'eastasia', 'koreacentral', 'koreasouth',
-    // Alibaba Cloud
-    'cn-hangzhou', 'cn-shanghai', 'cn-beijing', 'ap-southeast-1',
-]);
+const REGION_VALUES = Object.keys(REGION_SHORT_NAME_MAP) as [string, ...string[]];
+export const RegionSchema = z.enum(REGION_VALUES);
 
 /**
  * AuthProvider YAML schema (object format)

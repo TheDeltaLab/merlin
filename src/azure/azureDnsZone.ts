@@ -1,7 +1,7 @@
 import { AzureResource } from './resource.js';
 import { Resource, ResourceSchema, Command, RenderContext, RING_SHORT_NAME_MAP } from '../common/resource.js';
 import { AzureResourceRender } from './render.js';
-import { execSync } from 'child_process';
+import { isResourceNotFoundError, toEnvSlug, execAsync } from '../common/constants.js';
 
 export const AZURE_DNS_ZONE_RESOURCE_TYPE = 'AzureDnsZone';
 
@@ -52,7 +52,6 @@ export class AzureDnsZoneRender extends AzureResourceRender {
         if (!AzureDnsZoneRender.isAzureDnsZoneResource(resource)) {
             throw new Error(`Resource ${resource.name} is not an Azure DNS Zone resource`);
         }
-        console.log(`Rendering Azure DNS Zone resource ${resource.name} in ring ${resource.ring} with config:`, resource.config);
         // Guard: ensure the parent DNS zone exists before proceeding.
         await this.checkParentDnsZoneExists(resource as AzureDnsZoneResource);
 
@@ -95,18 +94,11 @@ export class AzureDnsZoneRender extends AzureResourceRender {
         const resourceGroupName = this.getResourceGroupName(resource);
 
         try {
-            execSync(`az group show --name ${resourceGroupName} 2>/dev/null`, { encoding: 'utf-8' });
+            await execAsync('az', ['group', 'show', '--name', resourceGroupName]);
             // RG already exists — no commands needed
             return [];
         } catch (error: any) {
-            const notFound =
-                error.status === 3 ||
-                error.status === 1 ||
-                (error.message + ' ' + (error.stderr?.toString() || '')).includes('ResourceGroupNotFound') ||
-                (error.message + ' ' + (error.stderr?.toString() || '')).includes('was not found') ||
-                (error.message + ' ' + (error.stderr?.toString() || '')).includes('could not be found');
-
-            if (!notFound) {
+            if (!isResourceNotFoundError(error)) {
                 throw new Error(`Failed to check resource group ${resourceGroupName}: ${error}`);
             }
         }
@@ -128,10 +120,7 @@ export class AzureDnsZoneRender extends AzureResourceRender {
 
         try {
             // Query by the actual DNS zone name, not the Merlin internal resource name
-            const result = execSync(
-                `az network dns zone show -g ${resourceGroup} -n ${dnsZoneName} 2>/dev/null`,
-                { encoding: 'utf-8' }
-            );
+            const result = await execAsync('az', ['network', 'dns', 'zone', 'show', '-g', resourceGroup, '-n', dnsZoneName]);
 
             const deployed = JSON.parse(result);
 
@@ -146,25 +135,9 @@ export class AzureDnsZoneRender extends AzureResourceRender {
             ) as AzureDnsZoneConfig;
 
         } catch (error: any) {
-            // If the command failed, it likely means the resource doesn't exist
-            // Azure CLI returns exit code 3 when resource is not found
-            if (error.status === 3 || error.status === 1) {
+            if (isResourceNotFoundError(error)) {
                 return undefined;
             }
-
-            // For other errors, check if it's a "not found" error
-            const errorMessage = error.message || String(error);
-            const stderr = error.stderr?.toString() || '';
-            const combinedError = errorMessage + ' ' + stderr;
-
-            if (combinedError.includes('ResourceNotFound') ||
-                combinedError.includes('ResourceGroupNotFound') ||
-                combinedError.includes('was not found') ||
-                combinedError.includes('could not be found')) {
-                return undefined;
-            }
-
-            // For genuine errors, throw them
             throw new Error(
                 `Failed to get deployed properties for DNS zone ${dnsZoneName} in resource group ${resourceGroup}: ${error}`
             );
@@ -185,7 +158,7 @@ export class AzureDnsZoneRender extends AzureResourceRender {
 
         let stdout: string;
         try {
-            stdout = execSync('az network dns zone list', { encoding: 'utf-8' });
+            stdout = await execAsync('az', ['network', 'dns', 'zone', 'list']);
         } catch (error: any) {
             const detail = error.stderr?.toString().trim() || error.message || String(error);
             throw new Error(
@@ -258,8 +231,7 @@ export class AzureDnsZoneRender extends AzureResourceRender {
         const childResourceGroup = this.getResourceGroupName(resource);
 
         // Slug helper: uppercase, non-alphanumeric → underscore (mirrors paramResolver.ts toVarName)
-        const slug = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '_');
-        const zoneSlug = slug(childZoneName);
+        const zoneSlug = toEnvSlug(childZoneName);
 
         // Variable names for captured values
         const ns1Var = `MERLIN_${zoneSlug}_NS1`;

@@ -6,12 +6,13 @@ import {
     AZURE_POSTGRESQL_RESOURCE_TYPE,
 } from '../azurePostgreSQLFlexible.js';
 
-vi.mock('child_process', () => ({
-    execSync: vi.fn(),
-}));
+vi.mock('../../common/constants.js', async (importOriginal) => {
+    const actual = await importOriginal() as any;
+    return { ...actual, execAsync: vi.fn() };
+});
 
-import { execSync } from 'child_process';
-const mockExecSync = vi.mocked(execSync);
+import { execAsync } from '../../common/constants.js';
+const mockExecAsync = vi.mocked(execAsync);
 
 function makeResource(
     config: Partial<AzurePostgreSQLFlexibleConfig> = {},
@@ -54,7 +55,7 @@ function findUpdate(commands: { command: string; args: string[] }[]) {
 }
 
 function mockNotFound(): void {
-    mockExecSync.mockImplementation(() => {
+    mockExecAsync.mockImplementation(async () => {
         const err: any = new Error('ResourceNotFound');
         err.status = 3;
         throw err;
@@ -62,17 +63,16 @@ function mockNotFound(): void {
 }
 
 function mockExists(): void {
-    mockExecSync.mockImplementation((cmd: string) => {
-        const c = String(cmd);
-        if (c.includes('group show')) {
-            return JSON.stringify({ name: 'merlin-rg-stg-krc' }) as any;
+    mockExecAsync.mockImplementation(async (_cmd: string, args: string[]) => {
+        if (args.includes('group') && args.includes('show')) {
+            return JSON.stringify({ name: 'merlin-rg-stg-krc' });
         }
         return JSON.stringify({
             sku: { name: 'Standard_D2ds_v4', tier: 'GeneralPurpose' },
             storage: { storageSizeGb: 32 },
             version: '16',
             tags: {},
-        }) as any;
+        });
     });
 }
 
@@ -237,7 +237,7 @@ describe('AzurePostgreSQLFlexibleRender', () => {
 
     describe('getDeployedProps', () => {
         it('returns undefined for exit code 1 (not found)', async () => {
-            mockExecSync.mockImplementation(() => {
+            mockExecAsync.mockImplementation(async () => {
                 const err: any = new Error('not found');
                 err.status = 1;
                 throw err;
@@ -249,10 +249,10 @@ describe('AzurePostgreSQLFlexibleRender', () => {
 
         it('throws on unexpected errors', async () => {
             let callCount = 0;
-            mockExecSync.mockImplementation(() => {
+            mockExecAsync.mockImplementation(async () => {
                 callCount++;
                 if (callCount <= 1) {
-                    return JSON.stringify({ name: 'merlin-rg-stg-krc' }) as any;
+                    return JSON.stringify({ name: 'merlin-rg-stg-krc' });
                 }
                 const err: any = new Error('NetworkError');
                 err.status = 99;

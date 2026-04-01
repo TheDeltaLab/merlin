@@ -1,6 +1,7 @@
 import { Resource, ResourceSchema, Command, Render, RenderContext } from '../common/resource.js';
 import { resolveConfig } from '../common/paramResolver.js';
 import { manifestToYaml, ensureNamespaceCommand } from './kubernetesNamespace.js';
+import { MERLIN_YAML_FILE_PLACEHOLDER } from '../common/constants.js';
 
 export const KUBERNETES_SERVICE_TYPE = 'KubernetesService';
 
@@ -110,7 +111,7 @@ export class KubernetesServiceRender implements Render {
 
         return [{
             command: 'kubectl',
-            args: ['apply', '-f', '__MERLIN_YAML_FILE__'],
+            args: ['apply', '-f', MERLIN_YAML_FILE_PLACEHOLDER],
             fileContent,
         }];
     }

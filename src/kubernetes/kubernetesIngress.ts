@@ -1,6 +1,7 @@
 import { Resource, ResourceSchema, Command, Render, RenderContext } from '../common/resource.js';
 import { resolveConfig } from '../common/paramResolver.js';
 import { manifestToYaml, ensureNamespaceCommand } from './kubernetesNamespace.js';
+import { toEnvSlug, MERLIN_YAML_FILE_PLACEHOLDER } from '../common/constants.js';
 
 export const KUBERNETES_INGRESS_TYPE = 'KubernetesIngress';
 
@@ -169,7 +170,7 @@ export class KubernetesIngressRender implements Render {
 
         const commands: Command[] = [{
             command: 'kubectl',
-            args: ['apply', '-f', '__MERLIN_YAML_FILE__'],
+            args: ['apply', '-f', MERLIN_YAML_FILE_PLACEHOLDER],
             fileContent,
         }];
 
@@ -198,8 +199,7 @@ export class KubernetesIngressRender implements Render {
         const svcNamespace = ingressNamespace ?? 'ingress-nginx';
 
         // Slug for env var names: uppercase, non-alphanumeric → underscore
-        const slug = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '_');
-        const varPrefix = `MERLIN_${slug(resourceName)}_${slug(dnsZone)}`;
+        const varPrefix = `MERLIN_${toEnvSlug(resourceName)}_${toEnvSlug(dnsZone)}`;
         const lbIpVar = `${varPrefix}_LB_IP`;
         const dnsZoneRgVar = `${varPrefix}_DNS_ZONE_RG`;
 

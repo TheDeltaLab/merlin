@@ -69,7 +69,7 @@ function generateImports(sourcePath: string): string {
 // DO NOT EDIT - This file is generated from YAML resource definitions
 
 import '${MERLIN_PACKAGE_NAME}/init.js'; // Initialize providers before importing runtime
-import { Resource, getAuthProvider, getProprietyGetter, registerResource } from '${MERLIN_PACKAGE_NAME}/runtime.js';`;
+import { Resource, getAuthProvider, getPropertyGetter, registerResource } from '${MERLIN_PACKAGE_NAME}/runtime.js';`;
 }
 
 /**
@@ -152,7 +152,7 @@ function generateResourceObject(resource: ExpandedResource): string {
     code += `  exports: {\n`;
     for (const [key, value] of Object.entries(resource.exports)) {
         code += `    ${JSON.stringify(key)}: {\n`;
-        code += `      getter: getProprietyGetter(${JSON.stringify(value.name)}),\n`;
+        code += `      getter: getPropertyGetter(${JSON.stringify(value.name)}),\n`;
         code += `      args: ${JSON.stringify(value.args)}\n`;
         code += `    },\n`;
     }

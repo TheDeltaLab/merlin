@@ -1,6 +1,6 @@
 import { Resource, ResourceSchema, Command, RenderContext } from '../common/resource.js';
 import { AzureResourceRender } from '../azure/render.js';
-import { execSync } from 'child_process';
+import { isResourceNotFoundError, execAsync } from '../common/constants.js';
 
 export const KUBERNETES_CLUSTER_TYPE = 'KubernetesCluster';
 export const AZURE_AKS_TYPE = 'AzureAKSCluster';
@@ -128,10 +128,7 @@ export class AzureAKSRender extends AzureResourceRender {
         const resourceGroup = this.getResourceGroupName(resource);
 
         try {
-            const result = execSync(
-                `az aks show -g ${resourceGroup} -n ${resourceName} 2>/dev/null`,
-                { encoding: 'utf-8' }
-            );
+            const result = await execAsync('az', ['aks', 'show', '-g', resourceGroup, '-n', resourceName]);
 
             const d = JSON.parse(result);
 
@@ -153,21 +150,9 @@ export class AzureAKSRender extends AzureResourceRender {
             ) as KubernetesClusterConfig;
 
         } catch (error: any) {
-            if (error.status === 3 || error.status === 1) {
+            if (isResourceNotFoundError(error)) {
                 return undefined;
             }
-
-            const errorMessage = error.message || String(error);
-            const stderr = error.stderr?.toString() || '';
-            const combinedError = errorMessage + ' ' + stderr;
-
-            if (combinedError.includes('ResourceNotFound') ||
-                combinedError.includes('ResourceGroupNotFound') ||
-                combinedError.includes('was not found') ||
-                combinedError.includes('could not be found')) {
-                return undefined;
-            }
-
             throw new Error(
                 `Failed to get deployed properties for AKS cluster ${resourceName} in resource group ${resourceGroup}: ${error}`
             );

@@ -1,4 +1,4 @@
-import { Command, Dependency, ProprietyGetter, Resource, getRender } from "../common/resource.js";
+import { Command, Dependency, PropertyGetter, Resource, getRender } from "../common/resource.js";
 import { resolveConfig } from "../common/paramResolver.js";
 import { AzureResourceRender } from "./render.js";
 import { AzureDnsZoneRender, AzureDnsZoneResource } from "./azureDnsZone.js";
@@ -6,10 +6,10 @@ import { AzureADAppRender, AzureADAppResource } from "./azureADApp.js";
 import { AzureServicePrincipalRender, AzureServicePrincipalResource } from "./azureServicePrincipal.js";
 
 /**
- * ProprietyGetter for Azure Resource Managed Identity,
+ * PropertyGetter for Azure Resource Managed Identity,
  * more specifically, it returns the ObjectId of the managed identity.
  */
-export class AzureResourceManagedIdentityGetter implements ProprietyGetter {
+export class AzureResourceManagedIdentityGetter implements PropertyGetter {
     name: string = 'AzureResourceManagedIdentity';
 
     dependencies: Dependency[] = [];
@@ -30,7 +30,7 @@ export class AzureResourceManagedIdentityGetter implements ProprietyGetter {
     }
 }
 
-export class AzureResourceNameGetter implements ProprietyGetter {
+export class AzureResourceNameGetter implements PropertyGetter {
     name: string = 'AzureResourceName';
 
     dependencies: Dependency[] = [];
@@ -46,10 +46,10 @@ export class AzureResourceNameGetter implements ProprietyGetter {
 }
 
 /**
- * ProprietyGetter for Azure Container Registry login server URL.
+ * PropertyGetter for Azure Container Registry login server URL.
  * Returns the loginServer field (e.g. "myregistry.azurecr.io") of the ACR.
  */
-export class AzureContainerRegistryServerGetter implements ProprietyGetter {
+export class AzureContainerRegistryServerGetter implements PropertyGetter {
     name: string = 'AzureContainerRegistryServer';
 
     dependencies: Dependency[] = [];
@@ -72,7 +72,7 @@ export class AzureContainerRegistryServerGetter implements ProprietyGetter {
     }
 }
 
-export class AzureContainerAppFqdnGetter implements ProprietyGetter {
+export class AzureContainerAppFqdnGetter implements PropertyGetter {
     name: string = 'AzureContainerAppFqdn';
 
     dependencies: Dependency[] = [];
@@ -95,7 +95,7 @@ export class AzureContainerAppFqdnGetter implements ProprietyGetter {
     }
 }
 
-export class AzureLogAnalyticsWorkspaceCustomerIdGetter implements ProprietyGetter {
+export class AzureLogAnalyticsWorkspaceCustomerIdGetter implements PropertyGetter {
     name: string = 'AzureLogAnalyticsWorkspaceCustomerId';
 
     dependencies: Dependency[] = [];
@@ -118,7 +118,7 @@ export class AzureLogAnalyticsWorkspaceCustomerIdGetter implements ProprietyGett
     }
 }
 
-export class AzureLogAnalyticsWorkspaceSharedKeyGetter implements ProprietyGetter {
+export class AzureLogAnalyticsWorkspaceSharedKeyGetter implements PropertyGetter {
     name: string = 'AzureLogAnalyticsWorkspaceSharedKey';
 
     dependencies: Dependency[] = [];
@@ -142,10 +142,10 @@ export class AzureLogAnalyticsWorkspaceSharedKeyGetter implements ProprietyGette
 }
 
 /**
- * ProprietyGetter for Azure AD App client ID (appId).
+ * PropertyGetter for Azure AD App client ID (appId).
  * Returns the appId (client ID) of the Azure AD application by display name.
  */
-export class AzureADAppClientIdGetter implements ProprietyGetter {
+export class AzureADAppClientIdGetter implements PropertyGetter {
     name: string = 'AzureADAppClientId';
 
     dependencies: Dependency[] = [];
@@ -169,11 +169,11 @@ export class AzureADAppClientIdGetter implements ProprietyGetter {
 }
 
 /**
- * ProprietyGetter for Azure DNS Zone full domain name.
+ * PropertyGetter for Azure DNS Zone full domain name.
  * Returns the complete DNS zone name (e.g. "chuang.staging.thebrainly.dev")
  * by combining dnsName and parentName from the resource config.
  */
-export class AzureDnsZoneNameGetter implements ProprietyGetter {
+export class AzureDnsZoneNameGetter implements PropertyGetter {
     name: string = 'AzureDnsZoneName';
 
     dependencies: Dependency[] = [];
@@ -189,10 +189,10 @@ export class AzureDnsZoneNameGetter implements ProprietyGetter {
 }
 
 /**
- * ProprietyGetter for Azure Key Vault vault URI.
+ * PropertyGetter for Azure Key Vault vault URI.
  * Returns the vaultUri (e.g. "https://mykeyvault.vault.azure.net/") of the Key Vault.
  */
-export class AzureKeyVaultUrlGetter implements ProprietyGetter {
+export class AzureKeyVaultUrlGetter implements PropertyGetter {
     name: string = 'AzureKeyVaultUrl';
 
     dependencies: Dependency[] = [];
@@ -216,10 +216,10 @@ export class AzureKeyVaultUrlGetter implements ProprietyGetter {
 }
 
 /**
- * ProprietyGetter for Azure Service Principal client ID (appId).
+ * PropertyGetter for Azure Service Principal client ID (appId).
  * Returns the appId of the AD App backing the Service Principal, looked up by display name.
  */
-export class AzureServicePrincipalClientIdGetter implements ProprietyGetter {
+export class AzureServicePrincipalClientIdGetter implements PropertyGetter {
     name: string = 'AzureServicePrincipalClientId';
 
     dependencies: Dependency[] = [];
@@ -243,10 +243,10 @@ export class AzureServicePrincipalClientIdGetter implements ProprietyGetter {
 }
 
 /**
- * ProprietyGetter for Azure Redis Enterprise connection URL.
+ * PropertyGetter for Azure Redis Enterprise connection URL.
  * Returns the Redis connection URL (rediss://<hostname>:10000) for the Redis Enterprise cluster.
  */
-export class AzureRedisEnterpriseUrlGetter implements ProprietyGetter {
+export class AzureRedisEnterpriseUrlGetter implements PropertyGetter {
     name: string = 'AzureRedisEnterpriseUrl';
 
     dependencies: Dependency[] = [];
@@ -270,10 +270,10 @@ export class AzureRedisEnterpriseUrlGetter implements ProprietyGetter {
 }
 
 /**
- * ProprietyGetter for Azure resource API scope.
+ * PropertyGetter for Azure resource API scope.
  * Returns the API scope string (api://<resourceName>/.default) for the resource.
  */
-export class AzureResourceApiScopeGetter implements ProprietyGetter {
+export class AzureResourceApiScopeGetter implements PropertyGetter {
     name: string = 'getResourceApiScope';
 
     dependencies: Dependency[] = [];
@@ -290,11 +290,11 @@ export class AzureResourceApiScopeGetter implements ProprietyGetter {
 }
 
 /**
- * ProprietyGetter for AKS OIDC Issuer URL.
+ * PropertyGetter for AKS OIDC Issuer URL.
  * Returns the OIDC issuer URL for Workload Identity federated credentials.
  * Required when creating Federated Credentials that trust a K8s ServiceAccount.
  */
-export class AzureAKSOidcIssuerUrlGetter implements ProprietyGetter {
+export class AzureAKSOidcIssuerUrlGetter implements PropertyGetter {
     name: string = 'AzureAKSOidcIssuerUrl';
 
     dependencies: Dependency[] = [];

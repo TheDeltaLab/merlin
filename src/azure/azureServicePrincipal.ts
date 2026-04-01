@@ -1,7 +1,7 @@
 import { Resource, ResourceSchema, Command, RenderContext } from '../common/resource.js';
 import { AzureResourceRender } from './render.js';
 import { RING_SHORT_NAME_MAP, REGION_SHORT_NAME_MAP } from '../common/resource.js';
-import { execSync } from 'child_process';
+import { isResourceNotFoundError, execAsync } from '../common/constants.js';
 
 export const AZURE_SERVICE_PRINCIPAL_RESOURCE_TYPE = 'AzureServicePrincipal';
 
@@ -211,17 +211,12 @@ export class AzureServicePrincipalRender extends AzureResourceRender {
     ): Promise<{ appId: string; objectId: string } | undefined> {
         const displayName = this.getDisplayName(resource);
         try {
-            const result = execSync(
-                `az ad app list --filter "displayName eq '${displayName}'" --output json 2>/dev/null`,
-                { encoding: 'utf-8' }
-            );
+            const result = await execAsync('az', ['ad', 'app', 'list', '--filter', `displayName eq '${displayName}'`, '--output', 'json']);
             const apps = JSON.parse(result);
             if (!Array.isArray(apps) || apps.length === 0) return undefined;
             return { appId: apps[0].appId as string, objectId: apps[0].id as string };
         } catch (error: any) {
-            if (error.status === 3 || error.status === 1) return undefined;
-            const combined = (error.message || '') + ' ' + (error.stderr?.toString() || '');
-            if (combined.includes('ResourceNotFound') || combined.includes('was not found')) return undefined;
+            if (isResourceNotFoundError(error)) return undefined;
             throw new Error(`Failed to look up AD App '${displayName}': ${error}`);
         }
     }

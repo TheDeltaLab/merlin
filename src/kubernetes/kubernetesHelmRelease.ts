@@ -1,6 +1,7 @@
 import { Resource, ResourceSchema, Command, Render, RenderContext } from '../common/resource.js';
 import { resolveConfig } from '../common/paramResolver.js';
 import { manifestToYaml, ensureNamespaceCommand } from './kubernetesNamespace.js';
+import { MERLIN_YAML_FILE_PLACEHOLDER } from '../common/constants.js';
 
 export const KUBERNETES_HELM_RELEASE_TYPE = 'KubernetesHelmRelease';
 
@@ -150,7 +151,7 @@ export class KubernetesHelmReleaseRender implements Render {
         // If values object is provided, serialize to YAML and pass via --values
         if (config.values && Object.keys(config.values).length > 0) {
             const valuesYaml = manifestToYaml(config.values);
-            args.push('--values', '__MERLIN_YAML_FILE__');
+            args.push('--values', MERLIN_YAML_FILE_PLACEHOLDER);
             commands.push({ command: 'helm', args, fileContent: valuesYaml });
         } else {
             commands.push({ command: 'helm', args });

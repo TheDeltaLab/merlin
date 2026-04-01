@@ -1,7 +1,7 @@
 import { Resource, ResourceSchema, Command, RenderContext } from '../common/resource.js';
 import { AzureResourceRender } from './render.js';
 import { RING_SHORT_NAME_MAP } from '../common/resource.js';
-import { execSync } from 'child_process';
+import { isResourceNotFoundError, execAsync } from '../common/constants.js';
 
 export const AZURE_AD_APP_RESOURCE_TYPE = 'AzureADApp';
 
@@ -156,10 +156,7 @@ export class AzureADAppRender extends AzureResourceRender {
         const displayName = this.getDisplayName(resource);
 
         try {
-            const result = execSync(
-                `az ad app list --filter "displayName eq '${displayName}'" --output json 2>/dev/null`,
-                { encoding: 'utf-8' }
-            );
+            const result = await execAsync('az', ['ad', 'app', 'list', '--filter', `displayName eq '${displayName}'`, '--output', 'json']);
 
             const apps = JSON.parse(result);
 
@@ -172,21 +169,9 @@ export class AzureADAppRender extends AzureResourceRender {
             return { objectId };
 
         } catch (error: any) {
-            // Azure CLI failure — likely auth issue or not found
-            if (error.status === 3 || error.status === 1) {
+            if (isResourceNotFoundError(error)) {
                 return undefined;
             }
-
-            const errorMessage = error.message || String(error);
-            const stderr = error.stderr?.toString() || '';
-            const combinedError = errorMessage + ' ' + stderr;
-
-            if (combinedError.includes('ResourceNotFound') ||
-                combinedError.includes('was not found') ||
-                combinedError.includes('could not be found')) {
-                return undefined;
-            }
-
             throw new Error(
                 `Failed to get deployed properties for Azure AD App '${displayName}': ${error}`
             );

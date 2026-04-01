@@ -1,6 +1,7 @@
 import { AuthProvider, Command, Dependency, Resource, getRender } from "../common/resource.js";
 import { AzureResourceRender } from "./render.js";
 import { AzureADAppRender, AzureADAppResource } from "./azureADApp.js";
+import { toEnvSlug } from '../common/constants.js';
 
 /**
  * Supported role assignment scopes.
@@ -49,11 +50,10 @@ export class AzureManagedIdentityAuthProvider implements AuthProvider {
         const providerRender  = getRender(provider.type)  as AzureResourceRender;
 
         // Shell variable name slug helper (uppercase, non-alphanumeric → underscore)
-        const slug = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '_');
 
-        const requestorSlug = slug(requestorRender.getResourceName(requestor));
-        const providerSlug  = slug(providerRender.getResourceName(provider));
-        const roleSlug      = slug(role);
+        const requestorSlug = toEnvSlug(requestorRender.getResourceName(requestor));
+        const providerSlug  = toEnvSlug(providerRender.getResourceName(provider));
+        const roleSlug      = toEnvSlug(role);
 
         const principalVar = `MERLIN_MI_${requestorSlug}_PRINCIPAL_ID`;
         const scopeVar     = `MERLIN_MI_${providerSlug}_${roleSlug}_SCOPE`;
@@ -256,11 +256,9 @@ export class AzureEntraIDAuthProvider implements AuthProvider {
         const requestorRender = getRender(requestor.type) as AzureResourceRender;
         const providerRender  = getRender(provider.type)  as AzureADAppRender;
 
-        const slug = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '_');
-
-        const requestorSlug = slug(requestorRender.getResourceName(requestor));
-        const providerSlug  = slug(providerRender.getResourceName(provider));
-        const roleSlug      = slug(role);
+        const requestorSlug = toEnvSlug(requestorRender.getResourceName(requestor));
+        const providerSlug  = toEnvSlug(providerRender.getResourceName(provider));
+        const roleSlug      = toEnvSlug(role);
 
         // Shell variable names
         const principalIdVar = `MERLIN_MI_${requestorSlug}_PRINCIPAL_ID`;

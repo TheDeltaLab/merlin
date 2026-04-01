@@ -1,7 +1,7 @@
 import { AzureResource } from './resource.js';
 import { Resource, ResourceSchema, Command, RenderContext } from '../common/resource.js';
 import { AzureResourceRender } from './render.js';
-import { execSync } from 'child_process';
+import { isResourceNotFoundError, execAsync } from '../common/constants.js';
 
 export const AZURE_CONTAINER_REGISTRY_RESOURCE_TYPE = 'AzureContainerRegistry';
 
@@ -103,10 +103,7 @@ export class AzureContainerRegistryRender extends AzureResourceRender {
 
         try {
             // Execute az acr show command
-            const result = execSync(
-                `az acr show -g ${resourceGroup} -n ${resourceName} 2>/dev/null`,
-                { encoding: 'utf-8' }
-            );
+            const result = await execAsync('az', ['acr', 'show', '-g', resourceGroup, '-n', resourceName]);
 
             const deployedProps = JSON.parse(result);
 
@@ -146,26 +143,9 @@ export class AzureContainerRegistryRender extends AzureResourceRender {
             ) as AzureContainerRegistryConfig;
 
         } catch (error: any) {
-            // If the command failed, it likely means the resource doesn't exist
-            // The 2>/dev/null suppresses stderr, so we check the error status
-            // Azure CLI returns exit code 3 when resource is not found
-            if (error.status === 3 || error.status === 1) {
+            if (isResourceNotFoundError(error)) {
                 return undefined;
             }
-
-            // For other errors, check if it's a "not found" error
-            const errorMessage = error.message || String(error);
-            const stderr = error.stderr?.toString() || '';
-            const combinedError = errorMessage + ' ' + stderr;
-
-            if (combinedError.includes('ResourceNotFound') ||
-                combinedError.includes('ResourceGroupNotFound') ||
-                combinedError.includes('was not found') ||
-                combinedError.includes('could not be found')) {
-                return undefined;
-            }
-
-            // For genuine errors, throw them
             throw new Error(
                 `Failed to get deployed properties for container registry ${resourceName} in resource group ${resourceGroup}: ${error}`
             );
