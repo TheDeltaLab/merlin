@@ -8,9 +8,7 @@ region:
   - koreacentral
   - eastasia
 
-dependencies:
-  - resource: AzureContainerRegistry.shared
-    isHardDependency: true
+dependencies: []
 
 defaultConfig:
   enableManagedIdentity: true
@@ -18,7 +16,7 @@ defaultConfig:
   enableWorkloadIdentity: true
   enableCsiSecretProvider: true
   enableSecretRotation: true
-  attachAcr: ${ AzureContainerRegistry.shared.name }
+  attachAcr: brainlysharedacr
   nodeVmSize: Standard_D2s_v3
   nodeCount: 2
   enableAutoScaling: true

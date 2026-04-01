@@ -178,7 +178,6 @@ export class AzureContainerRegistryRender extends AzureResourceRender {
      */
     private static readonly SIMPLE_PARAM_MAP: Record<string, string> = {
         'sku': '--sku',
-        'location': '--location',
         'defaultAction': '--default-action',
         'dnlScope': '--dnl-scope',
         'identity': '--identity',
@@ -186,6 +185,13 @@ export class AzureContainerRegistryRender extends AzureResourceRender {
         'roleAssignmentMode': '--role-assignment-mode',
         'workspace': '--workspace',
         'zoneRedundancy': '--zone-redundancy',
+    };
+
+    /**
+     * Parameters only valid for create (not update)
+     */
+    private static readonly CREATE_ONLY_SIMPLE_PARAM_MAP: Record<string, string> = {
+        'location': '--location',
     };
 
     /**
@@ -221,6 +227,7 @@ export class AzureContainerRegistryRender extends AzureResourceRender {
 
         // Add all optional parameters using helper methods (only added if present in config)
         this.addSimpleParams(args, config, AzureContainerRegistryRender.SIMPLE_PARAM_MAP);
+        this.addSimpleParams(args, config, AzureContainerRegistryRender.CREATE_ONLY_SIMPLE_PARAM_MAP);
         this.addBooleanFlags(args, config, AzureContainerRegistryRender.BOOLEAN_FLAG_MAP);
         this.addTags(args, config.tags);
 

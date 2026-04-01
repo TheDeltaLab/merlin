@@ -205,12 +205,12 @@ export class Compiler {
         const merged = this.mergeBySource(expandedResources);
         let allResources = merged.flatMap(m => m.resources);
 
-        // 6. Filter by ring/region
+        // 6. Filter by ring/region (resources with no ring/region are global — always included)
         if (options.ring) {
-            allResources = allResources.filter(r => r.ring === options.ring);
+            allResources = allResources.filter(r => r.ring === undefined || r.ring === options.ring);
         }
         if (options.region) {
-            allResources = allResources.filter(r => r.region === options.region);
+            allResources = allResources.filter(r => r.region === undefined || r.region === options.region);
         }
 
         return allResources;

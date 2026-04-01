@@ -11,8 +11,10 @@ import { parseConfigParams } from './interpolation.js';
  * and merges configuration overrides
  */
 export function expand(resource: ResourceYAML): ExpandedResource[] {
-    // Normalize to arrays
-    const rings: Ring[] = Array.isArray(resource.ring) ? resource.ring : [resource.ring];
+    // Normalize to arrays; undefined ring means one instance with no ring
+    const rings: (Ring | undefined)[] = resource.ring
+        ? (Array.isArray(resource.ring) ? resource.ring : [resource.ring])
+        : [undefined];
     // 'none' is an explicit opt-out from region expansion (for global resources)
     const regions: (Region | undefined)[] = (!resource.region || resource.region === 'none')
         ? [undefined]

@@ -52,6 +52,11 @@ export abstract class AzureResourceRender implements Render {
     }
 
     getResourceGroupName(resource: Resource): string {
+        // Allow config-level override
+        const config = resource.config as Record<string, unknown>;
+        if (config?.resourceGroupName && typeof config.resourceGroupName === 'string') {
+            return config.resourceGroupName;
+        }
         // [${project}-|shared]-rg-${ring}[-${region}]
         const projectPart = resource.project ? `${resource.project}` : 'shared';
         const ringPart = `rg-${RING_SHORT_NAME_MAP[resource.ring] || resource.ring}`;
@@ -60,6 +65,11 @@ export abstract class AzureResourceRender implements Render {
     }
 
     getResourceName(resource: Resource): string {
+        // Allow config-level override
+        const config = resource.config as Record<string, unknown>;
+        if (config?.resourceName && typeof config.resourceName === 'string') {
+            return config.resourceName;
+        }
         // [${project}-|shared]-${name}-${ring}[-${region}][-${type}]
         const projectPart = resource.project ? `${resource.project}` : 'shared';
         const ringPart = `${RING_SHORT_NAME_MAP[resource.ring] || resource.ring}`;

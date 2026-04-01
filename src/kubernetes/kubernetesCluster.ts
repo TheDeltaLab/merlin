@@ -239,6 +239,9 @@ export class AzureAKSRender extends AzureResourceRender {
 
         this.addTags(args, config.tags);
 
+        // Always generate SSH keys if not present (required for AKS create)
+        args.push('--generate-ssh-keys');
+
         const commands: Command[] = [{ command: 'az', args }];
 
         // CSI Secret Store Provider addon (must be added separately via --enable-addons)

@@ -74,15 +74,15 @@ export class AzureResourceGroupRender extends AzureResourceRender {
     }
 
     private renderCreate(resource: Resource): Command[] {
-        if (!resource.region) {
-            throw new Error(`Region is required for creating resource group for resource ${resource.name}`);
-        }
+        // Determine location: resource.region, or config.location, or default to koreacentral
+        const config = resource.config as Record<string, unknown>;
+        const location = resource.region ?? config?.location as string ?? 'koreacentral';
 
         const resourceGroupName = this.getResourceGroupName(resource);
         const args: string[] = [
             'group', 'create',
             '--name', resourceGroupName,
-            '--location', resource.region
+            '--location', location
         ];
 
         // Add tags if provided in config
