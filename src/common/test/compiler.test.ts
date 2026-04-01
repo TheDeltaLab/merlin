@@ -2,11 +2,20 @@
  * Compiler orchestrator tests
  */
 
-import { describe, test, expect, beforeEach, afterEach } from 'vitest';
+import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Compiler } from '../compiler.js';
 import { createTempDir, cleanupTempDir, writeToTemp, loadFixture } from '../../test-utils/helpers.js';
 import { mkdir } from 'fs/promises';
 import { join } from 'path';
+
+// Mock pnpm availability to skip slow pnpm install/build during tests
+vi.mock('../../compiler/initializer.js', async (importOriginal) => {
+    const original = await importOriginal<typeof import('../../compiler/initializer.js')>();
+    return {
+        ...original,
+        checkPnpmAvailable: vi.fn().mockResolvedValue(false),
+    };
+});
 
 describe('Compiler', () => {
     let tempDir: string;
