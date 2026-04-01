@@ -2,11 +2,20 @@
  * Integration tests for end-to-end compilation
  */
 
-import { describe, test, expect, beforeEach, afterEach } from 'vitest';
+import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Compiler } from '../../common/compiler.js';
 import { createTempDir, cleanupTempDir, writeToTemp, loadFixture } from '../../test-utils/helpers.js';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
+
+// Mock pnpm availability to skip slow pnpm install/build during tests
+vi.mock('../../compiler/initializer.js', async (importOriginal) => {
+    const original = await importOriginal<typeof import('../../compiler/initializer.js')>();
+    return {
+        ...original,
+        checkPnpmAvailable: vi.fn().mockResolvedValue(false),
+    };
+});
 
 describe('Integration Tests', () => {
     let tempDir: string;
