@@ -77,7 +77,7 @@ export interface ValidationResult {
  */
 export interface ExpandedResource {
     name: string;
-    ring: Ring;              // Single value
+    ring?: Ring;              // Single value or undefined (global resource)
     region?: Region;         // Single value or undefined
     type: string;
     project?: string;

@@ -76,9 +76,14 @@ import { Resource, getAuthProvider, getProprietyGetter, registerResource } from 
  * Generates the resource variable name
  */
 function generateResourceName(resource: ExpandedResource): string {
-    // With region: type_name_ring_region
-    // Without region: type_name_ring
-    const parts = [resource.type, resource.name, resource.ring];
+    // With ring+region: type_name_ring_region
+    // With ring only: type_name_ring
+    // No ring, with region: type_name_region
+    // No ring, no region: type_name
+    const parts = [resource.type, resource.name];
+    if (resource.ring) {
+        parts.push(resource.ring);
+    }
     if (resource.region) {
         parts.push(resource.region);
     }
@@ -93,7 +98,10 @@ function generateResourceObject(resource: ExpandedResource): string {
 
     // Basic fields
     code += `  name: ${JSON.stringify(resource.name)},\n`;
-    code += `  ring: ${JSON.stringify(resource.ring)},\n`;
+
+    if (resource.ring) {
+        code += `  ring: ${JSON.stringify(resource.ring)},\n`;
+    }
 
     if (resource.region) {
         code += `  region: ${JSON.stringify(resource.region)},\n`;

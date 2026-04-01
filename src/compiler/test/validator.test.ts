@@ -43,14 +43,13 @@ describe('Validator', () => {
                 expect(result.errors.some(e => e.path === 'type')).toBe(true);
             });
 
-            test('should reject resource missing ring', () => {
+            test('should accept resource missing ring (global resource)', () => {
                 const data = { ...createResourceYAML(), ring: undefined };
                 const parsed = createParsedYAML(data);
 
                 const result = validate(parsed);
 
-                expect(result.valid).toBe(false);
-                expect(result.errors.some(e => e.path === 'ring')).toBe(true);
+                expect(result.valid).toBe(true);
             });
 
             test('should accept resource missing authProvider', () => {

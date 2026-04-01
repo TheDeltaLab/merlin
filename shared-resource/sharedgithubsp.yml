@@ -8,9 +8,7 @@ ring:
 authProvider:
   name: AzureEntraID
 
-dependencies:
-  - resource: AzureContainerRegistry.shared
-    isHardDependency: true
+dependencies: []
 
 defaultConfig:
   tags:
@@ -38,12 +36,9 @@ specificConfig:
       # Alluneed RG — eastasia
       - role: Container Apps Contributor
         scope: /subscriptions/{subscriptionId}/resourceGroups/brainly-rg-tst-eas
-      # ACR — koreacentral
+      # ACR — shared (brainlysharedacr, used by all rings)
       - role: AcrPush
-        scope: /subscriptions/{subscriptionId}/resourceGroups/brainly-rg-tst-krc/providers/Microsoft.ContainerRegistry/registries/brainlysharedtstkrcacr
-      # ACR — eastasia
-      - role: AcrPush
-        scope: /subscriptions/{subscriptionId}/resourceGroups/brainly-rg-tst-eas/providers/Microsoft.ContainerRegistry/registries/brainlysharedtsteasacr
+        scope: /subscriptions/{subscriptionId}/resourceGroups/brainly-rg-shared/providers/Microsoft.ContainerRegistry/registries/brainlysharedacr
       # AKS — kubectl access for K8s deploys (shared RG)
       - role: Azure Kubernetes Service Cluster User Role
         scope: /subscriptions/{subscriptionId}/resourceGroups/shared-rg-tst-krc
@@ -75,12 +70,9 @@ specificConfig:
       # Alluneed RG — eastasia
       - role: Container Apps Contributor
         scope: /subscriptions/{subscriptionId}/resourceGroups/brainly-rg-stg-eas
-      # ACR — koreacentral
+      # ACR — shared (brainlysharedacr, used by all rings)
       - role: AcrPush
-        scope: /subscriptions/{subscriptionId}/resourceGroups/brainly-rg-stg-krc/providers/Microsoft.ContainerRegistry/registries/brainlysharedstgkrcacr
-      # ACR — eastasia
-      - role: AcrPush
-        scope: /subscriptions/{subscriptionId}/resourceGroups/brainly-rg-stg-eas/providers/Microsoft.ContainerRegistry/registries/brainlysharedstgeasacr
+        scope: /subscriptions/{subscriptionId}/resourceGroups/brainly-rg-shared/providers/Microsoft.ContainerRegistry/registries/brainlysharedacr
       # AKS — kubectl access for K8s deploys (shared RG)
       - role: Azure Kubernetes Service Cluster User Role
         scope: /subscriptions/{subscriptionId}/resourceGroups/shared-rg-stg-krc

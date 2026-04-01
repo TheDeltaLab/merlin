@@ -100,8 +100,9 @@ export interface Resource<Schema extends ResourceSchema = ResourceSchema> {
 
     /**
      * The ring this resource belongs to, e.g. test, staging, production.
+     * undefined means the resource is not ring specific (shared across all rings).
      */
-    ring: Ring;
+    ring?: Ring;
 
     /**
      * The region this resource is deployed to, e.g. eastus, westus.

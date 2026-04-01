@@ -8,7 +8,7 @@
  *   3. Resource groups are deduplicated and deployed as level 0
  */
 
-import { Resource, Command, RenderContext } from './common/resource.js';
+import { Resource, Command, RenderContext, Region } from './common/resource.js';
 import { getAllResources, getResource } from './common/registry.js';
 import { getRender } from './common/resource.js';
 import { AzureResourceGroupRender } from './azure/resourceGroup.js';
@@ -274,26 +274,27 @@ export class Deployer {
     const seen = new Map<string, ResourceCommands>(); // rgName → commands
 
     for (const r of resources) {
-      // Skip resources that don't have a region (global resources handle RG differently)
-      // DNS zones use their own ensureResourceGroupCommandsForDnsZone which is also context-aware
-      if (!r.region) continue;
+      const config = r.config as Record<string, unknown>;
+      const hasCustomRG = config?.resourceGroupName && typeof config.resourceGroupName === 'string';
+
+      // Skip resources that don't have a region AND no custom resourceGroupName
+      // Global resources with a custom RG (e.g. shared ACR) still need RG creation
+      if (!r.region && !hasCustomRG) continue;
 
       const rgName = rgRender.getResourceGroupName(r);
       if (!seen.has(rgName)) {
+        // Determine location for RG: resource.region, config.location, or default
+        const location = r.region ?? (config?.location as string) ?? 'koreacentral';
+
         // Build a minimal synthetic resource with only the fields RG render needs.
-        // Passing the original resource `r` would cause resolveConfig() to generate
-        // capture commands for r's dependencies (e.g. LAW customerId for ACEnv),
-        // which would incorrectly appear in the RG level.
-        // config is intentionally empty — tags are not critical for RG creation
-        // and may contain ParamValues that trigger unwanted capture commands.
         const rgResource: Resource = {
           name: `rg:${rgName}`,
           type: 'AzureResourceGroup',
           ring: r.ring,
-          region: r.region,
+          region: r.region ?? location as Region,
           project: r.project,
           dependencies: [],
-          config: {},
+          config: hasCustomRG ? { resourceGroupName: config.resourceGroupName } : {},
           exports: {},
         };
         const commands = await rgRender.render(rgResource);
@@ -311,7 +312,8 @@ export class Deployer {
    */
   private filterResources(resources: Resource[], options: DeployOptions): Resource[] {
     return resources.filter(resource => {
-      if (options.ring && resource.ring !== options.ring) {
+      // Resources with no ring are global — never filter them out by ring
+      if (options.ring && resource.ring !== undefined && resource.ring !== options.ring) {
         return false;
       }
       // Global resources (e.g. AzureADApp) have no region — never filter them out

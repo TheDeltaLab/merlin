@@ -1,12 +1,7 @@
 name: shared
 type: AzureContainerRegistry
 project: brainly
-ring:
-  - test
-  - staging
-region:
-  - koreacentral
-  - eastasia
+# No ring/region — ACR is a global shared resource across all environments
 
 authProvider:
   name: AzureManagedIdentity
@@ -16,12 +11,14 @@ authProvider:
 dependencies: []
 
 defaultConfig:
+  resourceName: brainlysharedacr
+  resourceGroupName: brainly-rg-shared
+  location: koreacentral
   sku: Basic
   adminUserEnabled: false
 
   tags:
     merlin: "true"
-    env: ${ this.ring }
 
 specificConfig: []
 

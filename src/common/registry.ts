@@ -36,35 +36,51 @@ export function registerResource(resource: Resource): void {
 
 /**
  * Gets a resource by type, name, ring, and optional region.
- * If the resource is registered as a global resource (isGlobalResource = true),
- * the region is ignored and the lookup falls back to the ring-only key.
  *
- * When the caller has no region (e.g. a global SP referencing a regional AKS),
- * falls back to any resource matching type:name:ring regardless of region.
+ * Lookup strategy (tries in order until a match is found):
+ * 1. Exact match: type:name:ring:region
+ * 2. Global resource (no region): type:name:ring (if resource.isGlobalResource)
+ * 3. Ring-less resource: type:name (for resources with no ring, e.g. shared ACR)
+ * 4. If caller has no region, scan for any type:name:ring:* match
+ * 5. If caller has no ring, scan for any type:name:*[:*] match
  */
 export function getResource(
     type: string,
     name: string,
-    ring: string,
+    ring?: string,
     region?: string
 ): Resource | undefined {
-    // First try exact match (with region)
+    // 1. Exact match (with ring and region)
     const exactKey = makeResourceKey(type, name, ring, region);
     const exact = RESOURCE_REGISTRY.get(exactKey);
     if (exact) return exact;
 
-    // If region was provided, also try the global (region-less) key
-    if (region) {
+    // 2. If region was provided, try global (region-less) key with same ring
+    if (region && ring) {
         const globalKey = makeResourceKey(type, name, ring, undefined);
         const global = RESOURCE_REGISTRY.get(globalKey);
         if (global?.isGlobalResource) return global;
     }
 
-    // If no region was provided (caller is a global resource), try to find
+    // 3. Try ring-less key (for resources that have no ring at all)
+    if (ring) {
+        const ringlessKey = makeResourceKey(type, name, undefined, undefined);
+        const ringless = RESOURCE_REGISTRY.get(ringlessKey);
+        if (ringless) return ringless;
+    }
+
+    // 4. If no region was provided (caller is a global resource), try to find
     // any regional resource matching type:name:ring:* (pick the first match).
-    // This allows global resources (e.g. SP) to reference regional resources (e.g. AKS).
-    if (!region) {
+    if (ring && !region) {
         const prefix = `${type}:${name}:${ring}:`;
+        for (const [key, res] of RESOURCE_REGISTRY) {
+            if (key.startsWith(prefix)) return res;
+        }
+    }
+
+    // 5. If no ring was provided, scan for any matching type:name:*
+    if (!ring) {
+        const prefix = `${type}:${name}:`;
         for (const [key, res] of RESOURCE_REGISTRY) {
             if (key.startsWith(prefix)) return res;
         }
@@ -89,8 +105,10 @@ export function clearRegistry(): void {
 
 /**
  * Creates a unique key for a resource.
- * Format: type:name:ring[:region]
+ * Format: type:name[:ring[:region]]
  */
-export function makeResourceKey(type: string, name: string, ring: string, region?: string): string {
-    return region ? `${type}:${name}:${ring}:${region}` : `${type}:${name}:${ring}`;
+export function makeResourceKey(type: string, name: string, ring?: string, region?: string): string {
+    if (ring && region) return `${type}:${name}:${ring}:${region}`;
+    if (ring) return `${type}:${name}:${ring}`;
+    return `${type}:${name}`;
 }

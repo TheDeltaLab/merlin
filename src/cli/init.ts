@@ -66,7 +66,7 @@ dependencies:
 
 defaultConfig:
   namespace: ${project}
-  image: brainlysharedstgkrcacr.azurecr.io/${project}:latest  # TODO: Change to your image
+  image: brainlysharedacr.azurecr.io/${project}:latest  # TODO: Change to your image
   port: 3000  # TODO: Change to your port
   serviceAccountName: ${project}-workload-sa
   secretProvider: ${project}-secret-provider

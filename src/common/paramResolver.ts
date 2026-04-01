@@ -115,7 +115,7 @@ async function resolveSegment(
             return seg.value;
 
         case 'self':
-            if (seg.field === 'ring') return resource.ring;
+            if (seg.field === 'ring') return resource.ring ?? '';
             if (seg.field === 'region') return resource.region ?? '';
             // TypeScript exhaustiveness — should never happen
             throw new Error(`Unknown self field: ${(seg as { field: string }).field}`);
@@ -126,7 +126,8 @@ async function resolveSegment(
             if (!depResource) {
                 throw new Error(
                     `Cannot resolve parameter "\${ ${seg.resourceType}.${seg.resource}.${seg.export} }": ` +
-                    `no resource "${seg.resourceType}.${seg.resource}" registered for ring="${resource.ring}"` +
+                    `no resource "${seg.resourceType}.${seg.resource}" registered` +
+                    (resource.ring ? ` for ring="${resource.ring}"` : '') +
                     (resource.region ? `, region="${resource.region}"` : '')
                 );
             }
@@ -183,7 +184,7 @@ function toVarName(
     resourceType: string,
     resource: string,
     exportName: string,
-    ring: string,
+    ring?: string,
     region?: string
 ): string {
     const slug = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '_');
@@ -196,7 +197,9 @@ function toVarName(
         shortType = resourceType; // fallback to full type name
     }
 
-    const shortRing = RING_SHORT_NAME_MAP[ring as keyof typeof RING_SHORT_NAME_MAP] ?? ring;
+    const shortRing = ring
+        ? RING_SHORT_NAME_MAP[ring as keyof typeof RING_SHORT_NAME_MAP] ?? ring
+        : undefined;
     const shortRegion = region
         ? REGION_SHORT_NAME_MAP[region as keyof typeof REGION_SHORT_NAME_MAP] ?? region
         : undefined;
@@ -205,8 +208,8 @@ function toVarName(
         'MERLIN',
         slug(shortType),
         slug(resource),
-        slug(shortRing),
     ];
+    if (shortRing) parts.push(slug(shortRing));
     if (shortRegion) parts.push(slug(shortRegion));
     parts.push(slug(exportName));
     return parts.join('_');
