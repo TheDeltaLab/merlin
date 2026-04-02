@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.0](https://github.com/TheDeltaLab/merlin/compare/v1.5.1...v1.6.0) (2026-04-02)
+
+
+### Features
+
+* add --k8s-only flag and skip K8s resources in pre-deploy RG creation ([#54](https://github.com/TheDeltaLab/merlin/issues/54)) ([859d564](https://github.com/TheDeltaLab/merlin/commit/859d564d40534c4485d06b3c20bcbf06e83a1019))
+
 ## [1.5.1](https://github.com/TheDeltaLab/merlin/compare/v1.5.0...v1.5.1) (2026-04-02)
 
 
