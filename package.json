@@ -24,7 +24,7 @@
     "build:full": "pnpm build && ([ -d .merlin ] && ([ -d .merlin/node_modules ] || (cd .merlin && pnpm install)) && cd .merlin && pnpm build || true)",
     "prepublishOnly": "pnpm build && pnpm test",
     "postinstall": "[ -f dist/merlin.js ] && chmod +x dist/merlin.js || true",
-    "link:global": "pnpm build && pnpm link --global",
+    "link:global": "pnpm build && node scripts/check-global-conflicts.js && pnpm link --global",
     "test": "vitest run",
     "test:watch": "vitest",
     "dev": "tsx src/merlin.ts"
