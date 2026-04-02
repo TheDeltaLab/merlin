@@ -25,6 +25,7 @@ interface CliOptions {
   outputFile?: string;
   concurrency?: number;
   noShared?: boolean;
+  k8sOnly?: boolean;
 }
 
 /**
@@ -54,6 +55,8 @@ function parseArguments(): CliOptions {
       }
     } else if (arg === '--no-shared') {
       options.noShared = true;
+    } else if (arg === '--k8s-only') {
+      options.k8sOnly = true;
     } else if (arg === '--help' || arg === '-h') {
       console.log(\`
 Usage: node deploy.js [options]
@@ -65,6 +68,7 @@ Options:
   --output, -o <file>        Write generated commands to file
   --concurrency, -c <n>      Max parallel resource deployments per level (default: 4)
   --no-shared                Skip deploying shared resources (still registered for resolution)
+  --k8s-only                 Only deploy Kubernetes resources (skip Azure, GitHub, etc.)
   --help, -h                 Show this help message
 
 Examples:
