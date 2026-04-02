@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.5.0](https://github.com/TheDeltaLab/merlin/compare/v1.4.0...v1.5.0) (2026-04-02)
+
+
+### Features
+
+* auto-ensure K8s namespace exists before deploying resources ([#41](https://github.com/TheDeltaLab/merlin/issues/41)) ([4f0346c](https://github.com/TheDeltaLab/merlin/commit/4f0346c81bbfb0d7e8c3dab0cacde73ba487a5d0))
+* modularize azure provider, improve CI/CD and onboarding ([#48](https://github.com/TheDeltaLab/merlin/issues/48)) ([0eb9dec](https://github.com/TheDeltaLab/merlin/commit/0eb9dec3dd676ddc2049f842a97d1a17dd06bb25))
+* unified shared ACR and optional ring for global resources ([#44](https://github.com/TheDeltaLab/merlin/issues/44)) ([c3036d7](https://github.com/TheDeltaLab/merlin/commit/c3036d7a3cb5a10536a66dcd1eb07cd135ca9777))
+
+
+### Bug Fixes
+
+* resolve 26 compiler/integration test timeouts by mocking pnpm ([#46](https://github.com/TheDeltaLab/merlin/issues/46)) ([159a0c0](https://github.com/TheDeltaLab/merlin/commit/159a0c02ed42db7000646759829ae464a68a347b))
+
 ## [1.4.0](https://github.com/TheDeltaLab/merlin/compare/v1.3.0...v1.4.0) (2026-03-31)
 
 
