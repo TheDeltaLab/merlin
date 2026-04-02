@@ -181,6 +181,9 @@ for repo in "${REPO_LIST[@]}"; do
   info "Configuring GitHub repo: $repo"
 
   # Set secrets
+  echo "$SP_APP_ID"  | gh secret set AKS_AZURE_CLIENT_ID --repo "$repo" 2>/dev/null && \
+    ok "  Secret AKS_AZURE_CLIENT_ID set" || warn "  Failed to set AKS_AZURE_CLIENT_ID"
+
   echo "$SP_APP_ID"  | gh secret set AKS_ACR_USERNAME --repo "$repo" 2>/dev/null && \
     ok "  Secret AKS_ACR_USERNAME set" || warn "  Failed to set AKS_ACR_USERNAME"
 
@@ -205,9 +208,10 @@ echo "  Expires:      ~$EXPIRE_DATE"
 echo "  Repos:        ${REPO_LIST[*]}"
 echo ""
 echo "GitHub Actions workflows can now use:"
-echo "  secrets.AKS_ACR_USERNAME  → docker login username"
-echo "  secrets.AKS_ACR_PASSWORD  → docker login password"
-echo "  vars.AKS_ACR_NAME        → ACR registry name"
+echo "  secrets.AKS_AZURE_CLIENT_ID → Azure OIDC login client ID"
+echo "  secrets.AKS_ACR_USERNAME    → docker login username"
+echo "  secrets.AKS_ACR_PASSWORD    → docker login password"
+echo "  vars.AKS_ACR_NAME          → ACR registry name"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 warn "Remember: when the secret expires, re-run this script to rotate it."

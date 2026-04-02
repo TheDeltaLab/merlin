@@ -51,11 +51,15 @@ export class Compiler {
         const generatedFiles: string[] = [];
 
         try {
-            // 1. Discover YAML files (auto-include shared resources from merlin package)
-            const sharedPaths = options.noShared ? [] : await this.getSharedResourcePaths();
+            // 1. Discover YAML files (always include shared resources for ${ } resolution)
+            const sharedPaths = await this.getSharedResourcePaths();
             const allInputPaths = [options.inputPath, ...(options.inputPaths ?? []), ...sharedPaths];
             const yamlFileArrays = await Promise.all(allInputPaths.map(p => this.discoverYAMLFiles(p)));
             const yamlFiles = [...new Set(yamlFileArrays.flat())];
+
+            // Track which files came from shared directories (for --no-shared deploy filtering)
+            const sharedFileArrays = await Promise.all(sharedPaths.map(p => this.discoverYAMLFiles(p)));
+            const sharedFiles = new Set(sharedFileArrays.flat());
             if (yamlFiles.length === 0) {
                 return this.createNoFilesError(options.inputPath);
             }
@@ -124,7 +128,16 @@ export class Compiler {
             // 5. Transform resources (expand ring/region)
             const expandedResources = this.transformResources(expandedYAMLs);
 
-            // 5.5. Merge resources from the same source file (e.g. KubernetesApp expands
+            // 5.5. Mark shared resources (from shared-resource/ and shared-k8s-resource/)
+            for (const entry of expandedResources) {
+                if (sharedFiles.has(entry.source)) {
+                    for (const r of entry.resources) {
+                        r._isShared = true;
+                    }
+                }
+            }
+
+            // 5.6. Merge resources from the same source file (e.g. KubernetesApp expands
             // into multiple resource types, all originating from the same YAML file)
             const mergedResources = this.mergeBySource(expandedResources);
 
@@ -173,8 +186,8 @@ export class Compiler {
      * Reuses compile pipeline steps 1-5, then filters by ring/region.
      */
     async list(options: ListOptions): Promise<ExpandedResource[]> {
-        // 1. Discover YAML files
-        const sharedPaths = options.noShared ? [] : await this.getSharedResourcePaths();
+        // 1. Discover YAML files (always include shared for ${ } resolution)
+        const sharedPaths = await this.getSharedResourcePaths();
         const allInputPaths = [options.inputPath, ...(options.inputPaths ?? []), ...sharedPaths];
         const yamlFileArrays = await Promise.all(allInputPaths.map(p => this.discoverYAMLFiles(p)));
         const yamlFiles = [...new Set(yamlFileArrays.flat())];

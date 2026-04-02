@@ -1034,6 +1034,7 @@ Merlin 创建的 `AzureServicePrincipal`（在 `shared-resource/sharedgithubsp.y
 
 | 类型 | 名称 | 用途 |
 |------|------|------|
+| Secret | `AKS_AZURE_CLIENT_ID` | SP appId（OIDC 登录 Azure CLI） |
 | Secret | `AKS_ACR_USERNAME` | SP appId（docker login 用户名） |
 | Secret | `AKS_ACR_PASSWORD` | SP client secret（docker login 密码） |
 | Variable | `AKS_ACR_NAME` | ACR 名称（如 `brainlysharedacr`） |

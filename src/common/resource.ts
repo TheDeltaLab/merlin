@@ -72,6 +72,12 @@ export interface Resource<Schema extends ResourceSchema = ResourceSchema> {
     project?: string;
 
     /**
+     * Whether this resource was auto-included from shared-resource/ or shared-k8s-resource/.
+     * Used by the deployer to skip shared resources when --no-shared is active.
+     */
+    _isShared?: boolean;
+
+    /**
      * The parent resource, in "Type.name" format
      * e.g., "AzureContainerAppEnvironment.chuangacenv"
      */
