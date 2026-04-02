@@ -1,5 +1,6 @@
 import { Resource, ResourceSchema, Command, Render, RenderContext } from '../common/resource.js';
 import { resolveConfig } from '../common/paramResolver.js';
+import { MERLIN_YAML_FILE_PLACEHOLDER } from '../common/constants.js';
 
 export const KUBERNETES_NAMESPACE_TYPE = 'KubernetesNamespace';
 
@@ -74,7 +75,7 @@ export class KubernetesNamespaceRender implements Render {
 
         return [{
             command: 'kubectl',
-            args: ['apply', '-f', '__MERLIN_YAML_FILE__'],
+            args: ['apply', '-f', MERLIN_YAML_FILE_PLACEHOLDER],
             fileContent,
         }];
     }

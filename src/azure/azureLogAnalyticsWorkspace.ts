@@ -1,7 +1,7 @@
 import { AzureResource } from './resource.js';
 import { Resource, ResourceSchema, Command, RenderContext } from '../common/resource.js';
 import { AzureResourceRender } from './render.js';
-import { execSync } from 'child_process';
+import { isResourceNotFoundError, execAsync } from '../common/constants.js';
 
 export const AZURE_LOG_ANALYTICS_WORKSPACE_RESOURCE_TYPE = 'AzureLogAnalyticsWorkspace';
 
@@ -107,10 +107,7 @@ export class AzureLogAnalyticsWorkspaceRender extends AzureResourceRender {
         const resourceGroup = this.getResourceGroupName(resource);
 
         try {
-            const result = execSync(
-                `az monitor log-analytics workspace show -g ${resourceGroup} -n ${resourceName} 2>/dev/null`,
-                { encoding: 'utf-8' }
-            );
+            const result = await execAsync('az', ['monitor', 'log-analytics', 'workspace', 'show', '-g', resourceGroup, '-n', resourceName]);
 
             const d = JSON.parse(result);
 
@@ -141,22 +138,9 @@ export class AzureLogAnalyticsWorkspaceRender extends AzureResourceRender {
             ) as AzureLogAnalyticsWorkspaceConfig;
 
         } catch (error: any) {
-            // Azure CLI returns exit code 3 when resource is not found
-            if (error.status === 3 || error.status === 1) {
+            if (isResourceNotFoundError(error)) {
                 return undefined;
             }
-
-            const errorMessage = error.message || String(error);
-            const stderr = error.stderr?.toString() || '';
-            const combinedError = errorMessage + ' ' + stderr;
-
-            if (combinedError.includes('ResourceNotFound') ||
-                combinedError.includes('ResourceGroupNotFound') ||
-                combinedError.includes('was not found') ||
-                combinedError.includes('could not be found')) {
-                return undefined;
-            }
-
             throw new Error(
                 `Failed to get deployed properties for log analytics workspace ` +
                 `${resourceName} in resource group ${resourceGroup}: ${error}`

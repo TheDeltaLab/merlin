@@ -1,6 +1,6 @@
 import { Resource, ResourceSchema, Command, RenderContext } from '../common/resource.js';
 import { AzureResourceRender } from './render.js';
-import { execSync } from 'child_process';
+import { isResourceNotFoundError, execAsync } from '../common/constants.js';
 
 export const AZURE_KEY_VAULT_RESOURCE_TYPE = 'AzureKeyVault';
 
@@ -85,10 +85,7 @@ export class AzureKeyVaultRender extends AzureResourceRender {
         const resourceGroup = this.getResourceGroupName(resource);
 
         try {
-            const result = execSync(
-                `az keyvault show -g ${resourceGroup} -n ${resourceName} 2>/dev/null`,
-                { encoding: 'utf-8' }
-            );
+            const result = await execAsync('az', ['keyvault', 'show', '-g', resourceGroup, '-n', resourceName]);
 
             const d = JSON.parse(result);
 
@@ -106,22 +103,9 @@ export class AzureKeyVaultRender extends AzureResourceRender {
             ) as AzureKeyVaultConfig;
 
         } catch (error: any) {
-            if (error.status === 3 || error.status === 1) {
+            if (isResourceNotFoundError(error)) {
                 return undefined;
             }
-
-            const errorMessage = error.message || String(error);
-            const stderr = error.stderr?.toString() || '';
-            const combinedError = errorMessage + ' ' + stderr;
-
-            if (combinedError.includes('ResourceNotFound') ||
-                combinedError.includes('ResourceGroupNotFound') ||
-                combinedError.includes('was not found') ||
-                combinedError.includes('could not be found') ||
-                combinedError.includes('VaultNotFound')) {
-                return undefined;
-            }
-
             throw new Error(
                 `Failed to get deployed properties for Key Vault ${resourceName} in resource group ${resourceGroup}: ${error}`
             );

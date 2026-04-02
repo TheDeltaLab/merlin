@@ -5,7 +5,7 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { resolveConfig } from '../paramResolver.js';
 import { clearRegistry, registerResource, getResource } from '../registry.js';
-import { Resource, registerProprietyGetter, ProprietyGetter, Dependency, Command, registerRender, Render } from '../resource.js';
+import { Resource, registerPropertyGetter, PropertyGetter, Dependency, Command, registerRender, Render } from '../resource.js';
 import { ParamValue } from '../../compiler/types.js';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -127,7 +127,7 @@ describe('resolveConfig', () => {
     describe('${ dep.export } resolution', () => {
         test('resolves dep segment to $VARNAME and collects a capture command', async () => {
             // Setup a getter
-            const mockGetter: ProprietyGetter = {
+            const mockGetter: PropertyGetter = {
                 name: 'testGetter',
                 dependencies: [],
                 get: vi.fn().mockResolvedValue([{
@@ -135,7 +135,7 @@ describe('resolveConfig', () => {
                     args: ['acr', 'show', '-g', 'rg', '-n', 'myregistry', '-o', 'tsv', '--query', 'loginServer'],
                 }] as Command[])
             };
-            registerProprietyGetter(mockGetter);
+            registerPropertyGetter(mockGetter);
 
             // Register the dependency resource
             const depResource = makeResource({
@@ -175,7 +175,7 @@ describe('resolveConfig', () => {
         });
 
         test('deduplicates capture commands when same export is referenced multiple times', async () => {
-            const mockGetter: ProprietyGetter = {
+            const mockGetter: PropertyGetter = {
                 name: 'acrServerGetter',
                 dependencies: [],
                 get: vi.fn().mockResolvedValue([{
@@ -183,7 +183,7 @@ describe('resolveConfig', () => {
                     args: ['acr', 'show', '-g', 'rg', '-n', 'reg', '-o', 'json']
                 }] as Command[])
             };
-            registerProprietyGetter(mockGetter);
+            registerPropertyGetter(mockGetter);
 
             const depResource = makeResource({
                 name: 'chuangacr',
@@ -223,7 +223,7 @@ describe('resolveConfig', () => {
 
         test('captures plain stdout from getter command', async () => {
             // AzureResourceNameGetter uses `echo` to output the resource name directly
-            const mockGetter: ProprietyGetter = {
+            const mockGetter: PropertyGetter = {
                 name: 'echoGetter',
                 dependencies: [],
                 get: vi.fn().mockResolvedValue([{
@@ -232,7 +232,7 @@ describe('resolveConfig', () => {
                     // No resultParser
                 }] as Command[])
             };
-            registerProprietyGetter(mockGetter);
+            registerPropertyGetter(mockGetter);
 
             const depResource = makeResource({
                 name: 'myresource',
@@ -303,14 +303,14 @@ describe('resolveConfig', () => {
         });
 
         test('multiple different exports produce multiple capture commands', async () => {
-            const acrGetter: ProprietyGetter = {
+            const acrGetter: PropertyGetter = {
                 name: 'acrGetter',
                 dependencies: [],
                 get: vi.fn().mockResolvedValue([{
                     command: 'az', args: ['acr', 'show']
                 }] as Command[])
             };
-            const nameGetter: ProprietyGetter = {
+            const nameGetter: PropertyGetter = {
                 name: 'nameGetter',
                 dependencies: [],
                 get: vi.fn().mockResolvedValue([{
@@ -469,12 +469,12 @@ describe('getResource — global resource lookup', () => {
     });
 
     test('resolveConfig resolves a dep on a global resource from a regional resource', async () => {
-        const mockGetter: ProprietyGetter = {
+        const mockGetter: PropertyGetter = {
             name: 'dnsNameGetter',
             dependencies: [],
             get: vi.fn().mockResolvedValue([{ command: 'echo', args: ['chuang.staging.example.com'] }] as Command[]),
         };
-        registerProprietyGetter(mockGetter);
+        registerPropertyGetter(mockGetter);
 
         // Register a global DNS-zone-like resource (no region)
         const globalRes = makeGlobalResource({

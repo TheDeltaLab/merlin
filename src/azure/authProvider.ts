@@ -1,6 +1,7 @@
 import { AuthProvider, Command, Dependency, Resource, getRender } from "../common/resource.js";
 import { AzureResourceRender } from "./render.js";
 import { AzureADAppRender, AzureADAppResource } from "./azureADApp.js";
+import { toEnvSlug } from '../common/constants.js';
 
 /**
  * Supported role assignment scopes.
@@ -37,23 +38,28 @@ export class AzureManagedIdentityAuthProvider implements AuthProvider {
     async apply(requestor: Resource, provider: Resource, args: Record<string, string>): Promise<Command[]> {
         const role = args['role'];
         if (!role) {
-            throw new Error(
-                `AzureManagedIdentityAuthProvider: 'role' is required in authProvider args ` +
-                `(requestor: ${requestor.type}.${requestor.name}, provider: ${provider.type}.${provider.name})`
-            );
+            // No role specified — this is expected for ordering-only dependencies
+            // where the provider resource has an authProvider but the dependency
+            // declaration doesn't include a role (e.g. K8s → Azure SP deps).
+            return [];
         }
 
         const scopeMode: RoleAssignmentScope = (args['scope'] as RoleAssignmentScope) ?? 'resource';
 
-        const requestorRender = getRender(requestor.type) as AzureResourceRender;
-        const providerRender  = getRender(provider.type)  as AzureResourceRender;
+        // Azure role assignments require both requestor and provider to be Azure resources.
+        // K8s resources (KubernetesDeployment, KubernetesService, etc.) use kubectl, not az,
+        // and their renders don't extend AzureResourceRender.
+        const requestorRender = getRender(requestor.type);
+        const providerRender  = getRender(provider.type);
+        if (!(requestorRender instanceof AzureResourceRender) || !(providerRender instanceof AzureResourceRender)) {
+            return [];
+        }
 
         // Shell variable name slug helper (uppercase, non-alphanumeric → underscore)
-        const slug = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '_');
 
-        const requestorSlug = slug(requestorRender.getResourceName(requestor));
-        const providerSlug  = slug(providerRender.getResourceName(provider));
-        const roleSlug      = slug(role);
+        const requestorSlug = toEnvSlug(requestorRender.getResourceName(requestor));
+        const providerSlug  = toEnvSlug(providerRender.getResourceName(provider));
+        const roleSlug      = toEnvSlug(role);
 
         const principalVar = `MERLIN_MI_${requestorSlug}_PRINCIPAL_ID`;
         const scopeVar     = `MERLIN_MI_${providerSlug}_${roleSlug}_SCOPE`;
@@ -247,20 +253,25 @@ export class AzureEntraIDAuthProvider implements AuthProvider {
     async apply(requestor: Resource, provider: Resource, args: Record<string, string>): Promise<Command[]> {
         const role = args['role'];
         if (!role) {
-            throw new Error(
-                `AzureEntraIDAuthProvider: 'role' is required in authProvider args ` +
-                `(requestor: ${requestor.type}.${requestor.name}, provider: ${provider.type}.${provider.name})`
-            );
+            // No role specified — this is expected for ordering-only dependencies
+            // where the provider resource has an authProvider but the dependency
+            // declaration doesn't include a role (e.g. K8s → Azure SP deps).
+            return [];
         }
 
-        const requestorRender = getRender(requestor.type) as AzureResourceRender;
-        const providerRender  = getRender(provider.type)  as AzureADAppRender;
+        // Entra ID app role assignments require both requestor and provider to be Azure resources.
+        // K8s resources use kubectl and their renders don't extend AzureResourceRender.
+        const requestorRenderRaw = getRender(requestor.type);
+        const providerRenderRaw  = getRender(provider.type);
+        if (!(requestorRenderRaw instanceof AzureResourceRender)) {
+            return [];
+        }
+        const requestorRender = requestorRenderRaw;
+        const providerRender  = providerRenderRaw as AzureADAppRender;
 
-        const slug = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '_');
-
-        const requestorSlug = slug(requestorRender.getResourceName(requestor));
-        const providerSlug  = slug(providerRender.getResourceName(provider));
-        const roleSlug      = slug(role);
+        const requestorSlug = toEnvSlug(requestorRender.getResourceName(requestor));
+        const providerSlug  = toEnvSlug(providerRender.getResourceName(provider));
+        const roleSlug      = toEnvSlug(role);
 
         // Shell variable names
         const principalIdVar = `MERLIN_MI_${requestorSlug}_PRINCIPAL_ID`;

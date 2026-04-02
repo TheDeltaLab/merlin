@@ -1,11 +1,11 @@
 import { AzureResource } from './resource.js';
 import { Resource, ResourceSchema, Command, Render, RenderContext } from '../common/resource.js';
 import { AzureResourceRender } from './render.js';
-import { execSync } from 'child_process';
+import { isResourceNotFoundError, execAsync } from '../common/constants.js';
 
 export const AZURE_BLOB_STORAGE_RESOURCE_TYPE = 'AzureBlobStorage';
 
-// refer to: https://learn.microsoft.com/zh-cn/cli/azure/storage/account?view=azure-cli-latest#az-storage-account-create
+// refer to: https://learn.microsoft.com/en-us/cli/azure/storage/account?view=azure-cli-latest#az-storage-account-create
 
 // Access Tier options
 export type AccessTier = 'Cold' | 'Cool' | 'Hot' | 'Premium';
@@ -201,10 +201,7 @@ export class AzureBlobStorageRender extends AzureResourceRender {
 
         try {
             // Execute az storage account show command
-            const result = execSync(
-                `az storage account show -g ${resourceGroup} -n ${resourceName} 2>/dev/null`,
-                { encoding: 'utf-8' }
-            );
+            const result = await execAsync('az', ['storage', 'account', 'show', '-g', resourceGroup, '-n', resourceName]);
 
             const deployedProps = JSON.parse(result);
 
@@ -299,26 +296,9 @@ export class AzureBlobStorageRender extends AzureResourceRender {
             ) as AzureBlobStorageConfig;
 
         } catch (error: any) {
-            // If the command failed, it likely means the resource doesn't exist
-            // The 2>/dev/null suppresses stderr, so we check the error status
-            // Azure CLI returns exit code 3 when resource is not found
-            if (error.status === 3 || error.status === 1) {
+            if (isResourceNotFoundError(error)) {
                 return undefined;
             }
-
-            // For other errors, check if it's a "not found" error
-            const errorMessage = error.message || String(error);
-            const stderr = error.stderr?.toString() || '';
-            const combinedError = errorMessage + ' ' + stderr;
-
-            if (combinedError.includes('ResourceNotFound') ||
-                combinedError.includes('ResourceGroupNotFound') ||
-                combinedError.includes('was not found') ||
-                combinedError.includes('could not be found')) {
-                return undefined;
-            }
-
-            // For genuine errors, throw them
             throw new Error(
                 `Failed to get deployed properties for storage account ${resourceName} in resource group ${resourceGroup}: ${error}`
             );

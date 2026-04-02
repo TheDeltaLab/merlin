@@ -6,13 +6,14 @@ import {
     AZURE_KEY_VAULT_RESOURCE_TYPE,
 } from '../azureKeyVault.js';
 
-// Mock child_process so execSync is replaceable in tests
-vi.mock('child_process', () => ({
-    execSync: vi.fn(),
-}));
+// Mock execAsync so it is replaceable in tests
+vi.mock('../../common/constants.js', async (importOriginal) => {
+    const actual = await importOriginal() as any;
+    return { ...actual, execAsync: vi.fn() };
+});
 
-import { execSync } from 'child_process';
-const mockExecSync = vi.mocked(execSync);
+import { execAsync } from '../../common/constants.js';
+const mockExecAsync = vi.mocked(execAsync);
 
 // ── Test helpers ──────────────────────────────────────────────────────────────
 
@@ -54,7 +55,7 @@ function findKvUpdate(commands: { command: string; args: string[] }[]) {
 }
 
 function mockNotFound(): void {
-    mockExecSync.mockImplementation(() => {
+    mockExecAsync.mockImplementation(async () => {
         const err: any = new Error('ResourceNotFound');
         err.status = 3;
         throw err;
@@ -62,10 +63,9 @@ function mockNotFound(): void {
 }
 
 function mockKeyVaultExists(props: object = {}): void {
-    mockExecSync.mockImplementation((cmd: string) => {
-        const c = String(cmd);
-        if (c.includes('group show')) {
-            return JSON.stringify({ name: 'merlin-rg-stg-krc' }) as any;
+    mockExecAsync.mockImplementation(async (_cmd: string, args: string[]) => {
+        if (args.includes('group') && args.includes('show')) {
+            return JSON.stringify({ name: 'merlin-rg-stg-krc' });
         }
         // keyvault show
         return JSON.stringify({
@@ -78,7 +78,7 @@ function mockKeyVaultExists(props: object = {}): void {
             },
             tags: {},
             ...props,
-        }) as any;
+        });
     });
 }
 
@@ -234,7 +234,7 @@ describe('AzureKeyVaultRender', () => {
 
     describe('getDeployedProps', () => {
         it('returns undefined for VaultNotFound error', async () => {
-            mockExecSync.mockImplementation(() => {
+            mockExecAsync.mockImplementation(async () => {
                 const err: any = new Error('VaultNotFound: vault was not found');
                 err.status = 0;
                 throw err;
@@ -247,7 +247,7 @@ describe('AzureKeyVaultRender', () => {
         });
 
         it('throws on unexpected errors', async () => {
-            mockExecSync.mockImplementation(() => {
+            mockExecAsync.mockImplementation(async () => {
                 const err: any = new Error('NetworkError: something went wrong');
                 err.status = 99;
                 throw err;

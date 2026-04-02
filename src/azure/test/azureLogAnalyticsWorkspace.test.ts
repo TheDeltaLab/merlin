@@ -6,13 +6,14 @@ import {
     AZURE_LOG_ANALYTICS_WORKSPACE_RESOURCE_TYPE,
 } from '../azureLogAnalyticsWorkspace.js';
 
-// Mock child_process so execSync is replaceable in tests
-vi.mock('child_process', () => ({
-    execSync: vi.fn(),
-}));
+// Mock execAsync so it is replaceable in tests
+vi.mock('../../common/constants.js', async (importOriginal) => {
+    const actual = await importOriginal() as any;
+    return { ...actual, execAsync: vi.fn() };
+});
 
-import { execSync } from 'child_process';
-const mockExecSync = vi.mocked(execSync);
+import { execAsync } from '../../common/constants.js';
+const mockExecAsync = vi.mocked(execAsync);
 
 // ── Test helpers ──────────────────────────────────────────────────────────────
 
@@ -48,7 +49,7 @@ function hasParam(args: string[], flag: string, value?: string): boolean {
 
 // Default mock: always throw "not found" (resource doesn't exist)
 function mockNotFound(): void {
-    mockExecSync.mockImplementation(() => {
+    mockExecAsync.mockImplementation(async () => {
         const err: any = new Error('ResourceNotFound');
         err.status = 3;
         throw err;
@@ -57,12 +58,11 @@ function mockNotFound(): void {
 
 // Mock: RG exists, resource exists with given JSON
 function mockResourceExists(showJson: string): void {
-    mockExecSync.mockImplementation((cmd: string) => {
-        const c = String(cmd);
-        if (c.includes('group show')) {
-            return JSON.stringify({ name: 'myproject-rg-stg-eus' }) as any;
+    mockExecAsync.mockImplementation(async (_cmd: string, args: string[]) => {
+        if (args.includes('group') && args.includes('show')) {
+            return JSON.stringify({ name: 'myproject-rg-stg-eus' });
         }
-        return showJson as any;
+        return showJson;
     });
 }
 
@@ -360,7 +360,7 @@ describe('AzureLogAnalyticsWorkspaceRender', () => {
         });
 
         it('returns undefined when exit code is 1', async () => {
-            mockExecSync.mockImplementation(() => {
+            mockExecAsync.mockImplementation(async () => {
                 const err: any = new Error('error');
                 err.status = 1;
                 throw err;
@@ -370,7 +370,7 @@ describe('AzureLogAnalyticsWorkspaceRender', () => {
         });
 
         it('returns undefined on ResourceNotFound in error message', async () => {
-            mockExecSync.mockImplementation(() => {
+            mockExecAsync.mockImplementation(async () => {
                 const err: any = new Error('ResourceNotFound');
                 err.status = 2;
                 throw err;
@@ -380,7 +380,7 @@ describe('AzureLogAnalyticsWorkspaceRender', () => {
         });
 
         it('returns undefined on ResourceGroupNotFound in error message', async () => {
-            mockExecSync.mockImplementation(() => {
+            mockExecAsync.mockImplementation(async () => {
                 const err: any = new Error('ResourceGroupNotFound');
                 err.status = 2;
                 throw err;
@@ -390,7 +390,7 @@ describe('AzureLogAnalyticsWorkspaceRender', () => {
         });
 
         it('returns undefined on "was not found" in error message', async () => {
-            mockExecSync.mockImplementation(() => {
+            mockExecAsync.mockImplementation(async () => {
                 const err: any = new Error('The workspace was not found');
                 err.status = 2;
                 throw err;
@@ -400,7 +400,7 @@ describe('AzureLogAnalyticsWorkspaceRender', () => {
         });
 
         it('returns undefined on "could not be found" in error message', async () => {
-            mockExecSync.mockImplementation(() => {
+            mockExecAsync.mockImplementation(async () => {
                 const err: any = new Error('Resource could not be found');
                 err.status = 2;
                 throw err;
@@ -410,7 +410,7 @@ describe('AzureLogAnalyticsWorkspaceRender', () => {
         });
 
         it('throws on a genuine error', async () => {
-            mockExecSync.mockImplementation(() => {
+            mockExecAsync.mockImplementation(async () => {
                 const err: any = new Error('Internal server error');
                 err.status = 500;
                 throw err;
@@ -434,7 +434,7 @@ describe('AzureLogAnalyticsWorkspaceRender', () => {
                 identity: { type: 'SystemAssigned', userAssignedIdentities: null },
                 tags: { env: 'staging' },
             });
-            mockExecSync.mockReturnValue(showJson as any);
+            mockExecAsync.mockResolvedValue(showJson);
             const result = await (render as any).getDeployedProps(makeResource());
 
             expect(result).toBeDefined();
@@ -468,7 +468,7 @@ describe('AzureLogAnalyticsWorkspaceRender', () => {
                 identity: null,
                 tags: {},
             });
-            mockExecSync.mockReturnValue(showJson as any);
+            mockExecAsync.mockResolvedValue(showJson);
             const result = await (render as any).getDeployedProps(makeResource());
             expect(result.capacityReservationLevel).toBe(500);
         });
@@ -487,7 +487,7 @@ describe('AzureLogAnalyticsWorkspaceRender', () => {
                 identity: null,
                 tags: {},
             });
-            mockExecSync.mockReturnValue(showJson as any);
+            mockExecAsync.mockResolvedValue(showJson);
             const result = await (render as any).getDeployedProps(makeResource());
             expect(result.replicationEnabled).toBe(true);
             expect(result.replicationLocation).toBe('westus');
@@ -515,7 +515,7 @@ describe('AzureLogAnalyticsWorkspaceRender', () => {
                 },
                 tags: {},
             });
-            mockExecSync.mockReturnValue(showJson as any);
+            mockExecAsync.mockResolvedValue(showJson);
             const result = await (render as any).getDeployedProps(makeResource());
             expect(result.identityType).toBe('UserAssigned');
             expect(result.userAssignedIdentities).toEqual([id1, id2]);
@@ -535,7 +535,7 @@ describe('AzureLogAnalyticsWorkspaceRender', () => {
                 identity: null,
                 tags: undefined,
             });
-            mockExecSync.mockReturnValue(showJson as any);
+            mockExecAsync.mockResolvedValue(showJson);
             const result = await (render as any).getDeployedProps(makeResource());
             // No key should have undefined or null as value
             for (const val of Object.values(result)) {

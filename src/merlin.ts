@@ -5,6 +5,7 @@ import { execSync } from 'child_process';
 import { existsSync } from 'fs';
 import * as path from 'path';
 import { resolveRing, resolveRegion } from './common/resolveNames.js';
+import { MERLIN_PACKAGE_VERSION } from './common/constants.js';
 import { loadCLIDefaults } from './cli/defaults.js';
 import { confirmDeploy } from './cli/confirm.js';
 import { runInit, TemplateName } from './cli/init.js';
@@ -48,7 +49,7 @@ function ensurePathExists(resourcePath: string): void {
 program
     .name('merlin')
     .description('CLI tool for Infrastructure as Code deployment and management')
-    .version('0.2.0')
+    .version(MERLIN_PACKAGE_VERSION)
     .addHelpText('after', `
 Quick Start:
   $ merlin init myapp                  Create a new project with resource templates

@@ -125,8 +125,8 @@ describe('Integration Tests', () => {
             expect(generatedCode).toContain('DepType1.dependency1');
 
             // Should have exports
-            expect(generatedCode).toContain('getProprietyGetter("getConnectionString")');
-            expect(generatedCode).toContain('getProprietyGetter("getEndpoint")');
+            expect(generatedCode).toContain('getPropertyGetter("getConnectionString")');
+            expect(generatedCode).toContain('getPropertyGetter("getEndpoint")');
         });
 
         test('should compile resource with dependencies', async () => {

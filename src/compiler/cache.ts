@@ -6,7 +6,7 @@
  */
 
 import { createHash } from 'crypto';
-import { readFile, writeFile, readdir, rm, stat } from 'fs/promises';
+import { readFile, writeFile, readdir, rm } from 'fs/promises';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
@@ -203,6 +203,7 @@ function isGeneratedTsFile(name: string): boolean {
  * Key files from merlin's dist/ to include in the cache hash.
  * When any of these change (after `pnpm build`), the cache misses
  * and .merlin/ is rebuilt with the new merlin code.
+ * Uses content hashing for reliability across git checkouts and CI.
  */
 const MERLIN_DIST_FILES = ['init.js', 'runtime.js', 'deployer.js'];
 
@@ -220,7 +221,9 @@ function getMerlinDistPath(): string {
 
 /**
  * Hashes key merlin dist/ files into the running hasher.
- * Uses file mtime + size as a fast proxy (avoids reading large files).
+ * Reads file content to compute a true content hash (not mtime-based).
+ * This is more reliable than mtime across git checkouts, CI environments,
+ * and npm installs where timestamps may not reflect actual content changes.
  * Falls back gracefully if files don't exist (e.g. dev mode).
  */
 async function hashMerlinDist(hasher: ReturnType<typeof createHash>): Promise<void> {
@@ -229,8 +232,10 @@ async function hashMerlinDist(hasher: ReturnType<typeof createHash>): Promise<vo
     for (const file of MERLIN_DIST_FILES) {
         try {
             const filePath = path.join(distDir, file);
-            const s = await stat(filePath);
-            hasher.update(`merlin:${file}:${s.mtimeMs}:${s.size}\n`);
+            const content = await readFile(filePath, 'utf-8');
+            hasher.update(`merlin:${file}\n`);
+            hasher.update(content);
+            hasher.update('\n');
         } catch {
             // File doesn't exist (e.g. in dev mode or partial build) — skip
         }

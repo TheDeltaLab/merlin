@@ -11,7 +11,7 @@ export type {
     Region,
     Dependency,
     AuthProvider,
-    ProprietyGetter,
+    PropertyGetter,
     Command,
     Render
 } from './common/resource.js';
@@ -19,10 +19,10 @@ export type {
 // Re-export functions used by generated code
 export {
     getAuthProvider,
-    getProprietyGetter,
+    getPropertyGetter,
     getRender,
     registerAuthProvider,
-    registerProprietyGetter,
+    registerPropertyGetter,
     registerRender,
     commandToString,
 } from './common/resource.js';

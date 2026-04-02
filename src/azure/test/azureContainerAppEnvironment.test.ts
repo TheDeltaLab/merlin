@@ -7,13 +7,14 @@ import {
 } from '../azureContainerAppEnvironment.js';
 import { Resource } from '../../common/resource.js';
 
-// Mock child_process so execSync is replaceable in tests
-vi.mock('child_process', () => ({
-    execSync: vi.fn(),
-}));
+// Mock execAsync so it is replaceable in tests
+vi.mock('../../common/constants.js', async (importOriginal) => {
+    const actual = await importOriginal() as any;
+    return { ...actual, execAsync: vi.fn() };
+});
 
-import { execSync } from 'child_process';
-const mockExecSync = vi.mocked(execSync);
+import { execAsync } from '../../common/constants.js';
+const mockExecAsync = vi.mocked(execAsync);
 
 // ── Test helpers ──────────────────────────────────────────────────────────────
 
@@ -49,7 +50,7 @@ function hasParam(args: string[], flag: string, value?: string): boolean {
 
 // Default mock: always throw "not found" (resource doesn't exist)
 function mockNotFound(): void {
-    mockExecSync.mockImplementation(() => {
+    mockExecAsync.mockImplementation(async () => {
         const err: any = new Error('ResourceNotFound');
         err.status = 3;
         throw err;
@@ -58,12 +59,11 @@ function mockNotFound(): void {
 
 // Mock: RG exists, resource exists with given JSON
 function mockResourceExists(showJson: string): void {
-    mockExecSync.mockImplementation((cmd: string) => {
-        const c = String(cmd);
-        if (c.includes('group show')) {
-            return JSON.stringify({ name: 'myproject-rg-stg-eus' }) as any;
+    mockExecAsync.mockImplementation(async (_cmd: string, args: string[]) => {
+        if (args.includes('group') && args.includes('show')) {
+            return JSON.stringify({ name: 'myproject-rg-stg-eus' });
         }
-        return showJson as any;
+        return showJson;
     });
 }
 
@@ -459,7 +459,7 @@ describe('AzureContainerAppEnvironmentRender', () => {
 
     describe('getDeployedProps()', () => {
         it('returns undefined when resource is not found (exit code 3)', async () => {
-            mockExecSync.mockImplementation(() => {
+            mockExecAsync.mockImplementation(async () => {
                 const err: any = new Error('not found');
                 err.status = 3;
                 throw err;
@@ -470,7 +470,7 @@ describe('AzureContainerAppEnvironmentRender', () => {
         });
 
         it('returns undefined when resource is not found (exit code 1)', async () => {
-            mockExecSync.mockImplementation(() => {
+            mockExecAsync.mockImplementation(async () => {
                 const err: any = new Error('not found');
                 err.status = 1;
                 throw err;
@@ -481,7 +481,7 @@ describe('AzureContainerAppEnvironmentRender', () => {
         });
 
         it('returns undefined on ResourceNotFound in error message', async () => {
-            mockExecSync.mockImplementation(() => {
+            mockExecAsync.mockImplementation(async () => {
                 throw new Error('ResourceNotFound: environment does not exist');
             });
             const resource = makeResource();
@@ -490,7 +490,7 @@ describe('AzureContainerAppEnvironmentRender', () => {
         });
 
         it('returns undefined on "was not found" in error message', async () => {
-            mockExecSync.mockImplementation(() => {
+            mockExecAsync.mockImplementation(async () => {
                 throw new Error('The resource was not found');
             });
             const resource = makeResource();
@@ -499,7 +499,7 @@ describe('AzureContainerAppEnvironmentRender', () => {
         });
 
         it('throws on genuine errors', async () => {
-            mockExecSync.mockImplementation(() => {
+            mockExecAsync.mockImplementation(async () => {
                 const err: any = new Error('Internal server error');
                 err.status = 500;
                 throw err;
@@ -525,7 +525,7 @@ describe('AzureContainerAppEnvironmentRender', () => {
                 },
                 tags: {},
             });
-            mockExecSync.mockReturnValue(showJson as any);
+            mockExecAsync.mockResolvedValue(showJson);
 
             const resource = makeResource();
             const result = await (render as any).getDeployedProps(resource);
@@ -549,7 +549,7 @@ describe('AzureContainerAppEnvironmentRender', () => {
                 },
                 tags: {},
             });
-            mockExecSync.mockReturnValue(showJson as any);
+            mockExecAsync.mockResolvedValue(showJson);
 
             const resource = makeResource();
             const result = await (render as any).getDeployedProps(resource);
@@ -570,7 +570,7 @@ describe('AzureContainerAppEnvironmentRender', () => {
                 },
                 tags: {},
             });
-            mockExecSync.mockReturnValue(showJson as any);
+            mockExecAsync.mockResolvedValue(showJson);
 
             const resource = makeResource();
             const result = await (render as any).getDeployedProps(resource);
@@ -590,7 +590,7 @@ describe('AzureContainerAppEnvironmentRender', () => {
                 },
                 tags: { env: 'staging', merlin: 'true' },
             });
-            mockExecSync.mockReturnValue(showJson as any);
+            mockExecAsync.mockResolvedValue(showJson);
 
             const resource = makeResource();
             const result = await (render as any).getDeployedProps(resource);
@@ -609,7 +609,7 @@ describe('AzureContainerAppEnvironmentRender', () => {
                 },
                 tags: {},
             });
-            mockExecSync.mockReturnValue(showJson as any);
+            mockExecAsync.mockResolvedValue(showJson);
 
             const resource = makeResource();
             const result = await (render as any).getDeployedProps(resource);

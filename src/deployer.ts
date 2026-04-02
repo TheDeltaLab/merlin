@@ -5,13 +5,13 @@
  * Uses a DAG-based execution model:
  *   1. Resources are grouped into execution levels (layers) via topological sort
  *   2. Resources within the same level have no dependency on each other and can run in parallel
- *   3. Resource groups are deduplicated and deployed as level 0
+ *   3. Pre-deployment steps (e.g. Azure resource groups) are deduplicated and deployed as level 0
  */
 
-import { Resource, Command, RenderContext, Region } from './common/resource.js';
+import { Resource, Command, RenderContext } from './common/resource.js';
 import { getAllResources, getResource } from './common/registry.js';
-import { getRender } from './common/resource.js';
-import { AzureResourceGroupRender } from './azure/resourceGroup.js';
+import { getRender, getPreDeployProvider } from './common/resource.js';
+import { MERLIN_YAML_FILE_PLACEHOLDER } from './common/constants.js';
 import { execa } from 'execa';
 import * as fs from 'fs/promises';
 import * as os from 'os';
@@ -51,7 +51,7 @@ export class Deployer {
    * Flow:
    *   1. Filter resources by ring/region
    *   2. Build execution levels (DAG-based topological layers)
-   *   3. Deduplicate and render resource groups as level 0
+   *   3. Run pre-deploy provider (e.g. Azure resource groups as level 0)
    *   4. Render resource commands for each level (with skipResourceGroup context)
    *   5. Execute (parallel within level) or print/write commands
    */
@@ -67,17 +67,17 @@ export class Deployer {
     // 2. Build execution levels from dependency DAG
     const resourceLevels = this.buildExecutionLevels(filtered);
 
-    // 3. Deduplicate resource groups and build RG level (level 0)
+    // 3. Run pre-deploy provider (e.g. Azure resource group deduplication)
     const flatResources = resourceLevels.flat();
-    const rgLevel = await this.renderResourceGroupLevel(flatResources);
+    const preDeployLevel = await this.renderPreDeployLevel(flatResources);
 
     // 4. Render commands for each resource level (skip RG creation in renders)
     const renderContext: RenderContext = { skipResourceGroup: true };
     const commandLevels: ExecutionLevel[] = [];
 
-    // Add RG level as level 0 (may be empty if all RGs already exist)
-    if (rgLevel.length > 0) {
-      commandLevels.push(rgLevel);
+    // Add pre-deploy level as level 0 (may be empty if provider returns nothing)
+    if (preDeployLevel.length > 0) {
+      commandLevels.push(preDeployLevel);
     }
 
     for (let i = 0; i < resourceLevels.length; i++) {
@@ -266,45 +266,16 @@ export class Deployer {
   }
 
   /**
-   * Collect all unique resource groups needed by the resources,
-   * render their creation commands (deduplicated), and return as a single level.
+   * Run the registered pre-deploy provider (if any) to produce level-0 commands.
+   * For Azure, this creates deduplicated resource groups.
+   * For clouds that don't need pre-deployment steps, returns an empty array.
    */
-  private async renderResourceGroupLevel(resources: Resource[]): Promise<ResourceCommands[]> {
-    const rgRender = new AzureResourceGroupRender();
-    const seen = new Map<string, ResourceCommands>(); // rgName → commands
+  private async renderPreDeployLevel(resources: Resource[]): Promise<ResourceCommands[]> {
+    const provider = getPreDeployProvider();
+    if (!provider) return [];
 
-    for (const r of resources) {
-      const config = r.config as Record<string, unknown>;
-      const hasCustomRG = config?.resourceGroupName && typeof config.resourceGroupName === 'string';
-
-      // Skip resources that don't have a region AND no custom resourceGroupName
-      // Global resources with a custom RG (e.g. shared ACR) still need RG creation
-      if (!r.region && !hasCustomRG) continue;
-
-      const rgName = rgRender.getResourceGroupName(r);
-      if (!seen.has(rgName)) {
-        // Determine location for RG: resource.region, config.location, or default
-        const location = r.region ?? (config?.location as string) ?? 'koreacentral';
-
-        // Build a minimal synthetic resource with only the fields RG render needs.
-        const rgResource: Resource = {
-          name: `rg:${rgName}`,
-          type: 'AzureResourceGroup',
-          ring: r.ring,
-          region: r.region ?? location as Region,
-          project: r.project,
-          dependencies: [],
-          config: hasCustomRG ? { resourceGroupName: config.resourceGroupName } : {},
-          exports: {},
-        };
-        const commands = await rgRender.render(rgResource);
-        if (commands.length > 0) {
-          seen.set(rgName, { resource: rgResource, commands });
-        }
-      }
-    }
-
-    return [...seen.values()];
+    const results = await provider.renderPreDeployLevel(resources);
+    return results.map(({ resource, commands }) => ({ resource, commands }));
   }
 
   /**
@@ -334,7 +305,7 @@ export class Deployer {
    */
   private commandToShellLine(command: Command): string {
     const resolvedArgs = command.args.map(a =>
-      a === '__MERLIN_YAML_FILE__' ? '/tmp/merlin_aca_$$.yml' : a
+      a === MERLIN_YAML_FILE_PLACEHOLDER ? '/tmp/merlin_manifest_$$.yml' : a
     );
     const cmdStr = `${command.command} ${resolvedArgs.join(' ')}`;
     if (command.envCapture) {
@@ -410,11 +381,11 @@ export class Deployer {
           const expandedContent = expandVars(command.fileContent, captureVars);
           tmpFile = path.join(
             os.tmpdir(),
-            `merlin_aca_${Date.now()}_${Math.random().toString(36).slice(2)}.yml`
+            `merlin_manifest_${Date.now()}_${Math.random().toString(36).slice(2)}.yml`
           );
           await fs.writeFile(tmpFile, expandedContent, 'utf-8');
           resolvedArgs = resolvedArgs.map(a =>
-            a === '__MERLIN_YAML_FILE__' ? tmpFile! : a
+            a === MERLIN_YAML_FILE_PLACEHOLDER ? tmpFile! : a
           );
         }
 
@@ -555,7 +526,7 @@ export class Deployer {
           if (command.fileContent) {
             // Write a heredoc block + command that references the temp file
             const tmpVar = `MERLIN_TMP_YAML_$$`;
-            lines.push(`${tmpVar}=$(mktemp /tmp/merlin_aca_XXXXXX.yml)`);
+            lines.push(`${tmpVar}=$(mktemp /tmp/merlin_manifest_XXXXXX.yml)`);
             // Use unquoted heredoc delimiter so $VARNAME is expanded by shell
             lines.push(`cat > "$${tmpVar}" <<MERLIN_YAML_EOF`);
             lines.push(command.fileContent);
@@ -564,7 +535,7 @@ export class Deployer {
             const cmdLine = this.commandToShellLine({
               ...command,
               args: command.args.map(a =>
-                a === '__MERLIN_YAML_FILE__' ? `"$${tmpVar}"` : a
+                a === MERLIN_YAML_FILE_PLACEHOLDER ? `"$${tmpVar}"` : a
               ),
             });
             lines.push(cmdLine);

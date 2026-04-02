@@ -1,8 +1,8 @@
 import { AzureResource } from './resource.js';
 import { Resource, ResourceSchema, Command, RenderContext } from '../common/resource.js';
 import { AzureResourceRender } from './render.js';
-import { execSync } from 'child_process';
 import { dump as yamlDump } from 'js-yaml';
+import { isResourceNotFoundError, toEnvSlug, MERLIN_YAML_FILE_PLACEHOLDER, execAsync } from '../common/constants.js';
 
 export const AZURE_CONTAINER_APP_TYPE = 'AzureContainerApp';
 
@@ -284,10 +284,7 @@ export class AzureContainerAppRender extends AzureResourceRender {
         const resourceGroup = this.getResourceGroupName(resource);
 
         try {
-            const result = execSync(
-                `az containerapp show -g ${resourceGroup} -n ${resourceName} 2>/dev/null`,
-                { encoding: 'utf-8' }
-            );
+            const result = await execAsync('az', ['containerapp', 'show', '-g', resourceGroup, '-n', resourceName]);
 
             const d = JSON.parse(result);
 
@@ -396,21 +393,9 @@ export class AzureContainerAppRender extends AzureResourceRender {
             ) as AzureContainerAppConfig;
 
         } catch (error: any) {
-            if (error.status === 3 || error.status === 1) {
+            if (isResourceNotFoundError(error)) {
                 return undefined;
             }
-
-            const errorMessage = error.message || String(error);
-            const stderr = error.stderr?.toString() || '';
-            const combinedError = errorMessage + ' ' + stderr;
-
-            if (combinedError.includes('ResourceNotFound') ||
-                combinedError.includes('ResourceGroupNotFound') ||
-                combinedError.includes('was not found') ||
-                combinedError.includes('could not be found')) {
-                return undefined;
-            }
-
             throw new Error(
                 `Failed to get deployed properties for container app ${resourceName} in resource group ${resourceGroup}: ${error}`
             );
@@ -562,9 +547,8 @@ export class AzureContainerAppRender extends AzureResourceRender {
         const resourceGroup = this.getResourceGroupName(resource);
 
         // Slug: uppercase, non-alphanumeric → underscore (mirrors paramResolver.ts toVarName)
-        const slug = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '_');
         // Include dnsZone in slug so multiple bindDnsZone entries get distinct variable names
-        const appSlug         = `${slug(resourceName)}_${slug(dnsZone)}`;
+        const appSlug         = `${toEnvSlug(resourceName)}_${toEnvSlug(dnsZone)}`;
         const dnsZoneRgVar    = `MERLIN_${appSlug}_DNS_ZONE_RG`;
         const envArmIdVar     = `MERLIN_${appSlug}_ENV_ARM_ID`;
         const envNameVar      = `MERLIN_${appSlug}_ENV_NAME`;
@@ -745,8 +729,7 @@ export class AzureContainerAppRender extends AzureResourceRender {
         const action = auth.unauthenticatedClientAction ?? 'RedirectToLoginPage';
         const secretName = 'microsoft-provider-authentication-secret';
 
-        const slug = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '_');
-        const appSlug      = slug(resourceName);
+        const appSlug      = toEnvSlug(resourceName);
         const fqdnVar      = `MERLIN_${appSlug}_AUTH_FQDN`;
         const secretValVar = `MERLIN_${appSlug}_AUTH_SECRET`;
 
@@ -835,7 +818,7 @@ export class AzureContainerAppRender extends AzureResourceRender {
                 'containerapp', 'update',
                 '--name',           this.getResourceName(resource),
                 '--resource-group', this.getResourceGroupName(resource),
-                '--yaml',           '__MERLIN_YAML_FILE__',
+                '--yaml',           MERLIN_YAML_FILE_PLACEHOLDER,
                 ...(resource.config.noWait ? ['--no-wait'] : []),
             ],
             fileContent,

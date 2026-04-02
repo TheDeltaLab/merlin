@@ -7,13 +7,14 @@ import {
     AZURE_AKS_TYPE,
 } from '../kubernetesCluster.js';
 
-// Mock child_process so execSync doesn't hit real Azure
-vi.mock('child_process', () => ({
-    execSync: vi.fn(),
-}));
+// Mock execAsync so it is replaceable in tests
+vi.mock('../../common/constants.js', async (importOriginal) => {
+    const actual = await importOriginal() as any;
+    return { ...actual, execAsync: vi.fn() };
+});
 
-import { execSync } from 'child_process';
-const mockExecSync = vi.mocked(execSync);
+import { execAsync } from '../../common/constants.js';
+const mockExecAsync = vi.mocked(execAsync);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -57,7 +58,7 @@ function findAksUpdate(commands: { command: string; args: string[] }[]) {
 }
 
 function mockNotFound(): void {
-    mockExecSync.mockImplementation(() => {
+    mockExecAsync.mockImplementation(async () => {
         const err: any = new Error('ResourceNotFound');
         err.status = 3;
         throw err;
@@ -65,10 +66,9 @@ function mockNotFound(): void {
 }
 
 function mockClusterExists(props: object = {}): void {
-    mockExecSync.mockImplementation((cmd: string) => {
-        const c = String(cmd);
-        if (c.includes('group show')) {
-            return JSON.stringify({ name: 'myproject-rg-stg-krc' }) as any;
+    mockExecAsync.mockImplementation(async (_cmd: string, args: string[]) => {
+        if (args.includes('group') && args.includes('show')) {
+            return JSON.stringify({ name: 'myproject-rg-stg-krc' });
         }
         // aks show
         return JSON.stringify({
@@ -77,7 +77,7 @@ function mockClusterExists(props: object = {}): void {
             networkProfile: { networkPlugin: 'azure', networkPolicy: 'azure' },
             tags: {},
             ...props,
-        }) as any;
+        });
     });
 }
 

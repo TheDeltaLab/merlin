@@ -46,7 +46,7 @@ export async function initializeOutputDirectory(options: InitOptions): Promise<I
         await createPackageJson(packageJsonPath, merlinPath, outputPath);
 
         // Create tsup.config.ts
-        await createTsupConfig(path.join(outputPath, 'tsup.config.ts'));
+        await createTsupConfig(path.join(outputPath, 'tsup.config.ts'), merlinPath, outputPath);
 
         // Create .gitignore
         await createGitignore(path.join(outputPath, '.gitignore'));
@@ -125,8 +125,16 @@ async function createPackageJson(filePath: string, merlinPath: string, outputPat
     await writeFile(filePath, JSON.stringify(packageJson, null, 2) + '\n', 'utf-8');
 }
 
-async function createTsupConfig(filePath: string): Promise<void> {
+async function createTsupConfig(filePath: string, merlinPath: string, outputPath: string): Promise<void> {
+    // Resolve the absolute path to merlin's dist directory for esbuild alias.
+    // This lets .merlin/ bundle merlin code directly, avoiding node_modules resolution
+    // issues (e.g. pnpm workspace intercepting the link: dependency).
+    const merlinDistDir = path.join(merlinPath, 'dist').replace(/\\/g, '/');
+
     const config = `import { defineConfig } from 'tsup';
+import path from 'path';
+
+const merlinDist = '${merlinDistDir}';
 
 export default defineConfig({
     entry: ['index.ts', 'deploy.ts'],
@@ -136,6 +144,14 @@ export default defineConfig({
     clean: true,
     sourcemap: true,
     dts: false,
+    noExternal: ['${MERLIN_PACKAGE_NAME}'],
+    esbuildOptions(options) {
+        options.alias = {
+            '${MERLIN_PACKAGE_NAME}/init.js': path.join(merlinDist, 'init.js'),
+            '${MERLIN_PACKAGE_NAME}/runtime.js': path.join(merlinDist, 'runtime.js'),
+            '${MERLIN_PACKAGE_NAME}/deployer.js': path.join(merlinDist, 'deployer.js'),
+        };
+    },
 });
 `;
 

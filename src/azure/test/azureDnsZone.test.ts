@@ -6,13 +6,14 @@ import {
     AZURE_DNS_ZONE_RESOURCE_TYPE,
 } from '../azureDnsZone.js';
 
-// Mock child_process so execSync is replaceable in tests
-vi.mock('child_process', () => ({
-    execSync: vi.fn(),
-}));
+// Mock execAsync so it is replaceable in tests
+vi.mock('../../common/constants.js', async (importOriginal) => {
+    const actual = await importOriginal() as any;
+    return { ...actual, execAsync: vi.fn() };
+});
 
-import { execSync } from 'child_process';
-const mockExecSync = vi.mocked(execSync);
+import { execAsync } from '../../common/constants.js';
+const mockExecAsync = vi.mocked(execAsync);
 
 // ── Test helpers ──────────────────────────────────────────────────────────────
 
@@ -48,7 +49,7 @@ function hasParam(args: string[], flag: string, value?: string): boolean {
 
 /** Mock: all az calls throw "not found" — use for tests that don't reach the list check */
 function mockNotFound(): void {
-    mockExecSync.mockImplementation(() => {
+    mockExecAsync.mockImplementation(async () => {
         const err: any = new Error('ResourceNotFound');
         err.status = 3;
         throw err;
@@ -60,10 +61,9 @@ function mockNotFound(): void {
  * Use for renderImpl happy-path "create" tests where parentName is set.
  */
 function mockNotFoundWithParentPresent(): void {
-    mockExecSync.mockImplementation((cmd: string) => {
-        const c = String(cmd);
-        if (c.includes('dns zone list')) {
-            return JSON.stringify([{ name: 'example.com' }]) as any;
+    mockExecAsync.mockImplementation(async (_cmd: string, args: string[]) => {
+        if (args.includes('zone') && args.includes('list')) {
+            return JSON.stringify([{ name: 'example.com' }]);
         }
         const err: any = new Error('ResourceNotFound');
         err.status = 3;
@@ -73,15 +73,14 @@ function mockNotFoundWithParentPresent(): void {
 
 /** Mock: zone exists, with optional tags */
 function mockZoneExists(tags?: Record<string, string>): void {
-    mockExecSync.mockImplementation((cmd: string) => {
-        const c = String(cmd);
-        if (c.includes('group show')) {
-            return JSON.stringify({ name: 'merlintest-rg-stg' }) as any;
+    mockExecAsync.mockImplementation(async (_cmd: string, args: string[]) => {
+        if (args.includes('group') && args.includes('show')) {
+            return JSON.stringify({ name: 'merlintest-rg-stg' });
         }
-        if (c.includes('dns zone list')) {
-            return JSON.stringify([{ name: 'example.com' }]) as any;
+        if (args.includes('zone') && args.includes('list')) {
+            return JSON.stringify([{ name: 'example.com' }]);
         }
-        return JSON.stringify({ name: 'mydns.example.com', tags: tags ?? {} }) as any;
+        return JSON.stringify({ name: 'mydns.example.com', tags: tags ?? {} });
     });
 }
 
@@ -379,10 +378,9 @@ describe('AzureDnsZoneRender', () => {
         });
 
         it('propagates unexpected errors from resource group check', async () => {
-            mockExecSync.mockImplementation((cmd: string) => {
-                const c = String(cmd);
-                if (c.includes('dns zone list')) {
-                    return JSON.stringify([{ name: 'example.com' }]) as any;
+            mockExecAsync.mockImplementation(async (_cmd: string, args: string[]) => {
+                if (args.includes('zone') && args.includes('list')) {
+                    return JSON.stringify([{ name: 'example.com' }]);
                 }
                 const err: any = new Error('Network failure');
                 err.status = 255;
@@ -393,14 +391,13 @@ describe('AzureDnsZoneRender', () => {
         });
 
         it('propagates unexpected errors from getDeployedProps', async () => {
-            mockExecSync.mockImplementation((cmd: string) => {
-                const c = String(cmd);
-                if (c.includes('dns zone list')) {
-                    return JSON.stringify([{ name: 'example.com' }]) as any;
+            mockExecAsync.mockImplementation(async (_cmd: string, args: string[]) => {
+                if (args.includes('zone') && args.includes('list')) {
+                    return JSON.stringify([{ name: 'example.com' }]);
                 }
-                if (c.includes('group show')) {
+                if (args.includes('group') && args.includes('show')) {
                     // RG exists — let RG check pass
-                    return JSON.stringify({ name: 'merlintest-rg-stg' }) as any;
+                    return JSON.stringify({ name: 'merlintest-rg-stg' });
                 }
                 // DNS zone show fails unexpectedly
                 const err: any = new Error('Network failure');
@@ -417,11 +414,10 @@ describe('AzureDnsZoneRender', () => {
     describe('parent DNS zone existence check', () => {
         it('skips check when parentName is undefined (root zone)', async () => {
             // Use a mock that succeeds for all az calls so the render completes
-            mockExecSync.mockImplementation((cmd: string) => {
-                const c = String(cmd);
+            mockExecAsync.mockImplementation(async (_cmd: string, args: string[]) => {
                 // dns zone list should never be called for root zones
-                if (c.includes('dns zone list')) throw new Error('dns zone list should not be called');
-                if (c.includes('group show')) return JSON.stringify({ name: 'merlintest-rg-stg' }) as any;
+                if (args.includes('zone') && args.includes('list')) throw new Error('dns zone list should not be called');
+                if (args.includes('group') && args.includes('show')) return JSON.stringify({ name: 'merlintest-rg-stg' });
                 // dns zone show — zone doesn't exist
                 const err: any = new Error('ResourceNotFound'); err.status = 3; throw err;
             });
@@ -429,8 +425,8 @@ describe('AzureDnsZoneRender', () => {
             // Should succeed and NOT call dns zone list
             const cmds = await render.render(resource);
             expect(cmds.some(c => c.args.includes('create'))).toBe(true);
-            const calls = mockExecSync.mock.calls.map(c => String(c[0]));
-            expect(calls.some(c => c.includes('dns zone list'))).toBe(false);
+            const calls = mockExecAsync.mock.calls.map(c => (c[1] as string[]).join(' '));
+            expect(calls.some(c => c.includes('zone') && c.includes('list'))).toBe(false);
         });
 
         it('proceeds normally when parent zone is found in the list', async () => {
@@ -442,9 +438,9 @@ describe('AzureDnsZoneRender', () => {
         });
 
         it('throws when parent zone is not in the list (empty list)', async () => {
-            mockExecSync.mockImplementation((cmd: string) => {
-                if (String(cmd).includes('dns zone list')) {
-                    return JSON.stringify([]) as any;
+            mockExecAsync.mockImplementation(async (_cmd: string, args: string[]) => {
+                if (args.includes('zone') && args.includes('list')) {
+                    return JSON.stringify([]);
                 }
                 const err: any = new Error('ResourceNotFound');
                 err.status = 3;
@@ -455,8 +451,8 @@ describe('AzureDnsZoneRender', () => {
         });
 
         it('error message includes the missing parent zone name', async () => {
-            mockExecSync.mockImplementation((cmd: string) => {
-                if (String(cmd).includes('dns zone list')) return JSON.stringify([]) as any;
+            mockExecAsync.mockImplementation(async (_cmd: string, args: string[]) => {
+                if (args.includes('zone') && args.includes('list')) return JSON.stringify([]);
                 const err: any = new Error('ResourceNotFound'); err.status = 3; throw err;
             });
             const resource = makeResource({ parentName: 'example.com' });
@@ -464,8 +460,8 @@ describe('AzureDnsZoneRender', () => {
         });
 
         it('error message includes the manual az create command', async () => {
-            mockExecSync.mockImplementation((cmd: string) => {
-                if (String(cmd).includes('dns zone list')) return JSON.stringify([]) as any;
+            mockExecAsync.mockImplementation(async (_cmd: string, args: string[]) => {
+                if (args.includes('zone') && args.includes('list')) return JSON.stringify([]);
                 const err: any = new Error('ResourceNotFound'); err.status = 3; throw err;
             });
             const resource = makeResource({ parentName: 'example.com' });
@@ -475,11 +471,11 @@ describe('AzureDnsZoneRender', () => {
         });
 
         it('throws when az network dns zone list itself fails', async () => {
-            mockExecSync.mockImplementation((cmd: string) => {
-                if (String(cmd).includes('dns zone list')) {
+            mockExecAsync.mockImplementation(async (_cmd: string, args: string[]) => {
+                if (args.includes('zone') && args.includes('list')) {
                     const err: any = new Error('auth error');
                     err.status = 1;
-                    err.stderr = Buffer.from('AADSTS error');
+                    err.stderr = 'AADSTS error';
                     throw err;
                 }
                 const err: any = new Error('ResourceNotFound'); err.status = 3; throw err;
@@ -489,8 +485,8 @@ describe('AzureDnsZoneRender', () => {
         });
 
         it('throws when az network dns zone list returns non-JSON output', async () => {
-            mockExecSync.mockImplementation((cmd: string) => {
-                if (String(cmd).includes('dns zone list')) return 'WARNING: not json garbage' as any;
+            mockExecAsync.mockImplementation(async (_cmd: string, args: string[]) => {
+                if (args.includes('zone') && args.includes('list')) return 'WARNING: not json garbage';
                 const err: any = new Error('ResourceNotFound'); err.status = 3; throw err;
             });
             const resource = makeResource({ parentName: 'example.com' });
@@ -498,10 +494,9 @@ describe('AzureDnsZoneRender', () => {
         });
 
         it('matches parent zone name case-insensitively (list has uppercase)', async () => {
-            mockExecSync.mockImplementation((cmd: string) => {
-                const c = String(cmd);
-                if (c.includes('dns zone list')) return JSON.stringify([{ name: 'EXAMPLE.COM' }]) as any;
-                if (c.includes('group show')) return JSON.stringify({ name: 'merlintest-rg-stg' }) as any;
+            mockExecAsync.mockImplementation(async (_cmd: string, args: string[]) => {
+                if (args.includes('zone') && args.includes('list')) return JSON.stringify([{ name: 'EXAMPLE.COM' }]);
+                if (args.includes('group') && args.includes('show')) return JSON.stringify({ name: 'merlintest-rg-stg' });
                 // dns zone show — zone doesn't exist
                 const err: any = new Error('ResourceNotFound'); err.status = 3; throw err;
             });
@@ -512,9 +507,9 @@ describe('AzureDnsZoneRender', () => {
         });
 
         it('does not match a similar but non-equal name (sub.example.com ≠ example.com)', async () => {
-            mockExecSync.mockImplementation((cmd: string) => {
-                if (String(cmd).includes('dns zone list')) {
-                    return JSON.stringify([{ name: 'sub.example.com' }]) as any;
+            mockExecAsync.mockImplementation(async (_cmd: string, args: string[]) => {
+                if (args.includes('zone') && args.includes('list')) {
+                    return JSON.stringify([{ name: 'sub.example.com' }]);
                 }
                 const err: any = new Error('ResourceNotFound'); err.status = 3; throw err;
             });
@@ -523,16 +518,15 @@ describe('AzureDnsZoneRender', () => {
         });
 
         it('finds the parent when multiple zones are in the list', async () => {
-            mockExecSync.mockImplementation((cmd: string) => {
-                const c = String(cmd);
-                if (c.includes('dns zone list')) {
+            mockExecAsync.mockImplementation(async (_cmd: string, args: string[]) => {
+                if (args.includes('zone') && args.includes('list')) {
                     return JSON.stringify([
                         { name: 'other.dev' },
                         { name: 'example.com' },
                         { name: 'another.net' },
-                    ]) as any;
+                    ]);
                 }
-                if (c.includes('group show')) return JSON.stringify({ name: 'merlintest-rg-stg' }) as any;
+                if (args.includes('group') && args.includes('show')) return JSON.stringify({ name: 'merlintest-rg-stg' });
                 // dns zone show — zone doesn't exist
                 const err: any = new Error('ResourceNotFound'); err.status = 3; throw err;
             });

@@ -1,17 +1,25 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AzureManagedIdentityAuthProvider } from '../authProvider.js';
+import { AzureResourceRender } from '../render.js';
 import * as resourceModule from '../../common/resource.js';
-import type { Resource, Render } from '../../common/resource.js';
+import type { Resource, Render, Command, RenderContext } from '../../common/resource.js';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-function makeRender(resourceName: string, resourceGroupName: string): Render & { getResourceName: any; getResourceGroupName: any } {
-    return {
-        render: vi.fn(),
-        getShortResourceTypeName: vi.fn().mockReturnValue('acr'),
-        getResourceName: vi.fn().mockReturnValue(resourceName),
-        getResourceGroupName: vi.fn().mockReturnValue(resourceGroupName),
-    } as any;
+/**
+ * Creates a mock that is an actual AzureResourceRender instance so that
+ * `instanceof AzureResourceRender` checks pass in the auth provider.
+ */
+function makeRender(resourceName: string, resourceGroupName: string): AzureResourceRender {
+    const render = Object.create(AzureResourceRender.prototype);
+    render.supportConnectorInResourceName = true;
+    render.isGlobalResource = false;
+    render.render = vi.fn();
+    render.renderImpl = vi.fn().mockResolvedValue([]);
+    render.getShortResourceTypeName = vi.fn().mockReturnValue('acr');
+    render.getResourceName = vi.fn().mockReturnValue(resourceName);
+    render.getResourceGroupName = vi.fn().mockReturnValue(resourceGroupName);
+    return render;
 }
 
 function makeResource(type: string, name: string, ring = 'staging', region = 'eastasia'): Resource {
@@ -41,13 +49,14 @@ describe('AzureManagedIdentityAuthProvider', () => {
         expect(provider.name).toBe('AzureManagedIdentity');
     });
 
-    it('throws when role arg is missing', async () => {
+    it('returns empty commands when role arg is missing', async () => {
         const requestor = makeResource('AzureContainerApp', 'myaca');
         const prov = makeResource('AzureContainerRegistry', 'myacr');
 
         vi.spyOn(resourceModule, 'getRender').mockReturnValue(makeRender('mymyacrstgeasacr', 'merlintest-rg-stg-eas') as any);
 
-        await expect(provider.apply(requestor, prov, {})).rejects.toThrow("'role' is required");
+        const cmds = await provider.apply(requestor, prov, {});
+        expect(cmds).toEqual([]);
     });
 
     describe('scope: resource (default)', () => {
@@ -219,6 +228,49 @@ describe('AzureManagedIdentityAuthProvider', () => {
             const cmdsB = await provider.apply(requestorB, prov, { role: 'AcrPull' });
 
             expect(cmdsA[0].envCapture).not.toBe(cmdsB[0].envCapture);
+        });
+    });
+
+    describe('non-Azure resource renders', () => {
+        /**
+         * Creates a plain Render mock (not an AzureResourceRender instance).
+         * Simulates K8s renders that implement Render directly.
+         */
+        function makeK8sRender(): Render {
+            return {
+                render: vi.fn().mockResolvedValue([]),
+                getShortResourceTypeName: vi.fn().mockReturnValue('k8sdeploy'),
+            };
+        }
+
+        it('returns empty commands when requestor render is not AzureResourceRender', async () => {
+            vi.spyOn(resourceModule, 'getRender').mockImplementation((type: string) => {
+                if (type === 'KubernetesDeployment') {
+                    return makeK8sRender() as any;
+                }
+                return makeRender('shared-sp-stg', 'shared-rg-stg') as any;
+            });
+
+            const requestor = makeResource('KubernetesDeployment', 'myapp');
+            const prov = makeResource('AzureServicePrincipal', 'mysp');
+
+            const cmds = await provider.apply(requestor, prov, { role: 'Contributor' });
+            expect(cmds).toEqual([]);
+        });
+
+        it('returns empty commands when provider render is not AzureResourceRender', async () => {
+            vi.spyOn(resourceModule, 'getRender').mockImplementation((type: string) => {
+                if (type === 'KubernetesService') {
+                    return makeK8sRender() as any;
+                }
+                return makeRender('merlintest-aca-stg-eas', 'merlintest-rg-stg-eas') as any;
+            });
+
+            const requestor = makeResource('AzureContainerApp', 'myaca');
+            const prov = makeResource('KubernetesService', 'mysvc');
+
+            const cmds = await provider.apply(requestor, prov, { role: 'Reader' });
+            expect(cmds).toEqual([]);
         });
     });
 });

@@ -5,6 +5,7 @@
 import { ResourceYAMLSchema } from './schemas.js';
 import { ParsedYAML, ValidationResult, CompilationError, ErrorSeverity } from './types.js';
 import { parseParamString } from './interpolation.js';
+import { RING_SHORT_NAME_MAP, REGION_SHORT_NAME_MAP } from '../common/resource.js';
 
 /**
  * Validates a parsed YAML resource against schema and semantic rules
@@ -194,19 +195,19 @@ function getHintForZodError(error: any): string | undefined {
     const path = error.path.join('.');
 
     if (code === 'invalid_type' && path === 'ring') {
-        return 'Valid rings are: test, staging, production';
+        return `Valid rings are: ${Object.keys(RING_SHORT_NAME_MAP).join(', ')}`;
     }
 
     if (code === 'invalid_enum_value' && path === 'ring') {
-        return 'Valid rings are: test, staging, production';
+        return `Valid rings are: ${Object.keys(RING_SHORT_NAME_MAP).join(', ')}`;
     }
 
     if (code === 'invalid_type' && path === 'region') {
-        return 'Valid regions are: eastus, westus, eastasia, koreacentral, koreasouth';
+        return `Valid regions are: ${Object.keys(REGION_SHORT_NAME_MAP).join(', ')}`;
     }
 
     if (code === 'invalid_enum_value' && path === 'region') {
-        return 'Valid regions are: eastus, westus, eastasia, koreacentral, koreasouth';
+        return `Valid regions are: ${Object.keys(REGION_SHORT_NAME_MAP).join(', ')}`;
     }
 
     if (path.includes('authProvider')) {

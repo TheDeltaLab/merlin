@@ -14,6 +14,7 @@
 import { Resource, Command, getRender, RING_SHORT_NAME_MAP, REGION_SHORT_NAME_MAP } from './resource.js';
 import { getResource } from './registry.js';
 import { ParamValue, ParamSegment, isParamValue } from '../compiler/types.js';
+import { toEnvSlug } from './constants.js';
 
 /**
  * Result returned by resolveConfig.
@@ -37,7 +38,7 @@ export interface ResolveConfigResult<T extends Resource> {
 /**
  * Resolves all ParamValue entries in resource.config.
  *
- * Instead of executing ProprietyGetter commands eagerly (which requires the
+ * Instead of executing PropertyGetter commands eagerly (which requires the
  * Azure resources to already exist), this function:
  *   1. Collects the getter commands as capture commands (envCapture set)
  *   2. Substitutes "$MERLIN_<TYPE>_<NAME>_<RING>[_<REGION>]_<EXPORT>" strings into config values
@@ -48,7 +49,7 @@ export interface ResolveConfigResult<T extends Resource> {
  *
  * @throws Error if a dependency resource cannot be found in the registry
  * @throws Error if a referenced export does not exist on the dependency resource
- * @throws Error if a ProprietyGetter returns no commands
+ * @throws Error if a PropertyGetter returns no commands
  */
 export async function resolveConfig<T extends Resource>(resource: T): Promise<ResolveConfigResult<T>> {
     const captureCommands: Command[] = [];
@@ -150,11 +151,11 @@ async function resolveSegment(
             if (!seen.has(varName)) {
                 seen.add(varName);
 
-                // Call the ProprietyGetter to get the commands
+                // Call the PropertyGetter to get the commands
                 const commands = await exportDef.getter.get(depResource, exportDef.args);
                 if (!commands.length) {
                     throw new Error(
-                        `ProprietyGetter "${exportDef.getter.name}" for "${seg.resourceType}.${seg.resource}.${seg.export}" returned no commands`
+                        `PropertyGetter "${exportDef.getter.name}" for "${seg.resourceType}.${seg.resource}.${seg.export}" returned no commands`
                     );
                 }
 
@@ -187,8 +188,6 @@ function toVarName(
     ring?: string,
     region?: string
 ): string {
-    const slug = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '_');
-
     // Use short type name from the Render implementation
     let shortType: string;
     try {
@@ -206,11 +205,11 @@ function toVarName(
 
     const parts = [
         'MERLIN',
-        slug(shortType),
-        slug(resource),
+        toEnvSlug(shortType),
+        toEnvSlug(resource),
     ];
-    if (shortRing) parts.push(slug(shortRing));
-    if (shortRegion) parts.push(slug(shortRegion));
-    parts.push(slug(exportName));
+    if (shortRing) parts.push(toEnvSlug(shortRing));
+    if (shortRegion) parts.push(toEnvSlug(shortRegion));
+    parts.push(toEnvSlug(exportName));
     return parts.join('_');
 }

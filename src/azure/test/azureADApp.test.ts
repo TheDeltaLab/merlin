@@ -6,13 +6,14 @@ import {
     AZURE_AD_APP_RESOURCE_TYPE,
 } from '../azureADApp.js';
 
-// Mock child_process so execSync is replaceable in tests
-vi.mock('child_process', () => ({
-    execSync: vi.fn(),
-}));
+// Mock execAsync so it is replaceable in tests
+vi.mock('../../common/constants.js', async (importOriginal) => {
+    const actual = await importOriginal() as any;
+    return { ...actual, execAsync: vi.fn() };
+});
 
-import { execSync } from 'child_process';
-const mockExecSync = vi.mocked(execSync);
+import { execAsync } from '../../common/constants.js';
+const mockExecAsync = vi.mocked(execAsync);
 
 // ── Test helpers ──────────────────────────────────────────────────────────────
 
@@ -46,7 +47,7 @@ function hasParam(args: string[], flag: string, value?: string): boolean {
 
 /** Mock: app does not exist */
 function mockNotFound(): void {
-    mockExecSync.mockImplementation(() => {
+    mockExecAsync.mockImplementation(async () => {
         const err: any = new Error('ResourceNotFound');
         err.status = 3;
         throw err;
@@ -55,8 +56,8 @@ function mockNotFound(): void {
 
 /** Mock: app exists with a given objectId */
 function mockAppExists(objectId = 'object-id-123'): void {
-    mockExecSync.mockImplementation(() => {
-        return JSON.stringify([{ id: objectId, displayName: 'merlintest-myapp-stg' }]) as any;
+    mockExecAsync.mockImplementation(async () => {
+        return JSON.stringify([{ id: objectId, displayName: 'merlintest-myapp-stg' }]);
     });
 }
 
@@ -378,7 +379,7 @@ describe('AzureADAppRender', () => {
         });
 
         it('propagates unexpected errors from getDeployedProps', async () => {
-            mockExecSync.mockImplementation(() => {
+            mockExecAsync.mockImplementation(async () => {
                 const err: any = new Error('Network failure');
                 err.status = 255;
                 throw err;

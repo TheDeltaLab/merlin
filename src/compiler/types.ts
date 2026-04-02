@@ -92,7 +92,7 @@ export interface ExpandedResource {
  * Export reference for generated code
  */
 export interface ExportRef {
-    name: string;            // The ProprietyGetter name
+    name: string;            // The PropertyGetter name
     args: Record<string, string>;
 }
 
