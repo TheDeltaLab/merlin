@@ -15,6 +15,10 @@ export class AzurePreDeployProvider implements PreDeployProvider {
         const seen = new Map<string, { resource: Resource; commands: Command[] }>();
 
         for (const r of resources) {
+            // Skip Kubernetes resources — they use kubectl/helm, not Azure ARM,
+            // and don't need Azure resource groups.
+            if (r.type.startsWith('Kubernetes')) continue;
+
             const config = r.config as Record<string, unknown>;
             const hasCustomRG = config?.resourceGroupName && typeof config.resourceGroupName === 'string';
 

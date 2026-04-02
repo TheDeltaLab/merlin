@@ -36,6 +36,12 @@ export interface DeployOptions {
    * but are filtered out before deployment.
    */
   noShared?: boolean;
+  /**
+   * When true, only deploy Kubernetes-type resources (type starts with "Kubernetes").
+   * Azure, GitHub, and other non-K8s resources are skipped.
+   * Useful in CI/CD pipelines that only have K8s (kubectl/helm) permissions.
+   */
+  k8sOnly?: boolean;
 }
 
 /** A single resource with its rendered deployment commands */
@@ -291,6 +297,10 @@ export class Deployer {
     return resources.filter(resource => {
       // Skip shared resources when --no-shared is active
       if (options.noShared && resource._isShared) {
+        return false;
+      }
+      // Skip non-Kubernetes resources when --k8s-only is active
+      if (options.k8sOnly && !resource.type.startsWith('Kubernetes')) {
         return false;
       }
       // Resources with no ring are global — never filter them out by ring

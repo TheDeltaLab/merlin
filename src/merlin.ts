@@ -163,6 +163,7 @@ program
     .option('-c, --concurrency <number>', 'Max parallel resource deployments per level (default: 4)', '4')
     .option('--cloud <cloud>', 'Cloud provider: azure (default) | alibaba', 'azure')
     .option('--no-shared', 'Do not auto-include shared resources from the merlin package')
+    .option('--k8s-only', 'Only deploy Kubernetes resources (skip Azure, GitHub, etc.)')
     .option('--all', 'Confirm deployment to all rings (required with --execute when no --ring)')
     .option('-y, --yes', 'Skip interactive confirmations (for CI/CD)')
     .addHelpText('after', `
@@ -262,6 +263,10 @@ Examples:
 
             if (!options.shared) {
                 args.push('--no-shared');
+            }
+
+            if (options.k8sOnly) {
+                args.push('--k8s-only');
             }
 
             if (options.execute) {

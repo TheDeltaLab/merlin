@@ -1063,6 +1063,95 @@ SP client secret 默认 2 年有效。过期后重新运行脚本即可轮换：
 
 ---
 
+## AKS 部署模式：CI/CD vs 手动
+
+AKS 项目的部署分为两个层面，由不同的执行者操作：
+
+### 层面总览
+
+| 层面 | 资源类型 | 执行者 | 频率 | 命令 |
+|------|----------|--------|------|------|
+| **Azure 基础设施** | AzureServicePrincipal, AzureKeyVault, AzureDnsZone 等 | 开发者本地 | 首次 + 变更时 | `merlin deploy` |
+| **K8s 工作负载** | KubernetesDeployment, Service, Ingress, ConfigMap 等 | GitHub Actions (CI/CD) | 每次代码推送 | `merlin deploy --k8s-only` |
+
+### 1. Azure 基础设施（手动操作）
+
+以下资源需要 Azure AD / ARM 权限，**必须由开发者本地执行**（不在 CI/CD 中运行）：
+
+```bash
+# 前提：本地已登录 Azure
+az login
+az account set --subscription <subscription-id>
+
+# ① 部署共享基础设施（AKS 集群、ACR、Key Vault 等）— 通常只需一次
+merlin deploy shared-resource --execute --ring test --region koreacentral
+merlin deploy shared-k8s-resource --execute --ring test --region koreacentral
+
+# ② 部署项目的 Azure 资源（如 AzureServicePrincipal.admin-aad）
+cd /path/to/trinity
+merlin deploy ./merlin-resources --execute --ring test --region koreacentral
+
+# ③ 配置 GitHub Actions 凭证
+cd /path/to/merlin
+./scripts/setup-github-acr-secrets.sh --ring test
+```
+
+**需要手动操作的场景：**
+
+| 场景 | 操作 |
+|------|------|
+| 首次部署新项目 | 运行步骤 ①②③ |
+| 修改了 `adminaad.yml`（redirect URI、权限等） | 重新运行步骤 ② |
+| 修改了 `shared-resource/` | 重新运行步骤 ① |
+| SP client secret 过期（2 年） | 重新运行步骤 ③ |
+| 添加新 ring/region | 重新运行步骤 ①②③ |
+
+> **提示**：步骤 ② 会同时部署 K8s 资源和 Azure 资源。如果只想部署 Azure 资源（跳过 K8s），目前需要手动运行完整部署。K8s 资源的 `kubectl apply` 是幂等的，重复执行无害。
+
+### 2. K8s 工作负载（CI/CD 自动化）
+
+GitHub Actions 使用 `--k8s-only --no-shared` 标志，只部署 Kubernetes 类型的资源：
+
+```yaml
+# .github/workflows/aks-deploy.yml 关键步骤
+merlin deploy ./merlin-resources \
+  --k8s-only \
+  --no-shared \
+  --execute \
+  --ring test \
+  --region koreacentral
+```
+
+**标志说明：**
+
+| 标志 | 作用 |
+|------|------|
+| `--k8s-only` | 只部署 `Kubernetes*` 类型的资源，跳过 Azure/GitHub 类型 |
+| `--no-shared` | 不部署共享资源（ACR、AKS 集群等），但仍编译它们以解析 `${ }` 表达式 |
+
+**CI/CD 的 SP 权限要求（最小权限）：**
+
+| 角色 | 范围 | 用途 |
+|------|------|------|
+| AKS Cluster User Role | `shared-rg-{ring}-{region}` | `az aks get-credentials` |
+| AKS RBAC Writer | `shared-rg-{ring}-{region}` | `kubectl apply`（创建/更新 K8s 资源） |
+| AcrPush | 共享 ACR | docker push |
+| Reader | 共享 ACR | `az acr login` 资源发现 |
+
+> **注意**：CI/CD 的 SP **不需要** `Microsoft.Resources/subscriptions/resourcegroups/write` 或 Azure AD Graph 权限。`--k8s-only` 确保不会触发这些操作。
+
+### 3. 部署顺序（新项目首次上线）
+
+```
+1. merlin deploy shared-resource --execute          # 共享 Azure 基础设施
+2. merlin deploy shared-k8s-resource --execute      # AKS 集群 + NGINX + cert-manager
+3. merlin deploy ./merlin-resources --execute       # 项目 Azure 资源 + K8s 工作负载
+4. ./scripts/setup-github-acr-secrets.sh            # 配置 CI/CD 凭证
+5. 之后 CI/CD 自动处理 K8s 部署（--k8s-only --no-shared）
+```
+
+---
+
 ## 常见问题和排错
 
 ### Q: `merlin deploy` 报 "path not found"
