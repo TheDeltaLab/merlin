@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.1](https://github.com/TheDeltaLab/merlin/compare/v1.5.0...v1.5.1) (2026-04-02)
+
+
+### Bug Fixes
+
+* --no-shared now compiles shared resources but skips deploying them ([#51](https://github.com/TheDeltaLab/merlin/issues/51)) ([83e9ae9](https://github.com/TheDeltaLab/merlin/commit/83e9ae91f9042b79fbf09e18f0c2294633aecd18))
+
 ## [1.5.0](https://github.com/TheDeltaLab/merlin/compare/v1.4.0...v1.5.0) (2026-04-02)
 
 
