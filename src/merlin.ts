@@ -260,6 +260,10 @@ Examples:
                 args.push('--concurrency', options.concurrency);
             }
 
+            if (!options.shared) {
+                args.push('--no-shared');
+            }
+
             if (options.execute) {
                 // Use pnpm execute (which runs with --execute flag)
                 console.log('🚀 Executing deployment...\n');

@@ -24,6 +24,7 @@ interface CliOptions {
   execute: boolean;
   outputFile?: string;
   concurrency?: number;
+  noShared?: boolean;
 }
 
 /**
@@ -51,6 +52,8 @@ function parseArguments(): CliOptions {
       if (!isNaN(val) && val > 0) {
         options.concurrency = val;
       }
+    } else if (arg === '--no-shared') {
+      options.noShared = true;
     } else if (arg === '--help' || arg === '-h') {
       console.log(\`
 Usage: node deploy.js [options]
@@ -61,6 +64,7 @@ Options:
   --region <region>          Target region (eastus, westus, eastasia, koreacentral, koreasouth)
   --output, -o <file>        Write generated commands to file
   --concurrency, -c <n>      Max parallel resource deployments per level (default: 4)
+  --no-shared                Skip deploying shared resources (still registered for resolution)
   --help, -h                 Show this help message
 
 Examples:

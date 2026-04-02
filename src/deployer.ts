@@ -30,6 +30,12 @@ export interface DeployOptions {
    * Defaults to 4.
    */
   concurrency?: number;
+  /**
+   * When true, skip deploying shared resources (those with _isShared flag).
+   * Shared resources are still compiled and registered for ${ } expression resolution,
+   * but are filtered out before deployment.
+   */
+  noShared?: boolean;
 }
 
 /** A single resource with its rendered deployment commands */
@@ -283,6 +289,10 @@ export class Deployer {
    */
   private filterResources(resources: Resource[], options: DeployOptions): Resource[] {
     return resources.filter(resource => {
+      // Skip shared resources when --no-shared is active
+      if (options.noShared && resource._isShared) {
+        return false;
+      }
       // Resources with no ring are global — never filter them out by ring
       if (options.ring && resource.ring !== undefined && resource.ring !== options.ring) {
         return false;

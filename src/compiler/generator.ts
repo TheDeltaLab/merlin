@@ -113,6 +113,10 @@ function generateResourceObject(resource: ExpandedResource): string {
         code += `  project: ${JSON.stringify(resource.project)},\n`;
     }
 
+    if (resource._isShared) {
+        code += `  _isShared: true,\n`;
+    }
+
     if (resource.parent) {
         code += `  parent: ${JSON.stringify(resource.parent)},\n`;
     }

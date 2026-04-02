@@ -86,6 +86,7 @@ export interface ExpandedResource {
     dependencies: DependencyYAML[];  // Use YAML format, not runtime Dependency
     config: Record<string, unknown>;  // Merged defaultConfig + specificConfig
     exports: Record<string, ExportRef>;
+    _isShared?: boolean;     // true if sourced from shared-resource/ or shared-k8s-resource/
 }
 
 /**
