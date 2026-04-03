@@ -516,22 +516,59 @@ When `ring` and `region` are arrays, Merlin generates a cartesian product (e.g.,
 
 Every change must follow this flow: **Issue → Branch → PR → Merge**
 
-1. **Create an Issue** — describe what needs to be done (`gh issue create`)
+1. **Create an Issue** — describe what needs to be done. Assign the issue to yourself and add it to the `Delta` project (`gh issue create --assignee @me --project Delta`)
 2. **Create a branch** — `git checkout -b <type>/<short-description>` from main
 3. **Commit & push** — use [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`, etc.)
 4. **Create a PR** — reference the issue with `Closes #<number>` in the body (`gh pr create`)
-5. **Assign** — assign both the issue and PR to the author (`gh issue edit --add-assignee`, `gh pr edit --add-assignee`)
+5. **Assign** — assign the PR to yourself (`gh pr edit --add-assignee @me`)
 6. **Merge** — merge the PR on GitHub; release-please will auto-create a release PR based on conventional commits
+
+**IMPORTANT: Every PR must have a corresponding Issue.** Before creating a PR, always create an issue first (if one doesn't already exist). The issue must be:
+- Assigned to the person creating the PR (`--assignee @me`)
+- Added to the `Delta` project (`--project Delta`)
+- Referenced in the PR body with `Closes #<number>`
+
+**After creating the issue**, fill in the Delta project fields using `gh project item-edit`:
+
+| Field | Options | Description |
+|-------|---------|-------------|
+| **Status** | `Backlog`, `Ready`, `In progress`, `In review`, `Done` | Set to `In progress` when starting work |
+| **Priority** | `P0`, `P1`, `P2` | P0 = critical, P1 = important, P2 = nice-to-have |
+| **Size** | `XS`, `S`, `M`, `L`, `XL` | Estimated effort |
+| **Estimate** | number (hours) | Time estimate in hours |
+| **Iteration** | current iteration | Sprint/iteration the work belongs to |
+
+```bash
+# Set project fields after issue creation:
+# 1. Get the item ID
+ITEM_ID=$(gh project item-list 3 --owner TheDeltaLab --format json | jq -r '.items[] | select(.content.number == <ISSUE_NUMBER>) | .id')
+
+# 2. Set fields
+gh project item-edit --project-id PVT_kwDODpJN884BODoV --id $ITEM_ID --field-id PVTSSF_lADODpJN884BODoVzg83rtE --single-select-option-id 47fc9ee4   # Status: In progress
+gh project item-edit --project-id PVT_kwDODpJN884BODoV --id $ITEM_ID --field-id PVTSSF_lADODpJN884BODoVzg83sNM --single-select-option-id <PRIORITY>  # Priority
+gh project item-edit --project-id PVT_kwDODpJN884BODoV --id $ITEM_ID --field-id PVTSSF_lADODpJN884BODoVzg83sNQ --single-select-option-id <SIZE>      # Size
+gh project item-edit --project-id PVT_kwDODpJN884BODoV --id $ITEM_ID --field-id PVTF_lADODpJN884BODoVzg83sNU --number <HOURS>                        # Estimate
+gh project item-edit --project-id PVT_kwDODpJN884BODoV --id $ITEM_ID --field-id PVTIF_lADODpJN884BODoVzg83sNY --iteration-id <ITERATION_ID>           # Iteration
+```
+
+**Field option IDs (for copy-paste):**
+
+Priority: `79628723` (P0), `0a877460` (P1), `da944a9c` (P2)
+
+Size: `911790be` (XS), `b277fb01` (S), `86db8eb3` (M), `853c8207` (L), `2d0801e2` (XL)
+
+Status: `f75ad846` (Backlog), `e18bf179` (Ready), `47fc9ee4` (In progress), `aba860b9` (In review), `98236657` (Done)
 
 **Never commit directly to main.** Direct pushes bypass code review and can trigger unintended release-please releases.
 
 ```bash
 # Example full workflow
-gh issue create --title "feat: add widget support" --body "Description" --assignee xintongli123
+gh issue create --title "feat: add widget support" --body "Description" --assignee @me --project Delta
+# Then set project fields (Status, Priority, Size, Estimate, Iteration) as shown above
 git checkout -b feat/widget-support
 # ... make changes, commit ...
 git push -u origin feat/widget-support
-gh pr create --title "feat: add widget support" --body "Closes #42" --assignee xintongli123
+gh pr create --title "feat: add widget support" --body "Closes #42" --assignee @me
 ```
 
 ## Important Development Notes
