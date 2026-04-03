@@ -185,14 +185,36 @@ async function createDeployScript(filePath: string): Promise<void> {
 }
 
 /**
- * Copies .npmrc from the project root (parent of .merlin/) into the output directory.
- * This is needed so that .merlin/pnpm install can authenticate to private registries
- * (e.g. GitHub Packages for @thedeltalab/merlin).
+ * Copies .npmrc into the .merlin/ output directory so that `pnpm install` can
+ * authenticate to private registries (e.g. GitHub Packages for @thedeltalab/merlin).
+ *
+ * Search order:
+ *   1. NPM_CONFIG_USERCONFIG env var (set by GitHub Actions `setup-node` with
+ *      `registry-url`). This is the primary auth source in CI.
+ *   2. Project root .npmrc (parent of .merlin/).
+ *
+ * The first file found is copied to .merlin/.npmrc. If the project root .npmrc
+ * already exists but lacks registry auth, the CI-generated config takes
+ * precedence because it contains the auth token.
  */
 async function copyNpmrc(outputPath: string): Promise<void> {
+    const dest = path.join(outputPath, '.npmrc');
+
+    // 1. Try NPM_CONFIG_USERCONFIG (CI environment, e.g. /home/runner/work/_temp/.npmrc)
+    const userConfig = process.env.NPM_CONFIG_USERCONFIG;
+    if (userConfig) {
+        try {
+            await access(userConfig);
+            await copyFile(userConfig, dest);
+            return;
+        } catch {
+            // File doesn't exist or can't be read — fall through
+        }
+    }
+
+    // 2. Try project root .npmrc
     const projectRoot = path.dirname(outputPath);
     const source = path.join(projectRoot, '.npmrc');
-    const dest = path.join(outputPath, '.npmrc');
     try {
         await access(source);
         await copyFile(source, dest);
