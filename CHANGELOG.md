@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.0](https://github.com/TheDeltaLab/merlin/compare/v1.6.0...v1.7.0) (2026-04-03)
+
+
+### Features
+
+* K8s-only deploy, directory roles, pnpm fixes, and init docs ([#58](https://github.com/TheDeltaLab/merlin/issues/58)) ([ee44802](https://github.com/TheDeltaLab/merlin/commit/ee448022a6a34a236a609668b67f7ad9b6ed160e))
+
 ## [1.6.0](https://github.com/TheDeltaLab/merlin/compare/v1.5.1...v1.6.0) (2026-04-02)
 
 
