@@ -14,6 +14,11 @@ defaultConfig:
   tags:
     merlin: "true"
     env: ${ this.ring }
+  # Directory Readers — allows the SP to query AD apps/SPs via MS Graph
+  # (needed for K8s ${ } capture commands like `az ad app list`)
+  # ⚠️ Requires Global Admin to deploy
+  directoryRoles:
+    - Directory Readers
 
 specificConfig:
   - ring: test
@@ -49,6 +54,12 @@ specificConfig:
         scope: /subscriptions/{subscriptionId}/resourceGroups/shared-rg-tst-krc
       - role: Azure Kubernetes Service RBAC Writer
         scope: /subscriptions/{subscriptionId}/resourceGroups/shared-rg-tst-eas
+      # Reader on shared RGs — needed for K8s ${ } capture commands
+      # (az keyvault show, az redisenterprise show, etc.)
+      - role: Reader
+        scope: /subscriptions/{subscriptionId}/resourceGroups/shared-rg-tst-krc
+      - role: Reader
+        scope: /subscriptions/{subscriptionId}/resourceGroups/shared-rg-tst-eas
 
   - ring: staging
     displayName: brainly-github-stg
@@ -82,6 +93,12 @@ specificConfig:
       - role: Azure Kubernetes Service RBAC Writer
         scope: /subscriptions/{subscriptionId}/resourceGroups/shared-rg-stg-krc
       - role: Azure Kubernetes Service RBAC Writer
+        scope: /subscriptions/{subscriptionId}/resourceGroups/shared-rg-stg-eas
+      # Reader on shared RGs — needed for K8s ${ } capture commands
+      # (az keyvault show, az redisenterprise show, etc.)
+      - role: Reader
+        scope: /subscriptions/{subscriptionId}/resourceGroups/shared-rg-stg-krc
+      - role: Reader
         scope: /subscriptions/{subscriptionId}/resourceGroups/shared-rg-stg-eas
 
 exports:

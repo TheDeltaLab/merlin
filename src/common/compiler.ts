@@ -68,6 +68,10 @@ export class Compiler {
             if (!options.validate && !options.skipCache) {
                 const cacheResult = await checkCache(yamlFiles, options.outputPath);
                 if (cacheResult.hit) {
+                    // Even on cache hit, ensure .merlin/node_modules exists.
+                    // It may have been deleted (e.g. git clean, CI fresh checkout)
+                    // while the cache file is still valid.
+                    await this.ensureDependenciesInstalled(options.outputPath);
                     return { success: true, errors: [], warnings: [], generatedFiles: [], cacheHit: true };
                 }
                 // Cache miss: clean stale generated artifacts before recompiling
@@ -541,6 +545,31 @@ export class Compiler {
         // Navigate up from dist/ to project root
         // In built code: dist/merlin.js (or dist/chunk-*.js) -> ../ -> project root
         return path.resolve(currentDir, '..');
+    }
+
+    /**
+     * Ensures .merlin/node_modules exists by running pnpm install if needed.
+     * This is a lightweight check for cache-hit scenarios where the full
+     * initializeOutputDirectory() is skipped but node_modules may be missing.
+     */
+    private async ensureDependenciesInstalled(outputPath: string): Promise<void> {
+        const nodeModulesPath = path.join(outputPath, 'node_modules');
+        try {
+            await access(nodeModulesPath);
+        } catch {
+            // node_modules missing — check if pnpm is available and package.json exists
+            const pnpmAvailable = await checkPnpmAvailable();
+            if (!pnpmAvailable) return;
+
+            const packageJsonPath = path.join(outputPath, 'package.json');
+            try {
+                await access(packageJsonPath);
+            } catch {
+                return; // No package.json either — nothing we can do
+            }
+
+            await execaCommand('pnpm install --ignore-workspace', { cwd: outputPath, stdio: 'pipe' });
+        }
     }
 
     /**

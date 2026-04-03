@@ -39,6 +39,19 @@ export async function initializeOutputDirectory(options: InitOptions): Promise<I
         if (exists) {
             // Check if we need to migrate the merlin dependency
             const migrated = await migrateMerlinDependency(packageJsonPath, merlinPath, outputPath);
+
+            // Ensure node_modules exists even if dependency specifier didn't change.
+            // This handles the case where node_modules was deleted (e.g. git clean, CI)
+            // but package.json still exists.
+            if (!migrated) {
+                const nodeModulesPath = path.join(outputPath, 'node_modules');
+                const hasNodeModules = await checkFileExists(nodeModulesPath);
+                if (!hasNodeModules) {
+                    await installDependencies(outputPath);
+                    return { initialized: true, skipped: false };
+                }
+            }
+
             return { initialized: migrated, skipped: !migrated };
         }
 
@@ -189,7 +202,11 @@ async function copyNpmrc(outputPath: string): Promise<void> {
 }
 
 async function installDependencies(cwd: string): Promise<void> {
-    await execaCommand('pnpm install', { cwd, stdio: 'pipe' });
+    // --ignore-workspace prevents pnpm from treating .merlin/ as part of a
+    // parent pnpm workspace (e.g. when the consumer project is a monorepo).
+    // Without this flag, pnpm resolves to the workspace root and installs
+    // nothing locally, leaving .merlin/node_modules empty.
+    await execaCommand('pnpm install --ignore-workspace', { cwd, stdio: 'pipe' });
 }
 
 /**

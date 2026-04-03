@@ -40,6 +40,20 @@ export interface RoleAssignment {
     scope: string;
 }
 
+/**
+ * Well-known Azure AD directory role template IDs.
+ * These are the same across all Azure AD tenants.
+ * @see https://learn.microsoft.com/en-us/entra/identity/role-based-access-control/permissions-reference
+ */
+export const DIRECTORY_ROLE_TEMPLATE_IDS: Record<string, string> = {
+    'Directory Readers': '88d8e3e3-8f55-4a1e-953a-9b9898b8876b',
+    'Directory Writers': '9360feb5-f418-4baa-8175-e2a00bac4301',
+    'Application Administrator': '9b895d92-2cd3-44c7-9d02-a6ac2d5ea5c3',
+    'Cloud Application Administrator': '158c047a-c907-4556-b7ef-446551a6b5f7',
+    'Global Reader': 'f2ef992c-3afb-46b9-b7cf-a126ee74c451',
+    'Security Reader': '5d6b6bb7-de71-4623-b4af-96380a352509',
+};
+
 export interface ClientSecretKeyVault {
     /** Key Vault names to store the client secret in (supports multiple for multi-region) */
     vaultNames: string[];
@@ -148,6 +162,19 @@ export interface AzureServicePrincipalConfig extends ResourceSchema {
 
     /** Role assignments granted to the Service Principal */
     roleAssignments?: RoleAssignment[];
+
+    /**
+     * Azure AD directory roles to assign to the Service Principal.
+     * These are tenant-level roles (e.g. "Directory Readers") that grant
+     * MS Graph API permissions — separate from ARM RBAC role assignments.
+     *
+     * Use well-known role names from `DIRECTORY_ROLE_TEMPLATE_IDS`, e.g.:
+     *   - "Directory Readers" — read AD apps, SPs, users (needed for `az ad app list`)
+     *   - "Cloud Application Administrator" — manage app registrations
+     *
+     * ⚠️ Requires Global Administrator or Privileged Role Administrator to deploy.
+     */
+    directoryRoles?: string[];
 }
 
 export interface AzureServicePrincipalResource extends Resource<AzureServicePrincipalConfig> {}
@@ -266,6 +293,9 @@ export class AzureServicePrincipalRender extends AzureResourceRender {
         // 8. Role assignments
         commands.push(...this.renderRoleAssignments(resource, appIdVar));
 
+        // 9. Directory roles (tenant-level, e.g. Directory Readers)
+        commands.push(...this.renderDirectoryRoles(resource, appIdVar));
+
         return commands;
     }
 
@@ -302,6 +332,75 @@ export class AzureServicePrincipalRender extends AzureResourceRender {
 
         commands.push(...this.renderFederatedCredentials(resource, appIdVar));
         commands.push(...this.renderRoleAssignments(resource, appIdVar));
+
+        // Directory roles (tenant-level, e.g. Directory Readers)
+        commands.push(...this.renderDirectoryRoles(resource, appIdVar));
+
+        return commands;
+    }
+
+    // ── Directory roles (tenant-level) ───────────────────────────────────────
+
+    /**
+     * Assign Azure AD directory roles (e.g. "Directory Readers") to the SP.
+     * Uses MS Graph REST API via `az rest`.
+     *
+     * Steps per role:
+     * 1. Activate the directory role template (idempotent — already-active is OK)
+     * 2. Get the activated role's object ID
+     * 3. Get the SP's object ID
+     * 4. Add the SP as a member of the directory role (idempotent)
+     *
+     * ⚠️ Requires Global Administrator or Privileged Role Administrator.
+     */
+    renderDirectoryRoles(resource: AzureServicePrincipalResource, appIdVar: string): Command[] {
+        const roles = resource.config.directoryRoles ?? [];
+        if (roles.length === 0) return [];
+
+        const commands: Command[] = [];
+
+        // Capture the SP's object ID (we need the SP object, not the app object)
+        const spObjectIdVar = this.envVarName(resource, 'SP_OID');
+        commands.push({
+            command: 'az',
+            args: ['ad', 'sp', 'list', '--filter', `appId eq '$${appIdVar}'`, '--query', '[0].id', '-o', 'tsv'],
+            envCapture: spObjectIdVar,
+        });
+
+        for (const roleName of roles) {
+            const templateId = DIRECTORY_ROLE_TEMPLATE_IDS[roleName];
+            if (!templateId) {
+                throw new Error(
+                    `Unknown directory role "${roleName}". Known roles: ${Object.keys(DIRECTORY_ROLE_TEMPLATE_IDS).join(', ')}`
+                );
+            }
+
+            // Single bash script that:
+            // 1. Activates the role template (POST directoryRoles, ignore "already exists")
+            // 2. Gets the activated role's object ID
+            // 3. Adds the SP as a member (ignore "already exists")
+            const script = [
+                `# Activate directory role template: ${roleName}`,
+                `az rest --method post --url "https://graph.microsoft.com/v1.0/directoryRoles" ` +
+                    `--headers "Content-Type=application/json" ` +
+                    `--body '{"roleTemplateId":"${templateId}"}' 2>/dev/null || true`,
+                ``,
+                `# Get the activated role object ID`,
+                `ROLE_ID=$(az rest --method get --url "https://graph.microsoft.com/v1.0/directoryRoles" ` +
+                    `-o tsv --query "value[?roleTemplateId=='${templateId}'].id | [0]")`,
+                ``,
+                `# Add SP as member (idempotent — ignore "already exists")`,
+                `az rest --method post ` +
+                    `--url "https://graph.microsoft.com/v1.0/directoryRoles/$ROLE_ID/members/\\$ref" ` +
+                    `--headers "Content-Type=application/json" ` +
+                    `--body '{"@odata.id":"https://graph.microsoft.com/v1.0/servicePrincipals/'$${spObjectIdVar}'"}' 2>/dev/null || true`,
+            ].join('\n');
+
+            commands.push({
+                command: 'bash',
+                args: ['-c', script],
+            });
+        }
 
         return commands;
     }
