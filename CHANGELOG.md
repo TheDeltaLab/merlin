@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.1](https://github.com/TheDeltaLab/merlin/compare/v1.7.0...v1.7.1) (2026-04-03)
+
+
+### Bug Fixes
+
+* throw on empty captured variables instead of silently skipping ([#61](https://github.com/TheDeltaLab/merlin/issues/61)) ([0a637a7](https://github.com/TheDeltaLab/merlin/commit/0a637a7fbea300874b8be4357c444861b31d4107)), closes [#60](https://github.com/TheDeltaLab/merlin/issues/60)
+
 ## [1.7.0](https://github.com/TheDeltaLab/merlin/compare/v1.6.0...v1.7.0) (2026-04-03)
 
 
