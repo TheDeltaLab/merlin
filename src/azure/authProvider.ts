@@ -1,6 +1,7 @@
 import { AuthProvider, Command, Dependency, Resource, getRender } from "../common/resource.js";
 import { AzureResourceRender } from "./render.js";
 import { AzureADAppRender, AzureADAppResource } from "./azureADApp.js";
+import { AzureServicePrincipalRender, AzureServicePrincipalResource } from "./azureServicePrincipal.js";
 import { toEnvSlug } from '../common/constants.js';
 
 /**
@@ -118,8 +119,12 @@ export class AzureManagedIdentityAuthProvider implements AuthProvider {
 
         // Service Principals are AAD objects, not ARM resources.
         // Their principal ID is the SP's object ID, looked up by display name.
+        // IMPORTANT: must use getDisplayName() (full ring name, e.g. "test") not
+        // getResourceName() (short ring name, e.g. "tst"), because the SP was
+        // created with getDisplayName() in azureServicePrincipal.ts.
         if (requestor.type === 'AzureServicePrincipal') {
-            const displayName = resourceName;
+            const spRender = render as AzureServicePrincipalRender;
+            const displayName = spRender.getDisplayName(requestor as AzureServicePrincipalResource);
             return [{
                 command: 'az',
                 args: ['ad', 'sp', 'list', '--filter', `displayName eq '${displayName}'`, '--query', '[0].id', '-o', 'tsv'],
