@@ -387,14 +387,21 @@ export class Deployer {
         // and substitute the placeholder in args with the real path.
         let resolvedArgs = command.args.map(arg => expandVars(arg, captureVars));
 
-        // Skip commands that reference a captured variable that resolved to empty
-        // (e.g. role assignment when the resource's managed identity doesn't exist yet)
-        if (!command.envCapture && resolvedArgs.some(a => a === '')) {
-          console.warn(
-            `  ⚠ Skipping command — one or more captured variables are empty (resource may not exist yet):\n` +
-            `    ${command.command} ${command.args.join(' ')}`
-          );
-          continue;
+        // Fail fast if any captured variable resolved to empty.
+        // This catches cases like $DNS_ZONE_RG being empty because the DNS zone
+        // was not found, or $PRINCIPAL_ID being empty because the resource doesn't
+        // exist yet. Previously we silently skipped, but that hides real errors
+        // (e.g. missing DNS zone) and makes debugging harder.
+        if (!command.envCapture) {
+          const emptyVarNames = this.findEmptyCaptureVars(command.args, resolvedArgs, captureVars);
+          if (emptyVarNames.length > 0) {
+            throw new Error(
+              `Captured variable(s) resolved to empty: ${emptyVarNames.map(v => `$${v}`).join(', ')}\n` +
+              `  Command: ${command.command} ${command.args.join(' ')}\n` +
+              `  This usually means a prior capture command returned no output. ` +
+              `Check that the referenced resource exists (e.g. DNS zone, managed identity).`
+            );
+          }
         }
 
         if (command.fileContent) {
@@ -448,6 +455,40 @@ export class Deployer {
     }
 
     console.log('');
+  }
+
+  /**
+   * Finds captured variable names that resolved to empty in the given args.
+   * Checks both standalone $VAR args (entire arg is '') and inline $VAR
+   * references embedded in larger strings (e.g. bash -c '... $VAR ...').
+   */
+  private findEmptyCaptureVars(
+    originalArgs: string[],
+    resolvedArgs: string[],
+    captureVars: Map<string, string>
+  ): string[] {
+    const emptyVars: string[] = [];
+    for (let i = 0; i < originalArgs.length; i++) {
+      const original = originalArgs[i];
+      const resolved = resolvedArgs[i];
+      // Case 1: entire arg resolved to empty
+      if (resolved === '') {
+        const match = original.match(/^\$([A-Z][A-Z0-9_]*)$/);
+        if (match) emptyVars.push(match[1]);
+        continue;
+      }
+      // Case 2: inline $VAR was replaced with empty string
+      const varRefs = original.match(/\$([A-Z][A-Z0-9_]*)/g);
+      if (varRefs) {
+        for (const ref of varRefs) {
+          const varName = ref.slice(1);
+          if (captureVars.has(varName) && captureVars.get(varName) === '') {
+            emptyVars.push(varName);
+          }
+        }
+      }
+    }
+    return emptyVars;
   }
 
   /**
