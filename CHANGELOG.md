@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.7.2](https://github.com/TheDeltaLab/merlin/compare/v1.7.1...v1.7.2) (2026-04-03)
+
+
+### Bug Fixes
+
+* copy CI-generated .npmrc for private registry auth in --ignore-workspace mode ([#63](https://github.com/TheDeltaLab/merlin/issues/63)) ([e9c665f](https://github.com/TheDeltaLab/merlin/commit/e9c665f7b2a951421d9ce165a3e4a2b85fd9b766))
+* use getDisplayName() for SP principal ID lookup in authProvider ([#64](https://github.com/TheDeltaLab/merlin/issues/64)) ([b74ecd5](https://github.com/TheDeltaLab/merlin/commit/b74ecd5ed9d23cdc0a3f61d2b83c6240fce54924))
+
 ## [1.7.1](https://github.com/TheDeltaLab/merlin/compare/v1.7.0...v1.7.1) (2026-04-03)
 
 
