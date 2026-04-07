@@ -250,9 +250,11 @@ defaultConfig:
     - OAUTH2_PROXY_UPSTREAM=static://202
     - OAUTH2_PROXY_HTTP_ADDRESS=0.0.0.0:4180
     - OAUTH2_PROXY_EMAIL_DOMAINS=*
-    - OAUTH2_PROXY_SCOPE=openid profile email
+    - OAUTH2_PROXY_SCOPE=openid email profile
     - OAUTH2_PROXY_SKIP_PROVIDER_BUTTON=true
     - OAUTH2_PROXY_PASS_ACCESS_TOKEN=true
+    - OAUTH2_PROXY_OIDC_EMAIL_CLAIM=preferred_username
+    - OAUTH2_PROXY_SET_XAUTHREQUEST=true
   ingress:
     subdomain: ${project}
     dnsZone: example.com  # TODO: Change to your DNS zone
