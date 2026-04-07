@@ -43,7 +43,8 @@ function appYml(project: string, opts: { ingress: boolean; withAuth: boolean }):
     const ingressBlock = opts.ingress ? `
   ingress:
     subdomain: ${project}
-    dnsZone: example.com  # TODO: Change to your DNS zone${opts.withAuth ? `
+    dnsZone: example.com  # TODO: Change to your DNS zone
+    # host: "\${ this.ring }.${project}.example.com"  # Optional: custom host pattern (overrides subdomain.ring.dnsZone)${opts.withAuth ? `
     annotations:
       nginx.ingress.kubernetes.io/auth-url: "https://$host/oauth2/auth"
       nginx.ingress.kubernetes.io/auth-signin: "https://$host/oauth2/start?rd=$escaped_request_uri"

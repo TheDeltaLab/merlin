@@ -152,7 +152,8 @@ defaultConfig:
 | 字段 | 默认值 | 说明 |
 |------|--------|------|
 | `namespace` | 与项目名相同 | K8s namespace，通常不需要改 |
-| `ingress.subdomain` | 与项目名相同 | 最终域名 = `{subdomain}.{ring}.{dnsZone}`，如 `myapp.staging.thebrainly.dev` |
+| `ingress.subdomain` | 与项目名相同 | 默认域名 = `{subdomain}.{ring}.{dnsZone}`，如 `myapp.staging.thebrainly.dev` |
+| `ingress.host` | 自动拼接 | 可选：自定义 host 模板，如 `${ this.ring }.myapp.thebrainly.dev`，覆盖自动拼接 |
 | `envVars` | `APP_ENV=${ this.ring }` | 根据需要添加更多环境变量 |
 | `envFrom` | `secretRef: {name}-secrets` | 对应 SecretProviderClass 生成的 K8s Secret |
 | `serviceAccountName` | `{name}-workload-sa` | 对应 workloadsa.yml 中的 ServiceAccount |
@@ -749,13 +750,14 @@ defaultConfig:
   # ── 可选：Ingress ─────────────────────────────────
   # 省略 → 不生成 Ingress（纯内部服务/worker）
   ingress:
-    subdomain: myapp                      # 必填：子域名
-    dnsZone: thebrainly.dev               # 必填：DNS zone
+    subdomain: myapp                      # 子域名（和 dnsZone 配合自动拼接 host）
+    dnsZone: thebrainly.dev               # DNS zone（也用于 bindDnsZone）
     # 最终域名 = subdomain.{ring}.dnsZone → myapp.staging.thebrainly.dev
+    # host: "${ this.ring }.myapp.thebrainly.dev"  # 可选：自定义 host 模板，覆盖自动拼接
     path: /                               # 默认："/"
     clusterIssuer: letsencrypt-prod       # 默认：letsencrypt-prod
     ingressClassName: nginx               # 默认：nginx
-    bindDnsZone: true                     # 默认：true（自动创建 DNS A 记录）
+    bindDnsZone: true                     # 默认：true（自动创建 DNS A 记录，需要 dnsZone）
     annotations:                          # 额外 Ingress 注解
       nginx.ingress.kubernetes.io/proxy-body-size: "50m"
     dependencies:                         # Ingress 的额外依赖
@@ -792,7 +794,8 @@ specificConfig:
 | `ingress.path` | `/` | |
 | `ingress.ingressClassName` | `nginx` | |
 | `ingress.clusterIssuer` | `letsencrypt-prod` | |
-| `ingress.bindDnsZone` | `true` | 自动创建 DNS A 记录 |
+| `ingress.bindDnsZone` | `true` | 自动创建 DNS A 记录（需要 `dnsZone`） |
+| `ingress.host` | `{subdomain}.{ring}.{dnsZone}` | 自定义时覆盖自动拼接 |
 
 ### 探针默认值（省略 `probes` 时自动生成）
 

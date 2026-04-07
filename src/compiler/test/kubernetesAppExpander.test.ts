@@ -699,6 +699,75 @@ describe('kubernetesAppExpander', () => {
             expect(ingress.specificConfig).toEqual([]);
             expect(ingress.exports).toEqual({});
         });
+
+        it('uses custom host when provided', () => {
+            const resource = createKubernetesApp({
+                ...MINIMAL_CONFIG,
+                ingress: {
+                    host: '${ this.ring }.web.thebrainly.dev',
+                    dnsZone: 'thebrainly.dev',
+                },
+            });
+            const result = expandKubernetesApp(resource);
+            const ingress = result[2];
+            const config = ingress.defaultConfig as Record<string, unknown>;
+            const rules = config.rules as Record<string, unknown>[];
+            const tls = config.tls as Record<string, unknown>[];
+
+            expect(rules[0].host).toBe('${ this.ring }.web.thebrainly.dev');
+            expect(tls[0].hosts).toEqual(['${ this.ring }.web.thebrainly.dev']);
+        });
+
+        it('uses custom host with bindDnsZone when dnsZone is also provided', () => {
+            const resource = createKubernetesApp({
+                ...MINIMAL_CONFIG,
+                ingress: {
+                    host: '${ this.ring }.web.thebrainly.dev',
+                    dnsZone: 'thebrainly.dev',
+                },
+            });
+            const result = expandKubernetesApp(resource);
+            const ingress = result[2];
+            const config = ingress.defaultConfig as Record<string, unknown>;
+
+            expect(config.bindDnsZone).toEqual({ dnsZone: 'thebrainly.dev' });
+        });
+
+        it('skips bindDnsZone when custom host is provided without dnsZone', () => {
+            const resource = createKubernetesApp({
+                ...MINIMAL_CONFIG,
+                ingress: {
+                    host: '${ this.ring }.web.thebrainly.dev',
+                },
+            });
+            const result = expandKubernetesApp(resource);
+            const ingress = result[2];
+            const config = ingress.defaultConfig as Record<string, unknown>;
+
+            expect(config.bindDnsZone).toBeUndefined();
+        });
+
+        it('throws when neither host nor subdomain+dnsZone is provided', () => {
+            const resource = createKubernetesApp({
+                ...MINIMAL_CONFIG,
+                ingress: {} as never,
+            });
+
+            expect(() => expandKubernetesApp(resource)).toThrow(
+                'ingress requires either "host" or both "subdomain" and "dnsZone"',
+            );
+        });
+
+        it('throws when only subdomain is provided without dnsZone', () => {
+            const resource = createKubernetesApp({
+                ...MINIMAL_CONFIG,
+                ingress: { subdomain: 'web' } as never,
+            });
+
+            expect(() => expandKubernetesApp(resource)).toThrow(
+                'ingress requires either "host" or both "subdomain" and "dnsZone"',
+            );
+        });
     });
 
     describe('full integration: complex app', () => {
