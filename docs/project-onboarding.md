@@ -457,9 +457,11 @@ defaultConfig:
     - OAUTH2_PROXY_UPSTREAM=static://202
     - OAUTH2_PROXY_HTTP_ADDRESS=0.0.0.0:4180
     - OAUTH2_PROXY_EMAIL_DOMAINS=*
-    - OAUTH2_PROXY_SCOPE=openid profile email
+    - OAUTH2_PROXY_SCOPE=openid email profile
     - OAUTH2_PROXY_SKIP_PROVIDER_BUTTON=true
     - OAUTH2_PROXY_PASS_ACCESS_TOKEN=true
+    - OAUTH2_PROXY_OIDC_EMAIL_CLAIM=preferred_username
+    - OAUTH2_PROXY_SET_XAUTHREQUEST=true
   ingress:
     subdomain: myapp
     dnsZone: example.com  # TODO
@@ -494,6 +496,8 @@ defaultConfig:
 | `ingress.bindDnsZone: false` | 不单独创建 DNS 记录，复用主服务的域名 |
 | `OAUTH2_PROXY_UPSTREAM=static://202` | 返回 202 表示认证成功（forward-auth 模式） |
 | `OAUTH2_PROXY_EMAIL_DOMAINS=*` | 允许所有邮箱域（通过 `assignmentRequired` 在 AAD 层面控制） |
+| `OAUTH2_PROXY_OIDC_EMAIL_CLAIM=preferred_username` | Azure AD 的 id_token 默认不含 `email` claim，用 `preferred_username` 代替 |
+| `OAUTH2_PROXY_SET_XAUTHREQUEST=true` | 将认证信息传递到后端（`X-Auth-Request-User` 等 header） |
 
 #### 工作原理
 
@@ -1980,3 +1984,17 @@ az ad app permission admin-consent --id <appId>
 1. 检查 Key Vault 中是否有对应的 secret：`az keyvault secret show --vault-name <vault> --name <secret-name>`
 2. 如果是重新部署（非首次），secret 不会自动重新生成。可能需要手动轮换（见"模式 2"中的轮换步骤）
 3. 确认 OAuth2 Proxy Pod 重启过以加载最新 secret
+
+### Q: OAuth2 认证后返回 500 "Oops! Something went wrong"
+
+**症状**：Azure AD 登录成功，回调 `/oauth2/callback` 时返回 500。日志中有 `neither the id_token nor the profileURL set an email`。
+
+**原因**：Azure AD 的 id_token 默认不包含 `email` claim，而 oauth2-proxy 默认用 email 标识用户。
+
+**修复**：在 oauth2-proxy 的 envVars 中添加：
+
+```yaml
+- OAUTH2_PROXY_OIDC_EMAIL_CLAIM=preferred_username
+```
+
+> `merlin init --with-auth` 生成的模板已包含此配置。如果是手动创建的 oauth2-proxy 配置，需要手动添加。
