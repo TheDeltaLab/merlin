@@ -60,6 +60,15 @@ specificConfig:
         scope: /subscriptions/{subscriptionId}/resourceGroups/shared-rg-tst-krc
       - role: Reader
         scope: /subscriptions/{subscriptionId}/resourceGroups/shared-rg-tst-eas
+      # Reader on project RGs — needed for ${ } capture commands that resolve
+      # resources in project RGs (e.g. az keyvault show on brainly-rg-tst-krc)
+      - role: Reader
+        scope: /subscriptions/{subscriptionId}/resourceGroups/brainly-rg-tst-krc
+      - role: Reader
+        scope: /subscriptions/{subscriptionId}/resourceGroups/brainly-rg-tst-eas
+      # DNS Zone Contributor — needed for Ingress bindDnsZone A record creation
+      - role: DNS Zone Contributor
+        scope: /subscriptions/{subscriptionId}/resourceGroups/Trinity-Dev-RG/providers/Microsoft.Network/dnsZones/thebrainly.dev
 
   - ring: staging
     displayName: brainly-github-stg
@@ -100,6 +109,15 @@ specificConfig:
         scope: /subscriptions/{subscriptionId}/resourceGroups/shared-rg-stg-krc
       - role: Reader
         scope: /subscriptions/{subscriptionId}/resourceGroups/shared-rg-stg-eas
+      # Reader on project RGs — needed for ${ } capture commands that resolve
+      # resources in project RGs (e.g. az keyvault show on brainly-rg-stg-krc)
+      - role: Reader
+        scope: /subscriptions/{subscriptionId}/resourceGroups/brainly-rg-stg-krc
+      - role: Reader
+        scope: /subscriptions/{subscriptionId}/resourceGroups/brainly-rg-stg-eas
+      # DNS Zone Contributor — needed for Ingress bindDnsZone A record creation
+      - role: DNS Zone Contributor
+        scope: /subscriptions/{subscriptionId}/resourceGroups/Trinity-Dev-RG/providers/Microsoft.Network/dnsZones/thebrainly.dev
 
 exports:
   clientId: AzureServicePrincipalClientId

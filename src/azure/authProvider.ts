@@ -2,6 +2,7 @@ import { AuthProvider, Command, Dependency, Resource, getRender } from "../commo
 import { AzureResourceRender } from "./render.js";
 import { AzureADAppRender, AzureADAppResource } from "./azureADApp.js";
 import { AzureServicePrincipalRender, AzureServicePrincipalResource } from "./azureServicePrincipal.js";
+import { resolveConfig } from '../common/paramResolver.js';
 import { toEnvSlug } from '../common/constants.js';
 
 /**
@@ -69,7 +70,7 @@ export class AzureManagedIdentityAuthProvider implements AuthProvider {
 
         // ── Step 1: capture the requestor's managed identity principal ID ──────
         commands.push(
-            ...this.buildPrincipalIdCapture(requestor, requestorRender, principalVar)
+            ...await this.buildPrincipalIdCapture(requestor, requestorRender, principalVar)
         );
 
         // ── Step 2: capture the provider resource's ARM scope ─────────────────
@@ -109,11 +110,11 @@ export class AzureManagedIdentityAuthProvider implements AuthProvider {
      * If the resource type has a dedicated `show` command registered via a
      * known mapping we use that; otherwise we fall back to `az resource show`.
      */
-    private buildPrincipalIdCapture(
+    private async buildPrincipalIdCapture(
         requestor: Resource,
         render: AzureResourceRender,
         varName: string,
-    ): Command[] {
+    ): Promise<Command[]> {
         const resourceName  = render.getResourceName(requestor);
         const resourceGroup = render.getResourceGroupName(requestor);
 
@@ -122,10 +123,14 @@ export class AzureManagedIdentityAuthProvider implements AuthProvider {
         // IMPORTANT: must use getDisplayName() (full ring name, e.g. "test") not
         // getResourceName() (short ring name, e.g. "tst"), because the SP was
         // created with getDisplayName() in azureServicePrincipal.ts.
+        // NOTE: config.displayName may contain ${ } expressions (ParamValue objects)
+        // that are not yet resolved. We must resolveConfig() first so that
+        // getDisplayName() returns the actual string, not "[object Object]".
         if (requestor.type === 'AzureServicePrincipal') {
             const spRender = render as AzureServicePrincipalRender;
-            const displayName = spRender.getDisplayName(requestor as AzureServicePrincipalResource);
-            return [{
+            const { resource: resolved, captureCommands } = await resolveConfig(requestor);
+            const displayName = spRender.getDisplayName(resolved as AzureServicePrincipalResource);
+            return [...captureCommands, {
                 command: 'az',
                 args: ['ad', 'sp', 'list', '--filter', `displayName eq '${displayName}'`, '--query', '[0].id', '-o', 'tsv'],
                 envCapture: varName,

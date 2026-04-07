@@ -501,7 +501,7 @@ export class AzureServicePrincipalRender extends AzureResourceRender {
                 command: 'bash',
                 args: ['-c', [
                     `EXISTING=$(az keyvault secret show --vault-name ${kvConfig.vaultNames[0]} --name ${kvConfig.secretName} --query value -o tsv 2>/dev/null || true)`,
-                    `if [ -n "$EXISTING" ]; then echo "$EXISTING"; else openssl rand -base64 32 | tr -d '\\n'; fi`,
+                    `if [ -n "$EXISTING" ]; then echo "$EXISTING"; else openssl rand -hex 16; fi`,
                 ].join('\n')],
                 envCapture: cookieVar,
             },
