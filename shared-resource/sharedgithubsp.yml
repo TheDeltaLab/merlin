@@ -28,6 +28,8 @@ specificConfig:
         subject: repo:TheDeltaLab/trinity:environment:nightly
       - name: alluneed-github-test
         subject: repo:TheDeltaLab/alluneed:environment:test
+      - name: babbage-github-nightly
+        subject: repo:TheDeltaLab/babbage:environment:nightly
     roleAssignments:
       # Trinity RG — koreacentral (Container Apps Contributor)
       - role: Container Apps Contributor
@@ -77,6 +79,8 @@ specificConfig:
         subject: repo:TheDeltaLab/trinity:environment:staging
       - name: alluneed-github-staging
         subject: repo:TheDeltaLab/alluneed:environment:staging
+      - name: babbage-github-staging
+        subject: repo:TheDeltaLab/babbage:environment:staging
     roleAssignments:
       # Trinity RG — koreacentral
       - role: Container Apps Contributor
