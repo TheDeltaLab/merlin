@@ -37,6 +37,10 @@ specificConfig:
       - name: alluneed-sa
         issuer: ${ KubernetesCluster.aks.oidcIssuerUrl }
         subject: system:serviceaccount:alluneed:alluneed-workload-sa
+      # Babbage namespace ServiceAccount
+      - name: babbage-sa
+        issuer: ${ KubernetesCluster.aks.oidcIssuerUrl }
+        subject: system:serviceaccount:babbage:babbage-workload-sa
     roleAssignments:
       # Key Vault Secrets User on both regional Key Vaults
       - role: Key Vault Secrets User
@@ -61,6 +65,10 @@ specificConfig:
       - name: alluneed-sa
         issuer: ${ KubernetesCluster.aks.oidcIssuerUrl }
         subject: system:serviceaccount:alluneed:alluneed-workload-sa
+      # Babbage namespace ServiceAccount
+      - name: babbage-sa
+        issuer: ${ KubernetesCluster.aks.oidcIssuerUrl }
+        subject: system:serviceaccount:babbage:babbage-workload-sa
     roleAssignments:
       - role: Key Vault Secrets User
         scope: /subscriptions/{subscriptionId}/resourceGroups/brainly-rg-stg-krc/providers/Microsoft.KeyVault/vaults/brainlysharedstgkrcakv
