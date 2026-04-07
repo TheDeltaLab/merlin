@@ -127,15 +127,17 @@ defaultConfig:
   image: myregistry.azurecr.io/myapp:latest  # TODO: Change to your ACR and image
   port: 3000  # TODO: Change to your port
   serviceAccountName: myapp-workload-sa
-  secretProvider: myapp-secret-provider
-  envFrom:
-    - secretRef: myapp-secrets
+  # secretProvider: myapp-secret-provider  # TODO: Uncomment after adding secrets to Key Vault
+  # envFrom:                                # TODO: Uncomment after adding secrets to Key Vault
+  #   - secretRef: myapp-secrets
   envVars:
     - APP_ENV=${ this.ring }
   ingress:
     subdomain: myapp
     dnsZone: example.com  # TODO: Change to your DNS zone
 ```
+
+> **注意**：`secretProvider` 和 `envFrom` 默认是注释掉的。只有在 Key Vault 中创建了对应的 secrets 后才需要取消注释。如果你的应用不需要 Key Vault secrets，可以直接删掉 `{name}secretprovider.yml`。
 
 #### 配置指南
 
@@ -154,9 +156,9 @@ defaultConfig:
 | `namespace` | 与项目名相同 | K8s namespace，通常不需要改 |
 | `ingress.subdomain` | 与项目名相同 | 最终域名 = `{subdomain}.{ring}.{dnsZone}`，如 `myapp.staging.thebrainly.dev` |
 | `envVars` | `APP_ENV=${ this.ring }` | 根据需要添加更多环境变量 |
-| `envFrom` | `secretRef: {name}-secrets` | 对应 SecretProviderClass 生成的 K8s Secret |
+| `envFrom` | 注释状态 | 取消注释后对应 SecretProviderClass 生成的 K8s Secret |
 | `serviceAccountName` | `{name}-workload-sa` | 对应 workloadsa.yml 中的 ServiceAccount |
-| `secretProvider` | `{name}-secret-provider` | 对应 secretprovider.yml 中的 SecretProviderClass |
+| `secretProvider` | 注释状态 | 取消注释后对应 secretprovider.yml 中的 SecretProviderClass |
 
 **省略的字段会用默认值：**
 
@@ -221,7 +223,17 @@ defaultConfig:
 
 ### 文件 4：`{name}secretprovider.yml` — SecretProviderClass (Key Vault → Pod)
 
+> **注意**：此文件仅在应用需要从 Key Vault 读取 secrets 时才需要。如果暂时不需要，可以直接删掉。
+
 ```yaml
+# NOTE: This file is only needed if your app reads secrets from Azure Key Vault.
+# Before deploying, make sure:
+#   1. The secrets listed below actually exist in the Key Vault
+#   2. The kv-workload SP has a federated credential for your ServiceAccount
+#      (add it to shared-k8s-resource/sharedkvsp.yml in the merlin repo)
+#   3. Uncomment secretProvider and envFrom in myapp.yml
+# If your app doesn't need secrets yet, you can safely delete this file.
+
 name: myapp-secret-provider
 type: KubernetesManifest
 
@@ -242,6 +254,7 @@ defaultConfig:
     kind: SecretProviderClass
     metadata:
       name: myapp-secret-provider
+      namespace: myapp
     spec:
       provider: azure
       parameters:
@@ -518,6 +531,7 @@ defaultConfig:
     kind: SecretProviderClass
     metadata:
       name: myapp-oauth2-proxy-secret-provider
+      namespace: myapp
     spec:
       provider: azure
       parameters:
@@ -613,9 +627,18 @@ merlin.yml (提供 project/ring/region 默认值，非资源)
 | `web`/`api` | DNS zone | `{name}.yml` |
 | `worker`/`web`/`api` | Azure AD 租户 ID | `{name}secretprovider.yml` |
 | `worker`/`web`/`api` | Key Vault 中的 secret 名和映射 | `{name}secretprovider.yml` |
+| `worker`/`web`/`api` | 取消注释 secretProvider 和 envFrom（需要 secrets 时） | `{name}.yml` |
 | `--with-auth` | Azure AD 租户 ID ×3 处 | `{name}secretprovider.yml`、`{name}oauth2proxy.yml`、`{name}oauth2proxysecretprovider.yml` |
 | `--with-auth` | 域名 ×3 处（必须一致） | `{name}aad.yml`、`{name}oauth2proxy.yml`、`{name}.yml` |
 | `--with-auth` | Key Vault 名（每个 ring 各一个） | `{name}aad.yml` |
+
+**共享资源配置（在 merlin 仓库中操作）：**
+
+| 模板 | 必须配置 | 文件 |
+|------|---------|------|
+| `worker`/`web`/`api` | 添加 ServiceAccount 的 federated credential | `shared-k8s-resource/sharedkvsp.yml` |
+| 所有需要 CI/CD 的模板 | 添加 GitHub repo 的 federated credential | `shared-resource/sharedgithubsp.yml` |
+| 所有需要 CI/CD 的模板 | 配置 GitHub Secrets/Variables | 见「新项目接入共享资源清单」 |
 
 ---
 
@@ -1100,6 +1123,8 @@ defaultConfig:
 
 ### SecretProviderClass（需要 Key Vault secrets 时）
 
+> **注意**：如果应用不需要 Key Vault secrets，可以跳过此文件。`merlin init` 生成的 `{name}.yml` 中 `secretProvider` 和 `envFrom` 默认是注释掉的。
+
 ```yaml
 name: myapp-secret-provider
 type: KubernetesManifest
@@ -1121,6 +1146,7 @@ defaultConfig:
     kind: SecretProviderClass
     metadata:
       name: myapp-secret-provider
+      namespace: myapp
     spec:
       provider: azure
       parameters:
@@ -1750,6 +1776,107 @@ merlin deploy ./merlin-resources \
 ---
 
 ## 常见问题和排错
+
+### Q: 新项目部署时 Pod 卡在 ContainerCreating / FailedMount
+
+**症状**：`MountVolume.SetUp failed ... No matching federated identity record found for presented assertion subject 'system:serviceaccount:<namespace>:<sa-name>'`
+
+**原因**：共享的 `kv-workload` SP 没有新项目 ServiceAccount 的 federated credential。
+
+**修复**：在 `shared-k8s-resource/sharedkvsp.yml` 的 `federatedCredentials` 中添加新项目的 SA：
+
+```yaml
+# shared-k8s-resource/sharedkvsp.yml
+specificConfig:
+  - ring: test
+    federatedCredentials:
+      # ... 已有项目 ...
+      # 新项目 namespace ServiceAccount
+      - name: myapp-sa
+        issuer: ${ KubernetesCluster.aks.oidcIssuerUrl }
+        subject: system:serviceaccount:myapp:myapp-workload-sa
+```
+
+然后运行 `merlin deploy shared-k8s-resource --execute --ring test --region koreacentral`。
+
+### Q: CI/CD 的 `az login` 报 AADSTS700213 (No matching federated identity record)
+
+**症状**：`No matching federated identity record found for presented assertion subject 'repo:TheDeltaLab/myapp:environment:nightly'`
+
+**原因**：共享 GitHub SP 没有新项目 repo 的 federated credential。
+
+**修复**：在 `shared-resource/sharedgithubsp.yml` 的 `federatedCredentials` 中添加新项目 repo：
+
+```yaml
+# shared-resource/sharedgithubsp.yml
+specificConfig:
+  - ring: test
+    federatedCredentials:
+      # ... 已有项目 ...
+      - name: myapp-github-nightly
+        subject: repo:TheDeltaLab/myapp:environment:nightly
+```
+
+然后运行 `merlin deploy shared-resource --execute --ring test --region koreacentral`。
+
+### Q: SecretProviderClass 创建在了 default namespace
+
+**症状**：`kubectl get secretproviderclass -n myapp` 找不到，但 `-n default` 能找到。
+
+**原因**：`KubernetesManifest` 的 manifest YAML 中 metadata 缺少 `namespace` 字段。merlin 的 `namespace` config 只影响 `kubectl create namespace`，不影响 manifest 内容本身。
+
+> **注意**：`merlin init` 生成的模板已包含 `namespace` 字段。如果你手动创建了 SecretProviderClass manifest，请确保 metadata 中有 namespace。
+
+**修复**：在 manifest 的 metadata 中显式指定 namespace：
+
+```yaml
+defaultConfig:
+  namespace: myapp
+  manifest: |
+    apiVersion: secrets-store.csi.x-k8s.io/v1
+    kind: SecretProviderClass
+    metadata:
+      name: myapp-secret-provider
+      namespace: myapp            # ← 必须显式指定
+    spec:
+      ...
+```
+
+---
+
+### 新项目接入共享资源清单
+
+当一个新项目要接入 Merlin 管理的共享 AKS 集群时，除了在项目 repo 中创建 `merlin-resources/` 外，还需要在 **merlin 仓库**中更新以下共享资源配置：
+
+| # | 文件 | 要添加的内容 | 用途 |
+|---|------|-------------|------|
+| 1 | `shared-k8s-resource/sharedkvsp.yml` | 新项目的 `federatedCredentials` 条目（每个 ring 都要加） | 让新项目的 K8s ServiceAccount 能通过 Workload Identity 访问 Key Vault |
+| 2 | `shared-resource/sharedgithubsp.yml` | 新项目 repo 的 `federatedCredentials` 条目（每个 ring 都要加） | 让 GitHub Actions OIDC 登录 Azure |
+
+更新后需要依次部署：
+
+```bash
+# 1. 部署共享资源（更新 GitHub SP 的 federated credentials）
+merlin deploy shared-resource --execute --ring test --region koreacentral
+
+# 2. 部署共享 K8s 资源（更新 kv-workload SP 的 federated credentials）
+merlin deploy shared-k8s-resource --execute --ring test --region koreacentral
+```
+
+此外，新项目的 GitHub repo 需要配置以下 Secrets / Variables：
+
+| 类型 | 名称 | 值 | 来源 |
+|------|------|-----|------|
+| Secret | `AKS_AZURE_CLIENT_ID` | GitHub SP 的 appId | `az ad sp list --filter "displayName eq 'brainly-github-tst'"` |
+| Secret | `AZURE_TENANT_ID` | Azure AD 租户 ID | `az account show --query tenantId` |
+| Secret | `AZURE_SUBSCRIPTION_ID` | Azure 订阅 ID | `az account show --query id` |
+| Secret | `AKS_ACR_USERNAME` | GitHub SP 的 appId | 同 `AKS_AZURE_CLIENT_ID` |
+| Secret | `AKS_ACR_PASSWORD` | GitHub SP 的 client secret | `az ad app credential reset --id <appId> --append --display-name "github-actions-acr-<project>"` |
+| Variable | `AKS_ACR_NAME` | 共享 ACR 名称 | `brainlysharedacr` |
+
+> **注意**：`az ad app credential reset --append` 创建新 secret 不影响现有 secret。secret 的值只在创建时显示一次，之后无法再查看。
+
+---
 
 ### Q: `merlin deploy` 报 "path not found"
 

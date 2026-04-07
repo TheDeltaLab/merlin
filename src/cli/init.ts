@@ -69,9 +69,9 @@ defaultConfig:
   image: myregistry.azurecr.io/${project}:latest  # TODO: Change to your ACR and image
   port: 3000  # TODO: Change to your port
   serviceAccountName: ${project}-workload-sa
-  secretProvider: ${project}-secret-provider
-  envFrom:
-    - secretRef: ${project}-secrets
+  # secretProvider: ${project}-secret-provider  # TODO: Uncomment after adding secrets to Key Vault
+  # envFrom:                                     # TODO: Uncomment after adding secrets to Key Vault
+  #   - secretRef: ${project}-secrets
   envVars:
     - APP_ENV=\${ this.ring }${ingressBlock}
 `,
@@ -106,7 +106,15 @@ function secretProviderYml(project: string): TemplateFile {
     return {
         filename: `${project}secretprovider.yml`,
         description: 'SecretProviderClass',
-        content: `name: ${project}-secret-provider
+        content: `# NOTE: This file is only needed if your app reads secrets from Azure Key Vault.
+# Before deploying, make sure:
+#   1. The secrets listed below actually exist in the Key Vault
+#   2. The kv-workload SP has a federated credential for your ServiceAccount
+#      (add it to shared-k8s-resource/sharedkvsp.yml in the merlin repo)
+#   3. Uncomment secretProvider and envFrom in ${project}.yml
+# If your app doesn't need secrets yet, you can safely delete this file.
+
+name: ${project}-secret-provider
 type: KubernetesManifest
 
 dependencies:
@@ -126,6 +134,7 @@ defaultConfig:
     kind: SecretProviderClass
     metadata:
       name: ${project}-secret-provider
+      namespace: ${project}
     spec:
       provider: azure
       parameters:
@@ -279,6 +288,7 @@ defaultConfig:
     kind: SecretProviderClass
     metadata:
       name: ${project}-oauth2-proxy-secret-provider
+      namespace: ${project}
     spec:
       provider: azure
       parameters:
@@ -396,12 +406,19 @@ export async function runInit(projectName: string, options: InitOptions): Promis
 
     console.log(`\n📝 Next steps:`);
     console.log(`   1. Edit ${projectName}.yml — set your container image and port`);
-    console.log(`   2. Edit ${projectName}secretprovider.yml — configure Key Vault secrets`);
-    if (options.withAuth) {
-        console.log(`   3. Edit ${projectName}aad.yml — verify Azure AD tenant and redirect URIs`);
+    if (options.template !== 'minimal') {
+        console.log(`   2. Add your project's ServiceAccount to shared-k8s-resource/sharedkvsp.yml`);
+        console.log(`      (federated credential for kv-workload SP)`);
+        console.log(`   3. Add your repo's federated credential to shared-resource/sharedgithubsp.yml`);
+        console.log(`      (for GitHub Actions OIDC auth)`);
     }
-    console.log(`   ${options.withAuth ? '4' : '3'}. merlin compile           # verify resources compile`);
-    console.log(`   ${options.withAuth ? '5' : '4'}. merlin deploy            # dry-run (preview commands)`);
-    console.log(`   ${options.withAuth ? '6' : '5'}. merlin deploy --execute  # deploy to test/koreacentral`);
+    if (options.withAuth) {
+        console.log(`   4. Edit ${projectName}aad.yml — verify Azure AD tenant and redirect URIs`);
+    }
+    const nextN = options.withAuth ? 5 : options.template !== 'minimal' ? 4 : 2;
+    console.log(`   ${nextN}. merlin compile           # verify resources compile`);
+    console.log(`   ${nextN + 1}. merlin deploy            # dry-run (preview commands)`);
+    console.log(`   ${nextN + 2}. merlin deploy --execute  # deploy to test/koreacentral`);
+    console.log(`\n⚠️  Don't forget: see docs/project-onboarding.md for the full checklist`);
     console.log('');
 }
