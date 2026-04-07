@@ -43,8 +43,11 @@ export interface KubernetesAppConfig {
     envFrom?: Array<Record<string, string>>;
     envVars?: string[];
     ingress?: {
-        subdomain: string;
-        dnsZone: string;
+        /** Custom host template — overrides auto-generated `{subdomain}.{ring}.{dnsZone}` pattern.
+         *  Supports `${ this.ring }` expressions, e.g. `${ this.ring }.web.thebrainly.dev`. */
+        host?: string;
+        subdomain?: string;
+        dnsZone?: string;
         path?: string;
         clusterIssuer?: string;
         ingressClassName?: string;
@@ -253,8 +256,18 @@ function buildIngressResource(resource: ResourceYAML, config: KubernetesAppConfi
     const clusterIssuer = ingress.clusterIssuer ?? DEFAULT_CLUSTER_ISSUER;
     const ingressPath = ingress.path ?? DEFAULT_INGRESS_PATH;
 
-    // Use ${ this.ring } interpolation for dynamic host — eliminates specificConfig
-    const host = `${ingress.subdomain}.\${ this.ring }.${ingress.dnsZone}`;
+    // Use custom host if provided, otherwise auto-generate from subdomain.ring.dnsZone
+    let host: string;
+    if (ingress.host) {
+        host = ingress.host;
+    } else if (ingress.subdomain && ingress.dnsZone) {
+        // Use ${ this.ring } interpolation for dynamic host — eliminates specificConfig
+        host = `${ingress.subdomain}.\${ this.ring }.${ingress.dnsZone}`;
+    } else {
+        throw new Error(
+            `KubernetesApp "${resource.name}": ingress requires either "host" or both "subdomain" and "dnsZone"`,
+        );
+    }
 
     const ingressConfig: Record<string, unknown> = {
         namespace: config.namespace,
@@ -275,8 +288,8 @@ function buildIngressResource(resource: ResourceYAML, config: KubernetesAppConfi
         }],
     };
 
-    // bindDnsZone defaults to true
-    if (ingress.bindDnsZone !== false) {
+    // bindDnsZone defaults to true when dnsZone is available
+    if (ingress.bindDnsZone !== false && ingress.dnsZone) {
         ingressConfig.bindDnsZone = { dnsZone: ingress.dnsZone };
     }
 

@@ -420,7 +420,7 @@ Some Azure resources are tenant-scoped and have no region (e.g. `AzureADApp`). S
 
 1. **KubernetesDeployment** (always) — with containers, probes, resource limits, CSI secret volumes, workload identity, auto-dependency on `KubernetesCluster.aks`
 2. **KubernetesService** (always) — ClusterIP service depending on the deployment
-3. **KubernetesIngress** (if `ingress` config present) — with TLS, cert-manager, DNS zone binding
+3. **KubernetesIngress** (if `ingress` config present) — with TLS, cert-manager, DNS zone binding. Host is auto-generated as `{subdomain}.{ring}.{dnsZone}` by default, or can be overridden with the `host` field for custom patterns like `{ring}.{subdomain}.{dnsZone}`.
 
 Override hooks (`deploymentOverrides`, `serviceOverrides`, `ingressOverrides`) allow fine-grained customization of each generated resource. The expansion happens after validation but before ring×region transformation.
 
