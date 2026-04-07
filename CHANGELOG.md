@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.3](https://github.com/TheDeltaLab/merlin/compare/v1.7.2...v1.7.3) (2026-04-07)
+
+
+### Bug Fixes
+
+* resolve SP displayName ParamValue, cookie secret length, and CI SP permissions ([#71](https://github.com/TheDeltaLab/merlin/issues/71)) ([6fd9d3d](https://github.com/TheDeltaLab/merlin/commit/6fd9d3d529d95b8a2da968c7699ef4cd6f0e7d79)), closes [#70](https://github.com/TheDeltaLab/merlin/issues/70)
+
 ## [1.7.2](https://github.com/TheDeltaLab/merlin/compare/v1.7.1...v1.7.2) (2026-04-03)
 
 
