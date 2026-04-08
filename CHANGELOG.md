@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.8.0](https://github.com/TheDeltaLab/merlin/compare/v1.7.3...v1.8.0) (2026-04-07)
+
+
+### Features
+
+* add babbage federated credentials to shared resources ([#77](https://github.com/TheDeltaLab/merlin/issues/77)) ([63d746a](https://github.com/TheDeltaLab/merlin/commit/63d746a05819f566d0e59f106f23828acf3e9147)), closes [#75](https://github.com/TheDeltaLab/merlin/issues/75)
+* support custom host template in KubernetesApp ingress ([#79](https://github.com/TheDeltaLab/merlin/issues/79)) ([e359d37](https://github.com/TheDeltaLab/merlin/commit/e359d3723e0924469b74782a86f00f5ae583066a)), closes [#78](https://github.com/TheDeltaLab/merlin/issues/78)
+
+
+### Bug Fixes
+
+* add namespace to init templates and comment out unused secret refs ([#74](https://github.com/TheDeltaLab/merlin/issues/74)) ([79d897f](https://github.com/TheDeltaLab/merlin/commit/79d897ff7d39e217683a47f5f83651a31b4b1f21)), closes [#73](https://github.com/TheDeltaLab/merlin/issues/73)
+* add oauth2-proxy email claim config to template and docs ([#81](https://github.com/TheDeltaLab/merlin/issues/81)) ([90cbe26](https://github.com/TheDeltaLab/merlin/commit/90cbe26fbc53d3327027ffe437fb12ae7aa62417)), closes [#80](https://github.com/TheDeltaLab/merlin/issues/80)
+
 ## [1.7.3](https://github.com/TheDeltaLab/merlin/compare/v1.7.2...v1.7.3) (2026-04-07)
 
 
