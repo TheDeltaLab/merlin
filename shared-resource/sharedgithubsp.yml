@@ -14,11 +14,50 @@ defaultConfig:
   tags:
     merlin: "true"
     env: ${ this.ring }
-  # Directory Readers — allows the SP to query AD apps/SPs via MS Graph
-  # (needed for K8s ${ } capture commands like `az ad app list`)
-  # ⚠️ Requires Global Admin to deploy
+
+  # ── MS Graph API permissions (Application type) ──────────────────────
+  # These grant the SP programmatic access to Azure AD / Entra ID.
+  # ⚠️ Requires admin consent (auto-attempted, but may need Global Admin)
+  apiPermissions:
+    - resourceAppId: "00000003-0000-0000-c000-000000000000"  # Microsoft Graph
+      resourceAccess:
+        # Application.ReadWrite.All — create/update AD Apps, SPs, federated credentials, client secrets
+        - id: "1bfefb4e-e0b5-418b-a88f-73c46d2cc8e9"
+          type: Role
+        # AppRoleAssignment.ReadWrite.All — manage app role assignments (EntraID auth provider)
+        - id: "06b708a9-e830-4db3-a914-8e69da51d44f"
+          type: Role
+        # Directory.Read.All — read directory data (query directory roles)
+        - id: "7ab1d382-f21e-4acd-a863-ba3e13f7da61"
+          type: Role
+
+  # ── Azure AD directory roles (tenant-level) ─────────────────────────
+  # ⚠️ Requires Global Admin or Privileged Role Administrator to deploy
   directoryRoles:
     - Directory Readers
+    - Application Administrator
+
+  # ── ARM RBAC role assignments (subscription-level) ──────────────────
+  # All at subscription scope so new regions/RGs/resources work automatically.
+  roleAssignments:
+    # Contributor — create/update all ARM resources (RG, ACA, ACR, Storage, KV, Redis, PG, LAW, DNS, FunctionApp, AKS)
+    - role: Contributor
+      scope: /subscriptions/{subscriptionId}
+    # User Access Administrator — create role assignments (authProvider, SP roleAssignments)
+    - role: User Access Administrator
+      scope: /subscriptions/{subscriptionId}
+    # AcrPush — push Docker images (Contributor doesn't include ACR data-plane push)
+    - role: AcrPush
+      scope: /subscriptions/{subscriptionId}
+    # AKS Cluster User — az aks get-credentials
+    - role: Azure Kubernetes Service Cluster User Role
+      scope: /subscriptions/{subscriptionId}
+    # AKS RBAC Writer — kubectl apply (K8s data-plane write)
+    - role: Azure Kubernetes Service RBAC Writer
+      scope: /subscriptions/{subscriptionId}
+    # Key Vault Secrets Officer — read/write KV secrets (Contributor doesn't include KV data-plane)
+    - role: Key Vault Secrets Officer
+      scope: /subscriptions/{subscriptionId}
 
 specificConfig:
   - ring: test
@@ -30,47 +69,6 @@ specificConfig:
         subject: repo:TheDeltaLab/alluneed:environment:test
       - name: babbage-github-nightly
         subject: repo:TheDeltaLab/babbage:environment:nightly
-    roleAssignments:
-      # Trinity RG — koreacentral (Container Apps Contributor)
-      - role: Container Apps Contributor
-        scope: /subscriptions/{subscriptionId}/resourceGroups/brainly-rg-tst-krc
-      # Trinity RG — eastasia
-      - role: Container Apps Contributor
-        scope: /subscriptions/{subscriptionId}/resourceGroups/brainly-rg-tst-eas
-      # Alluneed RG — koreacentral
-      - role: Container Apps Contributor
-        scope: /subscriptions/{subscriptionId}/resourceGroups/brainly-rg-tst-krc
-      # Alluneed RG — eastasia
-      - role: Container Apps Contributor
-        scope: /subscriptions/{subscriptionId}/resourceGroups/brainly-rg-tst-eas
-      # ACR — shared (brainlysharedacr, used by all rings)
-      - role: AcrPush
-        scope: /subscriptions/{subscriptionId}/resourceGroups/brainly-rg-shared/providers/Microsoft.ContainerRegistry/registries/brainlysharedacr
-      # AKS — kubectl access for K8s deploys (shared RG)
-      - role: Azure Kubernetes Service Cluster User Role
-        scope: /subscriptions/{subscriptionId}/resourceGroups/shared-rg-tst-krc
-      - role: Azure Kubernetes Service Cluster User Role
-        scope: /subscriptions/{subscriptionId}/resourceGroups/shared-rg-tst-eas
-      # AKS — K8s RBAC write for kubectl apply (Deployments, Services, Ingress, ConfigMaps, etc.)
-      - role: Azure Kubernetes Service RBAC Writer
-        scope: /subscriptions/{subscriptionId}/resourceGroups/shared-rg-tst-krc
-      - role: Azure Kubernetes Service RBAC Writer
-        scope: /subscriptions/{subscriptionId}/resourceGroups/shared-rg-tst-eas
-      # Reader on shared RGs — needed for K8s ${ } capture commands
-      # (az keyvault show, az redisenterprise show, etc.)
-      - role: Reader
-        scope: /subscriptions/{subscriptionId}/resourceGroups/shared-rg-tst-krc
-      - role: Reader
-        scope: /subscriptions/{subscriptionId}/resourceGroups/shared-rg-tst-eas
-      # Reader on project RGs — needed for ${ } capture commands that resolve
-      # resources in project RGs (e.g. az keyvault show on brainly-rg-tst-krc)
-      - role: Reader
-        scope: /subscriptions/{subscriptionId}/resourceGroups/brainly-rg-tst-krc
-      - role: Reader
-        scope: /subscriptions/{subscriptionId}/resourceGroups/brainly-rg-tst-eas
-      # DNS Zone Contributor — needed for Ingress bindDnsZone A record creation
-      - role: DNS Zone Contributor
-        scope: /subscriptions/{subscriptionId}/resourceGroups/Trinity-Dev-RG/providers/Microsoft.Network/dnsZones/thebrainly.dev
 
   - ring: staging
     displayName: brainly-github-stg
@@ -81,47 +79,6 @@ specificConfig:
         subject: repo:TheDeltaLab/alluneed:environment:staging
       - name: babbage-github-staging
         subject: repo:TheDeltaLab/babbage:environment:staging
-    roleAssignments:
-      # Trinity RG — koreacentral
-      - role: Container Apps Contributor
-        scope: /subscriptions/{subscriptionId}/resourceGroups/brainly-rg-stg-krc
-      # Trinity RG — eastasia
-      - role: Container Apps Contributor
-        scope: /subscriptions/{subscriptionId}/resourceGroups/brainly-rg-stg-eas
-      # Alluneed RG — koreacentral
-      - role: Container Apps Contributor
-        scope: /subscriptions/{subscriptionId}/resourceGroups/brainly-rg-stg-krc
-      # Alluneed RG — eastasia
-      - role: Container Apps Contributor
-        scope: /subscriptions/{subscriptionId}/resourceGroups/brainly-rg-stg-eas
-      # ACR — shared (brainlysharedacr, used by all rings)
-      - role: AcrPush
-        scope: /subscriptions/{subscriptionId}/resourceGroups/brainly-rg-shared/providers/Microsoft.ContainerRegistry/registries/brainlysharedacr
-      # AKS — kubectl access for K8s deploys (shared RG)
-      - role: Azure Kubernetes Service Cluster User Role
-        scope: /subscriptions/{subscriptionId}/resourceGroups/shared-rg-stg-krc
-      - role: Azure Kubernetes Service Cluster User Role
-        scope: /subscriptions/{subscriptionId}/resourceGroups/shared-rg-stg-eas
-      # AKS — K8s RBAC write for kubectl apply (Deployments, Services, Ingress, ConfigMaps, etc.)
-      - role: Azure Kubernetes Service RBAC Writer
-        scope: /subscriptions/{subscriptionId}/resourceGroups/shared-rg-stg-krc
-      - role: Azure Kubernetes Service RBAC Writer
-        scope: /subscriptions/{subscriptionId}/resourceGroups/shared-rg-stg-eas
-      # Reader on shared RGs — needed for K8s ${ } capture commands
-      # (az keyvault show, az redisenterprise show, etc.)
-      - role: Reader
-        scope: /subscriptions/{subscriptionId}/resourceGroups/shared-rg-stg-krc
-      - role: Reader
-        scope: /subscriptions/{subscriptionId}/resourceGroups/shared-rg-stg-eas
-      # Reader on project RGs — needed for ${ } capture commands that resolve
-      # resources in project RGs (e.g. az keyvault show on brainly-rg-stg-krc)
-      - role: Reader
-        scope: /subscriptions/{subscriptionId}/resourceGroups/brainly-rg-stg-krc
-      - role: Reader
-        scope: /subscriptions/{subscriptionId}/resourceGroups/brainly-rg-stg-eas
-      # DNS Zone Contributor — needed for Ingress bindDnsZone A record creation
-      - role: DNS Zone Contributor
-        scope: /subscriptions/{subscriptionId}/resourceGroups/Trinity-Dev-RG/providers/Microsoft.Network/dnsZones/thebrainly.dev
 
 exports:
   clientId: AzureServicePrincipalClientId

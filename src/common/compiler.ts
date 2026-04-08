@@ -55,11 +55,11 @@ export class Compiler {
             const sharedPaths = await this.getSharedResourcePaths();
             const allInputPaths = [options.inputPath, ...(options.inputPaths ?? []), ...sharedPaths];
             const yamlFileArrays = await Promise.all(allInputPaths.map(p => this.discoverYAMLFiles(p)));
-            const yamlFiles = [...new Set(yamlFileArrays.flat())];
+            const yamlFiles = [...new Set(yamlFileArrays.flat().map(f => path.resolve(f)))];
 
             // Track which files came from shared directories (for --no-shared deploy filtering)
             const sharedFileArrays = await Promise.all(sharedPaths.map(p => this.discoverYAMLFiles(p)));
-            const sharedFiles = new Set(sharedFileArrays.flat());
+            const sharedFiles = new Set(sharedFileArrays.flat().map(f => path.resolve(f)));
             if (yamlFiles.length === 0) {
                 return this.createNoFilesError(options.inputPath);
             }
