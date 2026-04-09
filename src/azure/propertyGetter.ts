@@ -243,6 +243,33 @@ export class AzureServicePrincipalClientIdGetter implements PropertyGetter {
 }
 
 /**
+ * PropertyGetter for Azure Service Principal Object ID.
+ * Returns the SP's Object ID (not appId) — needed for Redis access policy assignments
+ * and other operations that require the directory object ID.
+ */
+export class AzureServicePrincipalObjectIdGetter implements PropertyGetter {
+    name: string = 'AzureServicePrincipalObjectId';
+
+    dependencies: Dependency[] = [];
+
+    async get(resource: Resource, _args: Record<string, string>): Promise<Command[]> {
+        const render = getRender(resource.type) as AzureServicePrincipalRender;
+        const { resource: resolved } = await resolveConfig(resource as AzureServicePrincipalResource);
+        const displayName = render.getDisplayName(resolved as AzureServicePrincipalResource);
+
+        return [{
+            command: 'az',
+            args: [
+                'ad', 'sp', 'list',
+                '--filter', `displayName eq '${displayName}'`,
+                '-o', 'tsv',
+                '--query', '[0].id'
+            ]
+        }];
+    }
+}
+
+/**
  * PropertyGetter for Azure Redis Enterprise connection URL.
  * Returns the Redis connection URL (rediss://<hostname>:10000) for the Redis Enterprise cluster.
  */

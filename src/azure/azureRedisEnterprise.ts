@@ -1,10 +1,15 @@
 import { Resource, ResourceSchema, Command, RenderContext } from '../common/resource.js';
 import { AzureResourceRender } from './render.js';
-import { isResourceNotFoundError, execAsync } from '../common/constants.js';
+import { isResourceNotFoundError, execAsync, toEnvSlug } from '../common/constants.js';
 
 export const AZURE_REDIS_ENTERPRISE_RESOURCE_TYPE = 'AzureRedisEnterprise';
 
 // refer to: https://learn.microsoft.com/en-us/cli/azure/redisenterprise?view=azure-cli-latest
+
+export interface RedisAccessPolicyAssignment {
+    /** Object ID of the AAD principal, or a ${ } expression that resolves at deploy time */
+    objectId: string;
+}
 
 export interface AzureRedisEnterpriseConfig extends ResourceSchema {
     /** Redis Enterprise SKU (e.g. Balanced_B1, Enterprise_E10) */
@@ -32,6 +37,12 @@ export interface AzureRedisEnterpriseConfig extends ResourceSchema {
     port?: number;
     /** High availability: 'Enabled' | 'Disabled' */
     highAvailability?: string;
+    /**
+     * Entra ID access policy assignments for the default database.
+     * Each entry grants an AAD principal (SP, MI, user) data-plane access via Entra ID auth.
+     * Required when accessKeysAuth is 'Disabled'.
+     */
+    accessPolicyAssignments?: RedisAccessPolicyAssignment[];
     /** Tags */
     tags?: Record<string, string>;
 }
@@ -74,6 +85,9 @@ export class AzureRedisEnterpriseRender extends AzureResourceRender {
         } else {
             ret.push(...this.renderUpdate(resource as AzureRedisEnterpriseResource));
         }
+
+        // Access policy assignments (Entra ID data-plane auth)
+        ret.push(...this.renderAccessPolicyAssignments(resource as AzureRedisEnterpriseResource));
 
         return ret;
     }
@@ -179,5 +193,65 @@ export class AzureRedisEnterpriseRender extends AzureResourceRender {
         }
 
         return [{ command: 'az', args }];
+    }
+
+    // ── Access policy assignments (Entra ID data-plane auth) ─────────────────
+
+    /**
+     * Render access policy assignment commands for the default database.
+     *
+     * When accessKeysAuth is 'Disabled', each AAD principal that needs data-plane
+     * access must have an explicit access policy assignment on the database.
+     *
+     * Uses `bash -c '... || true'` for idempotency — "already exists" errors
+     * are swallowed on re-runs.
+     *
+     * The objectId may be:
+     * - A literal UUID (e.g. user/group Object ID)
+     * - A shell variable reference (e.g. $MERLIN_SP_..._OID) from a ${ } expression
+     *   that was resolved by the deployer at render time
+     */
+    renderAccessPolicyAssignments(resource: AzureRedisEnterpriseResource): Command[] {
+        const config = resource.config;
+        if (!config.accessPolicyAssignments || config.accessPolicyAssignments.length === 0) {
+            return [];
+        }
+
+        const clusterName = this.getResourceName(resource);
+        const resourceGroup = this.getResourceGroupName(resource);
+        const envSlug = toEnvSlug(`REDIS_${resource.name}_${resource.ring}`);
+
+        const commands: Command[] = [];
+
+        for (const assignment of config.accessPolicyAssignments) {
+            const objectId = assignment.objectId;
+
+            // Capture objectId into a variable if it's a shell variable reference,
+            // so we can use it as both --name and --object-id
+            const varName = `MERLIN_${envSlug}_REDIS_USER_OID`;
+
+            // Use bash -c for idempotency: swallow "already exists" errors
+            // --access-policy-assignment-name must match ^[A-Za-z0-9]{1,60}$,
+            // so we strip hyphens from the Object ID UUID to use as the name.
+            const nameVar = `${varName}_NAME`;
+            commands.push({
+                command: 'bash',
+                args: [
+                    '-c',
+                    `${varName}="${objectId}" && ` +
+                    `${nameVar}=$(echo $${varName} | tr -d '-') && ` +
+                    `az redisenterprise database access-policy-assignment create ` +
+                    `--cluster-name ${clusterName} ` +
+                    `--resource-group ${resourceGroup} ` +
+                    `--database-name default ` +
+                    `--access-policy-assignment-name $${nameVar} ` +
+                    `--access-policy-name default ` +
+                    `--object-id $${varName} ` +
+                    `|| true`
+                ]
+            });
+        }
+
+        return commands;
     }
 }

@@ -82,3 +82,4 @@ specificConfig:
 
 exports:
   clientId: AzureServicePrincipalClientId
+  objectId: AzureServicePrincipalObjectId
