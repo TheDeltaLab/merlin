@@ -10,7 +10,7 @@ git clone https://github.com/TheDeltaLab/merlin.git
 cd merlin && pnpm install && pnpm link:global
 
 # 验证
-merlin --version   # 应输出 1.4.0+
+merlin --version   # 应输出 1.9.0+
 ```
 
 ### 2. 初始化项目资源
@@ -1769,12 +1769,11 @@ cd /path/to/merlin
 
 ### 2. K8s 工作负载（CI/CD 自动化）
 
-GitHub Actions 使用 `--k8s-only --no-shared` 标志，只部署 Kubernetes 类型的资源：
+GitHub Actions 使用 `--no-shared` 标志部署 Kubernetes 资源：
 
 ```yaml
 # .github/workflows/aks-deploy.yml 关键步骤
 merlin deploy ./merlin-resources \
-  --k8s-only \
   --no-shared \
   --execute \
   --ring test \
@@ -1785,8 +1784,208 @@ merlin deploy ./merlin-resources \
 
 | 标志 | 作用 |
 |------|------|
-| `--k8s-only` | 只部署 `Kubernetes*` 类型的资源，跳过 Azure/GitHub 类型 |
 | `--no-shared` | 不部署共享资源（ACR、AKS 集群等），但仍编译它们以解析 `${ }` 表达式 |
+| `--k8s-only` | （可选）只部署 `Kubernetes*` 类型的资源，跳过 Azure/GitHub 类型 |
+
+#### CI/CD Workflow 完整说明（`.github/workflows/aks-deploy.yml`）
+
+每个项目的 `aks-deploy.yml` 是统一的 AKS 部署流水线，包含 3 个可选步骤：
+
+```
+Step 1: Deploy merlin resources  (ConfigMap, Ingress, Secret 等 K8s 资源)
+Step 2: Build Docker image       (构建并推送到共享 ACR)
+Step 3: Update K8s Deployment    (更新镜像标签，触发滚动更新)
+```
+
+**触发方式：**
+
+| 触发 | 行为 |
+|------|------|
+| `push` to `main` | 自动检测变更的 app，执行 Step 2 + 3（**不**自动部署 merlin 资源） |
+| `workflow_dispatch` | 手动选择执行哪些步骤、目标 ring/region、要构建的 app |
+
+> **安全设计**：merlin 资源变更（ConfigMap、Ingress 等）**不会**在 push 时自动部署——只能通过手动 `workflow_dispatch` 触发。这防止意外修改 K8s 配置。
+
+**Workflow 结构：**
+
+```yaml
+name: AKS Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/**'
+      - 'packages/**'
+      - 'pnpm-lock.yaml'
+  workflow_dispatch:
+    inputs:
+      deploy_resources:
+        description: 'Deploy merlin resource changes'
+        type: boolean
+        default: false
+      build_images:
+        description: 'Build and push Docker images to ACR'
+        type: boolean
+        default: false
+      update_deployments:
+        description: 'Update K8s Deployments to pull latest images'
+        type: boolean
+        default: false
+      ring:
+        description: 'Target ring'
+        type: choice
+        options: [test, staging]
+      region:
+        description: 'Target region'
+        type: choice
+        options: [koreacentral, eastasia]
+
+permissions:
+  id-token: write    # OIDC 联合认证需要
+  contents: read
+  packages: read
+
+env:
+  ACR_NAME: ${{ vars.AKS_ACR_NAME }}
+  ACR_LOGIN_SERVER: ${{ vars.AKS_ACR_NAME }}.azurecr.io
+```
+
+**4 个 Jobs 说明：**
+
+| Job | 触发条件 | 作用 |
+|-----|---------|------|
+| `detect-changes` | 总是运行 | push 时自动检测哪些 app 源码变更；dispatch 时使用用户输入 |
+| `deploy-resources` | `deploy_resources == true`（仅手动） | 安装 merlin CLI，`az login` OIDC，`az aks get-credentials`，`merlin deploy --no-shared --execute` |
+| `build-images` | app 变更或 `build_images == true` | `az acr login`，`docker build & push`，镜像标签 `nightly-<sha>` |
+| `update-deployment` | build 成功或 `update_deployments == true` | `kubectl set image` 更新 Deployment 镜像标签，`kubectl rollout status` 等待完成 |
+
+**镜像标签策略：**
+
+```
+<acr>.azurecr.io/<project>/<app>:nightly-<sha>   # 唯一标签（每次构建）
+<acr>.azurecr.io/<project>/<app>:nightly          # 浮动标签（最新构建）
+```
+
+K8s 通过检测镜像标签变化（`nightly-abc1234` → `nightly-def5678`）自动触发滚动更新。
+
+**单 app vs 多 app 项目区别：**
+
+| | 单 app（如 babbage） | 多 app（如 trinity） |
+|---|---|---|
+| 变更检测 | 只检测 `apps/portal/` | 分别检测每个 `apps/<name>/` |
+| 构建 | 单次构建 | matrix 策略并行构建 |
+| 更新 | 直接 `kubectl set image` | matrix 策略并行更新每个 Deployment |
+| `inputs.apps` | 无此字段 | 可指定 `'all'` 或逗号分隔的 app 名称 |
+
+**多 app 的 app → Deployment 名称映射**（以 trinity 为例）：
+
+```yaml
+# 大多数 app 的 Deployment 名称 = trinity-<app>
+web → trinity-web
+admin → trinity-admin
+
+# 特殊命名
+lance → trinity-lance
+lance-worker → trinity-lance-worker
+```
+
+**deploy-resources Job 关键步骤详解：**
+
+```yaml
+# 1. 安装 Merlin CLI（从 GitHub Packages）
+- uses: actions/setup-node@v4
+  with:
+    registry-url: https://npm.pkg.github.com
+- run: npm install -g @thedeltalab/merlin
+  env:
+    NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+# 2. Azure OIDC 登录（无密码，用 federated credential）
+- uses: azure/login@v2
+  with:
+    client-id: ${{ secrets.AKS_AZURE_CLIENT_ID }}
+    tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+    subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+# 3. 获取 AKS 凭证（名称由 ring + region 推导）
+- run: |
+    az aks get-credentials \
+      --name "shared-aks-${RING_SHORT}-${REGION_SHORT}-aks" \
+      --resource-group "shared-rg-${RING_SHORT}-${REGION_SHORT}"
+
+# 4. 部署 merlin 资源
+- run: |
+    merlin deploy ./merlin-resources \
+      --no-shared --execute \
+      --ring $RING --region $REGION
+```
+
+**build-images Job 关键步骤：**
+
+```yaml
+# ACR 登录用 SP client secret（OIDC 不支持 ACR token exchange）
+- uses: docker/login-action@v3
+  with:
+    registry: ${{ env.ACR_LOGIN_SERVER }}
+    username: ${{ secrets.AKS_ACR_USERNAME }}
+    password: ${{ secrets.AKS_ACR_PASSWORD }}
+
+# Docker Buildx + registry cache（加速重复构建）
+- uses: docker/build-push-action@v6
+  with:
+    context: .
+    file: apps/${{ matrix.app }}/Dockerfile
+    push: true
+    tags: ${{ steps.docker-meta.outputs.tags }}
+    cache-from: type=registry,ref=<acr>/<project>/<app>:buildcache
+    cache-to: type=registry,ref=<acr>/<project>/<app>:buildcache,mode=max
+```
+
+**update-deployment Job 关键步骤：**
+
+```yaml
+# 获取当前 container 名（不一定和 app 名一致）
+CONTAINER=$(kubectl get deployment/$DEPLOYMENT -n $NAMESPACE \
+  -o jsonpath='{.spec.template.spec.containers[0].name}')
+
+# 更新镜像标签触发滚动更新
+kubectl set image deployment/$DEPLOYMENT \
+  $CONTAINER=$IMAGE_URI -n $NAMESPACE
+
+# 等待 rollout 完成（超时 5 分钟）
+kubectl rollout status deployment/$DEPLOYMENT \
+  -n $NAMESPACE --timeout=300s
+```
+
+#### 新项目配置 CI/CD Workflow
+
+在新项目中创建 `.github/workflows/aks-deploy.yml` 时，需要修改的关键部分：
+
+1. **`paths` 触发路径** — 根据项目的目录结构调整
+
+2. **app 列表** — 修改 `DOCKER_APPS` 数组和 matrix 配置
+
+3. **镜像路径** — `<acr>/<project>/<app>` 中的 `<project>` 部分
+
+4. **Deployment 名称映射** — `resolve deployment name` step 中的 case 语句
+
+5. **namespace** — `update-deployment` step 中的 `NAMESPACE` 变量
+
+可以直接复制 [babbage 的 aks-deploy.yml](https://github.com/TheDeltaLab/babbage/blob/main/.github/workflows/aks-deploy.yml)（单 app 模板）或 [trinity 的 aks-deploy.yml](https://github.com/TheDeltaLab/trinity/blob/main/.github/workflows/aks-deploy.yml)（多 app 模板）作为起点。
+
+#### GitHub Repo Secrets / Variables 配置
+
+| 类型 | 名称 | 值 | 用途 |
+|------|------|-----|------|
+| Secret | `AKS_AZURE_CLIENT_ID` | GitHub SP 的 appId | OIDC `az login` |
+| Secret | `AZURE_TENANT_ID` | Azure AD 租户 ID | OIDC `az login` |
+| Secret | `AZURE_SUBSCRIPTION_ID` | Azure 订阅 ID | OIDC `az login` |
+| Secret | `AKS_ACR_USERNAME` | GitHub SP 的 appId | ACR docker push |
+| Secret | `AKS_ACR_PASSWORD` | GitHub SP 的 client secret | ACR docker push |
+| Variable | `AKS_ACR_NAME` | `brainlysharedacr` | ACR 名称 |
+
+> **注意**：OIDC 登录使用 `id-token: write` permission + federated credential（无密码）。但 ACR docker push 不支持 OIDC token exchange，必须用 SP client secret。
 
 **CI/CD 的 SP 权限（完整 CI/CD 部署）：**
 
@@ -1830,7 +2029,9 @@ Azure AD 目录角色：
 3. merlin deploy shared-k8s-resource --execute      # AKS 集群 + NGINX + cert-manager
 4. merlin deploy ./merlin-resources --execute       # 项目 Azure 资源 + K8s 工作负载
 5. ./scripts/setup-github-acr-secrets.sh            # 配置 CI/CD ACR 推送凭证
-6. 之后 CI/CD 自动处理 K8s 部署（--k8s-only --no-shared）
+6. 配置 GitHub repo Secrets/Variables（见上方"GitHub Repo Secrets / Variables 配置"表格）
+7. 复制 aks-deploy.yml 到项目 .github/workflows/（见上方"新项目配置 CI/CD Workflow"）
+8. 之后 CI/CD 自动处理部署（push 触发构建 + 滚动更新）
 ```
 
 > **步骤 2 只需执行一次**。后续新增项目只需在 `sharedgithubsp.yml` 中添加 federated credential 并重新部署步骤 1，无需重复步骤 2。
@@ -1925,16 +2126,7 @@ merlin deploy shared-resource --execute --ring test --region koreacentral
 merlin deploy shared-k8s-resource --execute --ring test --region koreacentral
 ```
 
-此外，新项目的 GitHub repo 需要配置以下 Secrets / Variables：
-
-| 类型 | 名称 | 值 | 来源 |
-|------|------|-----|------|
-| Secret | `AKS_AZURE_CLIENT_ID` | GitHub SP 的 appId | `az ad sp list --filter "displayName eq 'brainly-github-tst'"` |
-| Secret | `AZURE_TENANT_ID` | Azure AD 租户 ID | `az account show --query tenantId` |
-| Secret | `AZURE_SUBSCRIPTION_ID` | Azure 订阅 ID | `az account show --query id` |
-| Secret | `AKS_ACR_USERNAME` | GitHub SP 的 appId | 同 `AKS_AZURE_CLIENT_ID` |
-| Secret | `AKS_ACR_PASSWORD` | GitHub SP 的 client secret | `az ad app credential reset --id <appId> --append --display-name "github-actions-acr-<project>"` |
-| Variable | `AKS_ACR_NAME` | 共享 ACR 名称 | `brainlysharedacr` |
+此外，新项目的 GitHub repo 需要配置 Secrets / Variables（详见上方"GitHub Repo Secrets / Variables 配置"表格），并复制 `aks-deploy.yml` workflow（详见"新项目配置 CI/CD Workflow"）。
 
 > **注意**：`az ad app credential reset --append` 创建新 secret 不影响现有 secret。secret 的值只在创建时显示一次，之后无法再查看。
 
