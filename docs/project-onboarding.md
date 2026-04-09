@@ -10,7 +10,7 @@ git clone https://github.com/TheDeltaLab/merlin.git
 cd merlin && pnpm install && pnpm link:global
 
 # 验证
-merlin --version   # 应输出 1.4.0+
+merlin --version   # 应输出 1.9.0+
 ```
 
 ### 2. 初始化项目资源
