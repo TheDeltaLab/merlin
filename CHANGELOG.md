@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.9.0](https://github.com/TheDeltaLab/merlin/compare/v1.8.0...v1.9.0) (2026-04-09)
+
+
+### Features
+
+* add Redis Enterprise Entra ID auth with automatic access policy assignments ([#86](https://github.com/TheDeltaLab/merlin/issues/86)) ([ea51a8b](https://github.com/TheDeltaLab/merlin/commit/ea51a8b911f6f6b4ac7dfd3fe97a83adb771db27))
+* upgrade GitHub SP to full CI/CD deploy permissions ([#83](https://github.com/TheDeltaLab/merlin/issues/83)) ([af029e4](https://github.com/TheDeltaLab/merlin/commit/af029e406ca08834cffe4e1856e2fd16deaa0a78))
+
 ## [1.8.0](https://github.com/TheDeltaLab/merlin/compare/v1.7.3...v1.8.0) (2026-04-07)
 
 
