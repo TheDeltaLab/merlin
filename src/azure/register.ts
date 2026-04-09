@@ -56,6 +56,7 @@ import {
     AzureADAppClientIdGetter,
     AzureKeyVaultUrlGetter,
     AzureServicePrincipalClientIdGetter,
+    AzureServicePrincipalObjectIdGetter,
     AzureRedisEnterpriseUrlGetter,
     AzureResourceApiScopeGetter,
     AzureAKSOidcIssuerUrlGetter,
@@ -114,6 +115,7 @@ export function registerAzureProviders(): void {
     registerPropertyGetter(new AzureADAppClientIdGetter());
     registerPropertyGetter(new AzureKeyVaultUrlGetter());
     registerPropertyGetter(new AzureServicePrincipalClientIdGetter());
+    registerPropertyGetter(new AzureServicePrincipalObjectIdGetter());
     registerPropertyGetter(new AzureRedisEnterpriseUrlGetter());
     registerPropertyGetter(new AzureResourceApiScopeGetter());
     registerPropertyGetter(new AzureAKSOidcIssuerUrlGetter());

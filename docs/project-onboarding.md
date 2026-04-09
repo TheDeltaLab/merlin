@@ -1629,13 +1629,39 @@ authProvider:
 
 ### 概述
 
-Merlin 创建的 `AzureServicePrincipal`（在 `shared-resource/sharedgithubsp.yml` 中定义）为 GitHub Actions 提供了 OIDC 联合认证（Federated Credentials），用于：
+Merlin 创建的 `AzureServicePrincipal`（在 `shared-resource/sharedgithubsp.yml` 中定义）为 GitHub Actions 提供了 OIDC 联合认证（Federated Credentials），支持完整 CI/CD 部署：
 
 - `az login` — Azure CLI 登录（OIDC，无需密码）
 - `az aks get-credentials` — 获取 AKS 集群凭证
 - `kubectl apply` — 部署 K8s 资源
+- `az ad app create/update` — 创建/更新 Azure AD App Registration
+- `az role assignment create` — 创建角色分配
+- `az keyvault secret set` — 管理 Key Vault secrets
+- 以及所有 `merlin deploy --execute` 需要的 Azure ARM 操作
 
 但 **OIDC 不能用于 ACR docker push**。Azure Container Registry 的 token exchange 不支持 OIDC federated token，所以推送镜像需要 SP client secret。
+
+### 首次权限配置（需 Global Admin）
+
+SP 的 ARM 角色由 `merlin deploy shared-resource` 自动分配，但 **MS Graph API 权限**和 **Azure AD 目录角色**需要 Global Administrator 或 Privileged Role Administrator 手动执行一次：
+
+```bash
+# 分配所有权限（两个 ring: test + staging）
+./scripts/setup-github-sp-permissions.sh
+
+# 只配置某个 ring
+./scripts/setup-github-sp-permissions.sh test
+./scripts/setup-github-sp-permissions.sh staging
+```
+
+脚本会自动完成以下操作（幂等，可重复运行）：
+
+1. **MS Graph API 权限** — 声明 `Application.ReadWrite.All`、`AppRoleAssignment.ReadWrite.All`、`Directory.Read.All`
+2. **Admin consent** — 授权 Graph API 权限
+3. **ARM RBAC 角色** — 在订阅级别分配 6 个角色（Contributor、User Access Administrator、AcrPush、AKS Cluster User、AKS RBAC Writer、Key Vault Secrets Officer）
+4. **Azure AD 目录角色** — 分配 Directory Readers 和 Application Administrator
+
+> ⚠️ 此脚本必须用有 **Owner（订阅）** + **Global Admin（租户）** 权限的账号执行。普通开发者账号会导致部分角色分配静默失败（脚本用 `|| true` 保证幂等性，但错误也会被吞掉）。
 
 ### 首次配置 ACR 推送凭证
 
@@ -1717,6 +1743,9 @@ az account set --subscription <subscription-id>
 merlin deploy shared-resource --execute --ring test --region koreacentral
 merlin deploy shared-k8s-resource --execute --ring test --region koreacentral
 
+# ①b 首次：让 Global Admin 执行权限配置脚本（只需一次）
+./scripts/setup-github-sp-permissions.sh
+
 # ② 部署项目的 Azure 资源（如 AzureServicePrincipal.admin-aad）
 cd /path/to/trinity
 merlin deploy ./merlin-resources --execute --ring test --region koreacentral
@@ -1730,7 +1759,7 @@ cd /path/to/merlin
 
 | 场景 | 操作 |
 |------|------|
-| 首次部署新项目 | 运行步骤 ①②③ |
+| 首次部署新项目 | 运行步骤 ①②③（首次还需 ①b） |
 | 修改了 `adminaad.yml`（redirect URI、权限等） | 重新运行步骤 ② |
 | 修改了 `shared-resource/` | 重新运行步骤 ① |
 | SP client secret 过期（2 年） | 重新运行步骤 ③ |
@@ -1759,26 +1788,52 @@ merlin deploy ./merlin-resources \
 | `--k8s-only` | 只部署 `Kubernetes*` 类型的资源，跳过 Azure/GitHub 类型 |
 | `--no-shared` | 不部署共享资源（ACR、AKS 集群等），但仍编译它们以解析 `${ }` 表达式 |
 
-**CI/CD 的 SP 权限要求（最小权限）：**
+**CI/CD 的 SP 权限（完整 CI/CD 部署）：**
 
-| 角色 | 范围 | 用途 |
-|------|------|------|
-| AKS Cluster User Role | `shared-rg-{ring}-{region}` | `az aks get-credentials` |
-| AKS RBAC Writer | `shared-rg-{ring}-{region}` | `kubectl apply`（创建/更新 K8s 资源） |
-| AcrPush | 共享 ACR | docker push |
-| Reader | 共享 ACR | `az acr login` 资源发现 |
+GitHub SP (`brainly-github-tst` / `brainly-github-stg`) 已配置为支持完整 CI/CD 部署（不限于 K8s），权限定义在 `shared-resource/sharedgithubsp.yml`。
 
-> **注意**：CI/CD 的 SP **不需要** `Microsoft.Resources/subscriptions/resourcegroups/write` 或 Azure AD Graph 权限。`--k8s-only` 确保不会触发这些操作。
+ARM RBAC 角色（订阅级别）：
+
+| 角色 | 用途 |
+|------|------|
+| Contributor | 创建/更新所有 ARM 资源（RG、ACA、ACR、Storage、KV、Redis、PG 等） |
+| User Access Administrator | 创建 role assignment（authProvider、SP roleAssignments） |
+| AcrPush | 推送 Docker 镜像（Contributor 不包含 ACR 数据面推送） |
+| Azure Kubernetes Service Cluster User Role | `az aks get-credentials` |
+| Azure Kubernetes Service RBAC Writer | `kubectl apply`（K8s 数据面写入） |
+| Key Vault Secrets Officer | 读写 Key Vault secrets（Contributor 不包含 KV 数据面） |
+
+MS Graph API 权限（需 admin consent）：
+
+| 权限 | 用途 |
+|------|------|
+| Application.ReadWrite.All | 创建/更新 AD Apps、SPs、federated credentials |
+| AppRoleAssignment.ReadWrite.All | 管理 app role assignments（EntraID auth provider） |
+| Directory.Read.All | 查询目录数据（`az ad app list` 等） |
+
+Azure AD 目录角色：
+
+| 角色 | 用途 |
+|------|------|
+| Directory Readers | 读取目录对象（SP、App 查询） |
+| Application Administrator | 管理 AD App 注册和 SP |
+
+> **注意**：MS Graph API 权限和 Azure AD 目录角色需要 **Global Administrator** 或 **Privileged Role Administrator** 才能分配。首次设置运行 `./scripts/setup-github-sp-permissions.sh`（见上方"首次权限配置"）。
+
+> **K8s-only 模式**：如果 CI/CD 只用 `--k8s-only` 标志，实际只需要 AKS Cluster User、AKS RBAC Writer 和 Directory.Read.All（用于解析 `${ AzureServicePrincipal.*.clientId }` 表达式）。但订阅级角色不会造成安全风险，因为 `--k8s-only` 会跳过所有非 K8s 操作。
 
 ### 3. 部署顺序（新项目首次上线）
 
 ```
-1. merlin deploy shared-resource --execute          # 共享 Azure 基础设施
-2. merlin deploy shared-k8s-resource --execute      # AKS 集群 + NGINX + cert-manager
-3. merlin deploy ./merlin-resources --execute       # 项目 Azure 资源 + K8s 工作负载
-4. ./scripts/setup-github-acr-secrets.sh            # 配置 CI/CD 凭证
-5. 之后 CI/CD 自动处理 K8s 部署（--k8s-only --no-shared）
+1. merlin deploy shared-resource --execute          # 共享 Azure 基础设施（创建 SP + federated credentials）
+2. ./scripts/setup-github-sp-permissions.sh         # 首次：Global Admin 执行，分配 Graph/Directory 权限
+3. merlin deploy shared-k8s-resource --execute      # AKS 集群 + NGINX + cert-manager
+4. merlin deploy ./merlin-resources --execute       # 项目 Azure 资源 + K8s 工作负载
+5. ./scripts/setup-github-acr-secrets.sh            # 配置 CI/CD ACR 推送凭证
+6. 之后 CI/CD 自动处理 K8s 部署（--k8s-only --no-shared）
 ```
+
+> **步骤 2 只需执行一次**。后续新增项目只需在 `sharedgithubsp.yml` 中添加 federated credential 并重新部署步骤 1，无需重复步骤 2。
 
 ---
 
@@ -1882,6 +1937,8 @@ merlin deploy shared-k8s-resource --execute --ring test --region koreacentral
 | Variable | `AKS_ACR_NAME` | 共享 ACR 名称 | `brainlysharedacr` |
 
 > **注意**：`az ad app credential reset --append` 创建新 secret 不影响现有 secret。secret 的值只在创建时显示一次，之后无法再查看。
+
+> **首次部署提示**：如果这是整个集群的首次搭建（而非在已有集群中新增项目），还需要让 Global Admin 执行一次 `./scripts/setup-github-sp-permissions.sh` 来配置 SP 的 Graph API 权限和 Azure AD 目录角色。详见上方"首次权限配置"章节。
 
 ---
 

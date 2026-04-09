@@ -181,9 +181,10 @@ Merlin uses a **compile-time + runtime** architecture:
 - **`src/alibaba/`**: Alibaba Cloud placeholder (Phase 2, not yet implemented)
 - **`src/runtime.ts`**: Public API for generated code
 - **`src/init.ts`**: Thin cloud dispatcher — calls `registerAzureProviders()` or throws for unknown clouds; registers cloud-neutral K8s/GitHub renders
-- **`shared-resource/`**: Cross-project shared infrastructure — ACR, Redis, Postgres, ABS, AKV, GitHub SP (`project: merlin`)
+- **`shared-resource/`**: Cross-project shared infrastructure — ACR, Redis, Postgres, ABS, AKV, GitHub SP with full CI/CD deploy permissions (`project: merlin`)
 - **`shared-k8s-resource/`**: Shared Kubernetes infrastructure — AKS cluster, NGINX Ingress, cert-manager, Let's Encrypt issuer, KV workload SP
 - **`synapse-k8s-resource/`**: Synapse AI gateway K8s workloads — gateway + dashboard (koreacentral only)
+- **`scripts/`**: Operational scripts — `setup-github-sp-permissions.sh` (one-time Global Admin setup for SP Graph API/Directory permissions), `setup-github-acr-secrets.sh` (configure GitHub repo ACR push credentials)
 - **`.merlin/`**: Generated TypeScript project (output, not in git)
 
 > **Note:** Project-specific resources (Trinity, Alluneed, etc.) have been moved to their respective project repos (e.g. [trinity](https://github.com/TheDeltaLab/trinity), [alluneed](https://github.com/TheDeltaLab/alluneed)). Each project maintains its own `merlin-resources/` directory and installs `@thedeltalab/merlin` as a dependency. Shared resources (`shared-resource/`, `shared-k8s-resource/`) are bundled in the npm package and auto-included during compile/deploy.
