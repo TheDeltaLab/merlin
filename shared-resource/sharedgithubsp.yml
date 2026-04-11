@@ -69,6 +69,8 @@ specificConfig:
         subject: repo:TheDeltaLab/alluneed:environment:test
       - name: babbage-github-nightly
         subject: repo:TheDeltaLab/babbage:environment:nightly
+      - name: synapse-github-nightly
+        subject: repo:TheDeltaLab/synapse:environment:nightly
 
   - ring: staging
     displayName: brainly-github-stg
@@ -79,6 +81,8 @@ specificConfig:
         subject: repo:TheDeltaLab/alluneed:environment:staging
       - name: babbage-github-staging
         subject: repo:TheDeltaLab/babbage:environment:staging
+      - name: synapse-github-staging
+        subject: repo:TheDeltaLab/synapse:environment:staging
 
 exports:
   clientId: AzureServicePrincipalClientId
