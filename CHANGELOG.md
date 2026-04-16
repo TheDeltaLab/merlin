@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.10.0](https://github.com/TheDeltaLab/merlin/compare/v1.9.0...v1.10.0) (2026-04-16)
+
+
+### Features
+
+* add synapse GitHub federated credentials to shared SP ([#92](https://github.com/TheDeltaLab/merlin/issues/92)) ([bf2442a](https://github.com/TheDeltaLab/merlin/commit/bf2442a7be5f65d59bd49f474364f27545ea2350)), closes [#91](https://github.com/TheDeltaLab/merlin/issues/91)
+
+
+### Bug Fixes
+
+* ensure Service Principal exists in SP update path ([#97](https://github.com/TheDeltaLab/merlin/issues/97)) ([b657948](https://github.com/TheDeltaLab/merlin/commit/b6579480f48e9e820de77352fe3367f03f88c0a9))
+
 ## [1.9.0](https://github.com/TheDeltaLab/merlin/compare/v1.8.0...v1.9.0) (2026-04-09)
 
 
