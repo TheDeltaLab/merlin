@@ -312,6 +312,13 @@ export class AzureServicePrincipalRender extends AzureResourceRender {
             envCapture: appIdVar,
         });
 
+        // Ensure the Service Principal exists (App may exist without SP if a previous
+        // create was interrupted, or if the App was created manually/via Portal)
+        commands.push({
+            command: 'bash',
+            args: ['-c', `az ad sp create --id $${appIdVar} 2>/dev/null || true`],
+        });
+
         // Update redirect URIs (idempotent — always sets the full list)
         const redirectUris = resource.config.webRedirectUris ?? [];
         if (redirectUris.length > 0) {
