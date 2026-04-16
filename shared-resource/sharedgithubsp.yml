@@ -71,6 +71,10 @@ specificConfig:
         subject: repo:TheDeltaLab/babbage:environment:nightly
       - name: synapse-github-nightly
         subject: repo:TheDeltaLab/synapse:environment:nightly
+      - name: lovelace-github-nightly
+        subject: repo:TheDeltaLab/lovelace:environment:nightly
+      - name: cortex-github-nightly
+        subject: repo:TheDeltaLab/cortex:environment:nightly
 
   - ring: staging
     displayName: brainly-github-stg
@@ -83,6 +87,10 @@ specificConfig:
         subject: repo:TheDeltaLab/babbage:environment:staging
       - name: synapse-github-staging
         subject: repo:TheDeltaLab/synapse:environment:staging
+      - name: lovelace-github-staging
+        subject: repo:TheDeltaLab/lovelace:environment:staging
+      - name: cortex-github-staging
+        subject: repo:TheDeltaLab/cortex:environment:staging
 
 exports:
   clientId: AzureServicePrincipalClientId
