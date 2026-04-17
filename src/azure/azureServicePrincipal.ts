@@ -449,10 +449,12 @@ export class AzureServicePrincipalRender extends AzureResourceRender {
         const spObjectIdVar = this.envVarName(resource, 'SP_OBJECT_ID');
         const value = resource.config.assignmentRequired ? 'true' : 'false';
         return [
-            // Capture the SP's object ID (different from appId)
+            // Capture the SP's object ID — use `az ad sp show` (direct lookup by appId)
+            // which is more reliable than `az ad sp list --filter` after a recent create.
+            // If the SP doesn't exist yet, create it first.
             {
-                command: 'az',
-                args: ['ad', 'sp', 'list', '--filter', `appId eq '$${appIdVar}'`, '--query', '[0].id', '-o', 'tsv'],
+                command: 'bash',
+                args: ['-c', `az ad sp show --id $${appIdVar} --query id -o tsv 2>/dev/null || az ad sp create --id $${appIdVar} --query id -o tsv`],
                 envCapture: spObjectIdVar,
             },
             // Set appRoleAssignmentRequired on the Service Principal
