@@ -203,6 +203,102 @@ describe('AzureServicePrincipalRender', () => {
         });
     });
 
+    // ── 4b. renderClientSecret (idempotent) ──────────────────────────────────
+
+    describe('renderClientSecret', () => {
+        const APP_ID_VAR = 'MERLIN_SP_BRAINLY_GITHUB_TST_APP_ID';
+
+        it('returns empty array when no clientSecretKeyVault configured', () => {
+            const resource = makeResource();
+            const cmds = render.renderClientSecret(resource, APP_ID_VAR);
+            expect(cmds).toHaveLength(0);
+        });
+
+        it('emits an idempotent bash block that reuses KV value if present, else resets credential', () => {
+            const resource = makeResource({
+                clientSecretKeyVault: {
+                    vaultNames: ['brainlysharedtstkrcakv'],
+                    secretName: 'lovelace-oauth2-proxy-client-secret',
+                },
+            });
+            const cmds = render.renderClientSecret(resource, APP_ID_VAR);
+
+            // 1 capture bash + 1 keyvault secret set
+            expect(cmds).toHaveLength(2);
+            const captureCmd = cmds[0];
+            expect(captureCmd.command).toBe('bash');
+            expect(captureCmd.envCapture).toBeDefined();
+            expect(captureCmd.envCapture).toContain('CLIENT_SECRET');
+
+            const script = captureCmd.args[1];
+            // Reads existing secret from first vault
+            expect(script).toContain('az keyvault secret show');
+            expect(script).toContain('brainlysharedtstkrcakv');
+            expect(script).toContain('lovelace-oauth2-proxy-client-secret');
+            // Falls back to credential reset when missing
+            expect(script).toContain('az ad app credential reset');
+            expect(script).toContain(`$${APP_ID_VAR}`);
+            // Branching with EXISTING variable
+            expect(script).toContain('EXISTING');
+            expect(script).toContain('if [ -n "$EXISTING" ]');
+        });
+
+        it('writes the captured secret into every configured vault', () => {
+            const resource = makeResource({
+                clientSecretKeyVault: {
+                    vaultNames: ['vault-a', 'vault-b', 'vault-c'],
+                    secretName: 'my-secret',
+                },
+            });
+            const cmds = render.renderClientSecret(resource, APP_ID_VAR);
+
+            // 1 capture + 3 vault writes
+            expect(cmds).toHaveLength(4);
+            const vaults = cmds.slice(1).map(c => c.args[c.args.indexOf('--vault-name') + 1]);
+            expect(vaults).toEqual(['vault-a', 'vault-b', 'vault-c']);
+            cmds.slice(1).forEach(c => {
+                expect(c.command).toBe('az');
+                expect(c.args).toContain('secret');
+                expect(c.args).toContain('set');
+                expect(c.args).toContain('my-secret');
+            });
+        });
+    });
+
+    // ── 4c. renderUpdate invokes renderClientSecret ──────────────────────────
+
+    describe('renderUpdate with clientSecretKeyVault', () => {
+        it('includes idempotent client secret commands on update flow', () => {
+            const resource = makeResource({
+                displayName: 'brainly-github-tst',
+                clientSecretKeyVault: {
+                    vaultNames: ['brainlysharedtstkrcakv'],
+                    secretName: 'lovelace-oauth2-proxy-client-secret',
+                },
+            });
+            const cmds = render.renderUpdate(resource, 'app-id-123', 'object-id-123');
+
+            // Find the bash capture emitted by renderClientSecret
+            const captureCmd = cmds.find(
+                c => c.command === 'bash'
+                    && c.envCapture
+                    && c.envCapture.includes('CLIENT_SECRET')
+            );
+            expect(captureCmd).toBeDefined();
+            expect(captureCmd!.args[1]).toContain('az keyvault secret show');
+            expect(captureCmd!.args[1]).toContain('az ad app credential reset');
+
+            // And the subsequent keyvault secret set
+            const setCmd = cmds.find(
+                c => c.command === 'az'
+                    && c.args.includes('secret')
+                    && c.args.includes('set')
+                    && c.args.includes('lovelace-oauth2-proxy-client-secret')
+            );
+            expect(setCmd).toBeDefined();
+        });
+    });
+
     // ── 5. renderRoleAssignments ─────────────────────────────────────────────
 
     describe('renderRoleAssignments', () => {
