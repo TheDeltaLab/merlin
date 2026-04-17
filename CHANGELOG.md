@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.11.0](https://github.com/TheDeltaLab/merlin/compare/v1.10.1...v1.11.0) (2026-04-17)
+
+
+### Features
+
+* add lovelace & cortex federated credentials and onboarding docs ([#101](https://github.com/TheDeltaLab/merlin/issues/101)) ([ef2369b](https://github.com/TheDeltaLab/merlin/commit/ef2369b8c63bf4e2be19f7843a3519e78b5ee2a5)), closes [#100](https://github.com/TheDeltaLab/merlin/issues/100)
+
+
+### Bug Fixes
+
+* make AzureServicePrincipal client secret generation idempotent ([#103](https://github.com/TheDeltaLab/merlin/issues/103)) ([3e40dba](https://github.com/TheDeltaLab/merlin/commit/3e40dba016791c4eb115a6d4e3e937b39367a7f1)), closes [#102](https://github.com/TheDeltaLab/merlin/issues/102)
+
 ## [1.10.1](https://github.com/TheDeltaLab/merlin/compare/v1.10.0...v1.10.1) (2026-04-17)
 
 
