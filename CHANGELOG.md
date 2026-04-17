@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.10.1](https://github.com/TheDeltaLab/merlin/compare/v1.10.0...v1.10.1) (2026-04-17)
+
+
+### Bug Fixes
+
+* replace az ad sp list with az ad sp show + create fallback ([#98](https://github.com/TheDeltaLab/merlin/issues/98)) ([7ec38b5](https://github.com/TheDeltaLab/merlin/commit/7ec38b5ec86976d68f74e653e4dd9ba3ef9818e4)), closes [#96](https://github.com/TheDeltaLab/merlin/issues/96)
+
 ## [1.10.0](https://github.com/TheDeltaLab/merlin/compare/v1.9.0...v1.10.0) (2026-04-16)
 
 
