@@ -119,14 +119,13 @@ describe('AzureServicePrincipalRender', () => {
             expect(cmds).toHaveLength(2);
         });
 
-        it('captures SP object ID with az ad sp list', () => {
+        it('captures SP object ID with az ad sp show (fallback to create)', () => {
             const resource = makeResource({ directoryRoles: ['Directory Readers'] });
             const cmds = render.renderDirectoryRoles(resource, APP_ID_VAR);
             const captureCmd = cmds[0];
-            expect(captureCmd.command).toBe('az');
-            expect(captureCmd.args).toContain('ad');
-            expect(captureCmd.args).toContain('sp');
-            expect(captureCmd.args).toContain('list');
+            expect(captureCmd.command).toBe('bash');
+            expect(captureCmd.args[1]).toContain('az ad sp show');
+            expect(captureCmd.args[1]).toContain('az ad sp create');
             expect(captureCmd.envCapture).toBeDefined();
             expect(captureCmd.envCapture).toContain('SP_OID');
         });
