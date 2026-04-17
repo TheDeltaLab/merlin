@@ -410,3 +410,29 @@ Azure AD 目录角色：
 ```
 
 > **步骤 2 只需执行一次**。后续新增项目只需在 `sharedgithubsp.yml` 中添加 federated credential 并重新部署步骤 1，无需重复步骤 2。
+
+> **新增项目必须修改的共享配置文件：**
+>
+> | 文件 | 修改内容 | 何时需要 |
+> |------|---------|---------|
+> | `shared-resource/sharedgithubsp.yml` | 添加项目的 GitHub Actions federated credential（nightly + staging） | 所有新项目（CI/CD OIDC 登录 Azure） |
+> | `shared-k8s-resource/sharedkvsp.yml` | 添加项目的 K8s ServiceAccount federated credential（test + staging） | 项目使用 Key Vault secrets（通过 CSI SecretProviderClass） |
+>
+> 修改后需要重新部署：
+> ```bash
+> merlin deploy shared-resource --execute          # sharedgithubsp.yml 变更
+> merlin deploy shared-k8s-resource --execute      # sharedkvsp.yml 变更
+> ```
+>
+> **示例** — 为新项目 `myapp` 添加配置：
+>
+> ```yaml
+> # shared-resource/sharedgithubsp.yml — specificConfig.federatedCredentials 中添加：
+> - name: myapp-github-nightly
+>   subject: repo:TheDeltaLab/myapp:environment:nightly
+>
+> # shared-k8s-resource/sharedkvsp.yml — specificConfig.federatedCredentials 中添加：
+> - name: myapp-sa
+>   issuer: ${ KubernetesCluster.aks.oidcIssuerUrl }
+>   subject: system:serviceaccount:myapp:myapp-workload-sa
+> ```
