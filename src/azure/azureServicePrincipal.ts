@@ -281,7 +281,7 @@ export class AzureServicePrincipalRender extends AzureResourceRender {
         // 5. Configure assignment required (access control)
         commands.push(...this.renderAssignmentRequired(resource, appIdVar));
 
-        // 5. Client secret → Key Vault (create-only, not on update to avoid breaking running services)
+        // 5. Client secret → Key Vault (idempotent — only resets credential if KV is missing it)
         commands.push(...this.renderClientSecret(resource, appIdVar));
 
         // 6. Cookie secret → Key Vault (idempotent — only creates if missing)
@@ -336,6 +336,9 @@ export class AzureServicePrincipalRender extends AzureResourceRender {
 
         // Cookie secret → Key Vault (idempotent — only creates if missing)
         commands.push(...this.renderCookieSecret(resource));
+
+        // Client secret → Key Vault (idempotent — only resets credential if KV is missing it)
+        commands.push(...this.renderClientSecret(resource, appIdVar));
 
         commands.push(...this.renderFederatedCredentials(resource, appIdVar));
         commands.push(...this.renderRoleAssignments(resource, appIdVar));
@@ -465,23 +468,37 @@ export class AzureServicePrincipalRender extends AzureResourceRender {
         ];
     }
 
-    // ── Client secret → Key Vault ─────────────────────────────────────────
+    // ── Client secret → Key Vault (idempotent) ───────────────────────────
 
+    /**
+     * Ensure a client secret exists in Key Vault for the AD App.
+     * Idempotent: checks the first vault — if the secret already exists, reuses it.
+     * Only when missing, resets the AD App credential (rotating it) and writes to all vaults.
+     *
+     * Safe to call on both create and update:
+     *   - First deploy: KV empty → reset credential → write to KV.
+     *   - Subsequent deploys: KV has value → reuse (no rotation).
+     *   - KV secret deleted manually / App pre-existed / earlier deploy partially failed:
+     *     KV empty → self-heal by resetting credential and re-populating KV.
+     */
     renderClientSecret(resource: AzureServicePrincipalResource, appIdVar: string): Command[] {
         const kvConfig = resource.config.clientSecretKeyVault;
         if (!kvConfig) return [];
 
         const secretVar = this.envVarName(resource, 'CLIENT_SECRET');
         const commands: Command[] = [
-            // Generate a new client secret and capture its value
+            // Reuse existing KV value if present; otherwise reset AD App credential.
             {
-                command: 'az',
-                args: ['ad', 'app', 'credential', 'reset', '--id', `$${appIdVar}`, '--query', 'password', '-o', 'tsv'],
+                command: 'bash',
+                args: ['-c', [
+                    `EXISTING=$(az keyvault secret show --vault-name ${kvConfig.vaultNames[0]} --name ${kvConfig.secretName} --query value -o tsv 2>/dev/null || true)`,
+                    `if [ -n "$EXISTING" ]; then echo "$EXISTING"; else az ad app credential reset --id $${appIdVar} --query password -o tsv; fi`,
+                ].join('\n')],
                 envCapture: secretVar,
             },
         ];
 
-        // Store it in every Key Vault (for multi-region setups)
+        // Store in every Key Vault (idempotent — overwrites with same value if exists)
         for (const vaultName of kvConfig.vaultNames) {
             commands.push({
                 command: 'az',
