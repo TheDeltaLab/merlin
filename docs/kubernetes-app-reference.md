@@ -139,7 +139,7 @@ specificConfig:
 
 | 字段 | 默认值 | 说明 |
 |------|--------|------|
-| `replicas` | `1` | |
+| `replicas` | `1` | 见下方「副本数推荐」 |
 | `healthPath` | `/` | 用于所有探针 |
 | `imagePullPolicy` | `IfNotPresent` | |
 | `resources.cpuRequest` | `250m` | |
@@ -159,6 +159,57 @@ specificConfig:
 | startup | HTTP GET | `healthPath` | initialDelay=1s, period=1s, failure=240 |
 | liveness | HTTP GET | `healthPath` | period=10s, timeout=5s, failure=3 |
 | readiness | HTTP GET | `healthPath` | period=5s, timeout=5s, failure=48 |
+
+### 副本数推荐
+
+`replicas` 默认 `1`，**生产环境的用户面向应用必须显式设置成 ≥ 2** 以避免单点故障。
+
+| Workload 类型 | test | staging | production | 备注 |
+|--------------|------|---------|-----------|------|
+| 用户面向（web/admin/home/dashboard） | 1 | 2 | 3+ | 滚动更新和节点维护期间不能中断 |
+| 内部 API（lance、gateway 等） | 1 | 1–2 | 2 | 上游若有重试可单副本 |
+| 异步 worker（消费 BullMQ/MQ） | 1 | 1 | 1 | HPA 暂未支持，按需手动调高，见下方 |
+| 一次性任务/定时任务 | 1 | 1 | 1 | 不需多副本 |
+
+**何时必须多副本**
+
+- 用户能直接访问到（HTTP UI / 公网 API）—— pod 重启 / 节点 drain 时不能 503
+- 滚动发版期间不能中断（`maxUnavailable: 0` + replicas ≥ 2）
+- QPS 较高，单 pod 资源吃不下
+
+**何时可以单副本**
+
+- 内部低频服务（管理工具、cron 触发的 admin job）
+- 异步消费者：消息已持久化在 MQ，pod 重启期间消息不丢，重启后追上即可
+- test / dev / staging 等非关键环境
+
+**多副本前置条件**（缺一项就不要开多副本）
+
+1. **应用必须无状态** — 不依赖本地内存 / 本地文件系统的会话或缓存。如果有，先迁到 Redis / 数据库
+2. **健康检查正确** — `/health` 真实反映可服务能力（包括下游依赖检查），否则 readiness 让坏 pod 收流量
+3. **外部依赖能扛住 N 倍连接** — Postgres 连接池、Redis、上游 API 配额按 `replicas × per-pod-pool-size` 估算
+4. **没有"启动时单实例任务"** — 比如 DB migration、leader 选举抢锁等。这些应放到 init container 或 pre-deploy
+
+**示例：按 ring 配副本**
+
+```yaml
+defaultConfig:
+  replicas: 1                  # test 默认 1（成本优先）
+specificConfig:
+  - ring: staging
+    replicas: 2                # staging 验证 HA 行为
+  - ring: production
+    replicas: 3                # 生产至少 3，容忍 1 节点故障 + 1 滚动更新
+```
+
+**HPA / 自动扩缩容（暂未支持）**
+
+merlin 当前**只支持静态 `replicas`**，没有内置 HPA 字段。如需自动扩缩：
+
+- CPU/内存 触发的 HPA：手写 `KubernetesManifest` 资源塞 raw `HorizontalPodAutoscaler` YAML
+- 队列长度触发（推荐给 worker）：考虑部署 [KEDA](https://keda.sh/) 配 BullMQ trigger
+
+后续版本计划在 `KubernetesApp` 加 `autoscaling: { minReplicas, maxReplicas, targetCPU }` 字段。
 
 ---
 

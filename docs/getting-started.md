@@ -674,6 +674,47 @@ merlin deploy ./merlin-resources --ring test --region koreacentral --execute
 
 ---
 
+## 上线生产前 checklist
+
+`merlin init` 生成的配置默认面向 dev/test。**正式投到 production 前**，逐项确认：
+
+### 副本数与可用性
+
+- [ ] **用户面向应用（web/admin/home）配 `replicas: 2+`** — `defaultConfig.replicas` 默认是 1，单副本意味着 pod 重启 / 节点维护期间整个服务 503。建议在 `specificConfig` 按 ring 区分：
+  ```yaml
+  specificConfig:
+    - ring: staging
+      replicas: 2
+    - ring: production
+      replicas: 3
+  ```
+- [ ] **内部 API（lance、gateway 等）至少考虑 `replicas: 2`**，看流量定
+- [ ] **异步 worker 暂时单副本**（HPA 还未支持，按队列堆积情况手动调）
+- [ ] **健康检查路径正确** — `healthPath` 必须返回 200，且应反映"真实可服务能力"（包含下游依赖检查），不要用永远返回 200 的桩
+- [ ] **应用必须无状态** — 不依赖本地内存/磁盘的会话或缓存，否则不能多副本
+
+副本数推荐表和决策依据见 [KubernetesApp YAML 参考 → 副本数推荐](kubernetes-app-reference.md#副本数推荐)。
+
+### 资源与扩展
+
+- [ ] **resources 设置合理** — 按实际负载估算 `cpuRequest/memoryRequest`，prod 不要直接用模板默认值
+- [ ] **依赖资源能扛住 N 倍连接** — Postgres 连接池、Redis、上游 API 配额要按 `replicas × 单 pod 池大小` 评估
+- [ ] **生产 ring 在 `merlin.yml` 列出** — 默认模板只有 test，prod 需手动加 `ring: [test, staging, production]`
+
+### 安全
+
+- [ ] **公网入口必须有认证** — 用户面向应用走 oauth2-proxy（`--with-auth` 模板自动配好）；webhook/回调端点用共享 secret
+- [ ] **Key Vault 联邦凭证已配** — 本项目 ServiceAccount 已加到 `shared-k8s-resource/sharedkvsp.yml`，且 merlin 已重新部署 shared SP（见 [排错指南](troubleshooting.md)）
+- [ ] **GitHub SP 联邦凭证已配** — 本项目 GitHub Actions workflow 已加到 `sharedgithubsp.yml`
+
+### 部署流程
+
+- [ ] **CI/CD 配通** — 见 [CI/CD 指南](cicd-guide.md)，至少 `nightly` build 自动推 ACR
+- [ ] **先 dry-run 再 execute** — `merlin deploy --ring production --region <region>` 确认输出无误后再加 `--execute`
+- [ ] **观察 5 分钟** — `kubectl get pods -n <namespace>` 确认所有副本都 Ready，无 CrashLoopBackOff
+
+---
+
 ## 下一步
 
 - **详细字段说明** → [KubernetesApp YAML 参考](kubernetes-app-reference.md)
