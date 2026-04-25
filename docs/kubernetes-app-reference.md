@@ -21,7 +21,7 @@ defaultConfig:
 ```
 
 这就够了。Merlin 会自动填充：
-- CPU/内存限制（250m/512Mi request, 500m/1Gi limit）
+- CPU/内存限制（100m/512Mi request, 500m/1Gi limit）
 - 三个探针（liveness/readiness/startup，都用 HTTP GET `/`）
 - ClusterIP Service
 - 1 个副本
@@ -55,7 +55,7 @@ defaultConfig:
   # ── 可选：资源限制 ────────────────────────────────
   # 省略则用默认值
   resources:
-    cpuRequest: "250m"                # 默认：250m
+    cpuRequest: "100m"                # 默认：100m
     memoryRequest: 512Mi              # 默认：512Mi
     cpuLimit: "500m"                  # 默认：500m
     memoryLimit: 1Gi                  # 默认：1Gi
@@ -142,7 +142,7 @@ specificConfig:
 | `replicas` | `1` | 见下方「副本数推荐」 |
 | `healthPath` | `/` | 用于所有探针 |
 | `imagePullPolicy` | `IfNotPresent` | |
-| `resources.cpuRequest` | `250m` | |
+| `resources.cpuRequest` | `100m` | 适合轻量服务；模型/重 SSR 类应显式覆盖 |
 | `resources.memoryRequest` | `512Mi` | |
 | `resources.cpuLimit` | `500m` | |
 | `resources.memoryLimit` | `1Gi` | |

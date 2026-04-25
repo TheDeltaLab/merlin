@@ -169,7 +169,7 @@ defaultConfig:
 |------|--------|
 | `replicas` | `1` |
 | `healthPath` | `/`（用于 liveness/readiness/startup 探针） |
-| `resources.cpuRequest` / `cpuLimit` | `250m` / `500m` |
+| `resources.cpuRequest` / `cpuLimit` | `100m` / `500m` |
 | `resources.memoryRequest` / `memoryLimit` | `512Mi` / `1Gi` |
 | `ingress.path` | `/` |
 | `ingress.clusterIssuer` | `letsencrypt-prod` |
