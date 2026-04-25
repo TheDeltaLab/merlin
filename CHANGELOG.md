@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.1](https://github.com/TheDeltaLab/merlin/compare/v1.11.0...v1.11.1) (2026-04-25)
+
+
+### Bug Fixes
+
+* lower default cpuRequest from 250m to 100m, bump AKS maxCount to 6 ([#110](https://github.com/TheDeltaLab/merlin/issues/110)) ([9c25ecb](https://github.com/TheDeltaLab/merlin/commit/9c25ecb0d02d0a59fb0f978b76f1515e58cd697b)), closes [#109](https://github.com/TheDeltaLab/merlin/issues/109)
+
 ## [1.11.0](https://github.com/TheDeltaLab/merlin/compare/v1.10.1...v1.11.0) (2026-04-17)
 
 
