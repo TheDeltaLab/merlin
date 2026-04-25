@@ -21,7 +21,7 @@ defaultConfig:
   nodeCount: 2
   enableAutoScaling: true
   minCount: 1
-  maxCount: 5
+  maxCount: 6
   networkPlugin: azure
   noWait: false
   tags:

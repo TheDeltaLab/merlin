@@ -13,7 +13,7 @@ import type { ResourceYAML } from './schemas.js';
 
 const DEFAULT_REPLICAS = 1;
 const DEFAULT_HEALTH_PATH = '/';
-const DEFAULT_CPU_REQUEST = '250m';
+const DEFAULT_CPU_REQUEST = '100m';
 const DEFAULT_MEMORY_REQUEST = '512Mi';
 const DEFAULT_CPU_LIMIT = '500m';
 const DEFAULT_MEMORY_LIMIT = '1Gi';

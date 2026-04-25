@@ -126,7 +126,7 @@ describe('kubernetesAppExpander', () => {
             const config = deployment.defaultConfig as Record<string, unknown>;
             const containers = config.containers as Record<string, unknown>[];
 
-            expect(containers[0].cpuRequest).toBe('250m');
+            expect(containers[0].cpuRequest).toBe('100m');
             expect(containers[0].memoryRequest).toBe('512Mi');
             expect(containers[0].cpuLimit).toBe('500m');
             expect(containers[0].memoryLimit).toBe('1Gi');
