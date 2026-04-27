@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.12.0](https://github.com/TheDeltaLab/merlin/compare/v1.11.2...v1.12.0) (2026-04-27)
+
+
+### Features
+
+* **ci:** replace alluneed federated credential from test to nightly env ([#117](https://github.com/TheDeltaLab/merlin/issues/117)) ([4591f46](https://github.com/TheDeltaLab/merlin/commit/4591f46ad0d80dc5bf034a465188e0837bdb725f))
+
 ## [1.11.2](https://github.com/TheDeltaLab/merlin/compare/v1.11.1...v1.11.2) (2026-04-27)
 
 
