@@ -65,8 +65,8 @@ specificConfig:
     federatedCredentials:
       - name: trinity-github-nightly
         subject: repo:TheDeltaLab/trinity:environment:nightly
-      - name: alluneed-github-test
-        subject: repo:TheDeltaLab/alluneed:environment:test
+      - name: alluneed-github-nightly
+        subject: repo:TheDeltaLab/alluneed:environment:nightly
       - name: babbage-github-nightly
         subject: repo:TheDeltaLab/babbage:environment:nightly
       - name: synapse-github-nightly
