@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.2](https://github.com/TheDeltaLab/merlin/compare/v1.11.1...v1.11.2) (2026-04-27)
+
+
+### Bug Fixes
+
+* **aks:** bump shared AKS maxCount from 6 to 15 ([#113](https://github.com/TheDeltaLab/merlin/issues/113)) ([c620dc1](https://github.com/TheDeltaLab/merlin/commit/c620dc163ab4da7210aaa7ad8bf5769fa8e6ea0a)), closes [#112](https://github.com/TheDeltaLab/merlin/issues/112)
+
 ## [1.11.1](https://github.com/TheDeltaLab/merlin/compare/v1.11.0...v1.11.1) (2026-04-25)
 
 
