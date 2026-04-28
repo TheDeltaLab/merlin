@@ -14,7 +14,9 @@ Merlin 创建的 `AzureServicePrincipal`（在 `shared-resource/sharedgithubsp.y
 - `az keyvault secret set` — 管理 Key Vault secrets
 - 以及所有 `merlin deploy --execute` 需要的 Azure ARM 操作
 
-但 **OIDC 不能用于 ACR docker push**。Azure Container Registry 的 token exchange 不支持 OIDC federated token，所以推送镜像需要 SP client secret。
+**ACR push 也走 OIDC**：通过 `azure/login@v2`（OIDC）建立 Azure CLI 会话后，`az acr login --name <acr>` 会用该会话向 ACR 换取 docker refresh token 写入本地 docker config，全程**无需** SP client secret 也无需 `docker/login-action` + username/password。
+
+> **历史背景**：早期 Azure 文档曾说 ACR token exchange 不支持 OIDC，所以本仓库历史上配过 `AKS_ACR_USERNAME` / `AKS_ACR_PASSWORD` 这套 client secret 凭据。该限制已不复存在，新项目请直接走 OIDC + `az acr login` 模式（参考 [babbage `aks-deploy.yml`](https://github.com/TheDeltaLab/babbage/blob/main/.github/workflows/aks-deploy.yml)）。
 
 ### 首次权限配置（需 Global Admin）
 
@@ -38,39 +40,18 @@ SP 的 ARM 角色由 `merlin deploy shared-resource` 自动分配，但 **MS Gra
 
 > ⚠️ 此脚本必须用有 **Owner（订阅）** + **Global Admin（租户）** 权限的账号执行。普通开发者账号会导致部分角色分配静默失败（脚本用 `|| true` 保证幂等性，但错误也会被吞掉）。
 
-### 首次配置 ACR 推送凭证
-
-在 `merlin deploy shared-resource --execute` 创建完 SP 后，运行：
-
-```bash
-# 交互模式（会提示选择 ring）
-./scripts/setup-github-acr-secrets.sh
-
-# 非交互模式
-./scripts/setup-github-acr-secrets.sh --ring test
-./scripts/setup-github-acr-secrets.sh --ring staging
-
-# 指定目标 repo（默认: trinity + alluneed）
-./scripts/setup-github-acr-secrets.sh --ring test --repos TheDeltaLab/trinity
-```
-
-脚本会自动：
-1. 查找对应 ring 的 SP（`brainly-github-tst` 或 `brainly-github-stg`）
-2. 创建 client secret（有效期 2 年）
-3. 将凭证写入 GitHub repo 的 Secrets / Variables
-
 ### GitHub 配置项说明
 
-脚本写入的配置（AKS 专用，不影响 ACA）：
+OIDC 模式下 AKS 项目只需以下配置（无需 ACR username/password）：
 
 | 类型 | 名称 | 用途 |
 |------|------|------|
-| Secret | `AKS_AZURE_CLIENT_ID` | SP appId（OIDC 登录 Azure CLI） |
-| Secret | `AKS_ACR_USERNAME` | SP appId（docker login 用户名） |
-| Secret | `AKS_ACR_PASSWORD` | SP client secret（docker login 密码） |
+| Secret | `AKS_AZURE_CLIENT_ID` | GitHub SP 的 appId（OIDC 登录 Azure CLI；`az acr login` 复用该会话） |
+| Secret | `AZURE_TENANT_ID` | Azure AD 租户 ID |
+| Secret | `AZURE_SUBSCRIPTION_ID` | Azure 订阅 ID |
 | Variable | `AKS_ACR_NAME` | ACR 名称（如 `brainlysharedacr`） |
 
-已有的配置（OIDC + ACA 相关）：
+ACA 项目（仍在使用的）配置：
 
 | 类型 | 名称 | 用途 |
 |------|------|------|
@@ -79,18 +60,7 @@ SP 的 ARM 角色由 `merlin deploy shared-resource` 自动分配，但 **MS Gra
 | Secret | `AZURE_SUBSCRIPTION_ID` | Azure 订阅 ID |
 | Variable (org) | `NIGHTLY_REGISTRY_NAME` | ACA 的 nightly ACR 名称 |
 
-> **注意**：AKS 和 ACA 使用不同的 ACR 和认证方式，配置名称有意区分以避免冲突。
-
-### Secret 过期轮换
-
-SP client secret 默认 2 年有效。过期后重新运行脚本即可轮换：
-
-```bash
-./scripts/setup-github-acr-secrets.sh --ring test
-./scripts/setup-github-acr-secrets.sh --ring staging
-```
-
-脚本会创建新 secret 并自动更新 GitHub Secrets，旧 secret 自动失效。
+> **注意**：OIDC federated credential 不会过期，无需轮换 secret。原 `AKS_ACR_USERNAME` / `AKS_ACR_PASSWORD` 配置已废弃；如果旧项目还在用，迁移到 `az acr login`（OIDC）后即可从 GitHub Secrets 中删除。
 
 ---
 
@@ -124,21 +94,16 @@ merlin deploy shared-k8s-resource --execute --ring test --region koreacentral
 # ② 部署项目的 Azure 资源（如 AzureServicePrincipal.admin-aad）
 cd /path/to/trinity
 merlin deploy ./merlin-resources --execute --ring test --region koreacentral
-
-# ③ 配置 GitHub Actions 凭证
-cd /path/to/merlin
-./scripts/setup-github-acr-secrets.sh --ring test
 ```
 
 **需要手动操作的场景：**
 
 | 场景 | 操作 |
 |------|------|
-| 首次部署新项目 | 运行步骤 ①②③（首次还需 ①b） |
+| 首次部署新项目 | 运行步骤 ①②（首次还需 ①b） |
 | 修改了 `adminaad.yml`（redirect URI、权限等） | 重新运行步骤 ② |
 | 修改了 `shared-resource/` | 重新运行步骤 ① |
-| SP client secret 过期（2 年） | 重新运行步骤 ③ |
-| 添加新 ring/region | 重新运行步骤 ①②③ |
+| 添加新 ring/region | 重新运行步骤 ①② |
 
 > **提示**：步骤 ② 会同时部署 K8s 资源和 Azure 资源。如果只想部署 Azure 资源（跳过 K8s），目前需要手动运行完整部署。K8s 资源的 `kubectl apply` 是幂等的，重复执行无害。
 
@@ -299,12 +264,15 @@ lance-worker → trinity-lance-worker
 **build-images Job 关键步骤：**
 
 ```yaml
-# ACR 登录用 SP client secret（OIDC 不支持 ACR token exchange）
-- uses: docker/login-action@v3
+# Azure OIDC 登录（与 deploy-resources Job 一致）
+- uses: azure/login@v2
   with:
-    registry: ${{ env.ACR_LOGIN_SERVER }}
-    username: ${{ secrets.AKS_ACR_USERNAME }}
-    password: ${{ secrets.AKS_ACR_PASSWORD }}
+    client-id: ${{ secrets.AKS_AZURE_CLIENT_ID }}
+    tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+    subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+# 用 OIDC 会话向 ACR 换取 docker refresh token，写入本地 docker config
+- run: az acr login --name "$ACR_NAME"
 
 # Docker Buildx + registry cache（加速重复构建）
 - uses: docker/build-push-action@v6
@@ -316,6 +284,8 @@ lance-worker → trinity-lance-worker
     cache-from: type=registry,ref=<acr>/<project>/<app>:buildcache
     cache-to: type=registry,ref=<acr>/<project>/<app>:buildcache,mode=max
 ```
+
+> SP 仍需 `AcrPush` 角色（已在 `sharedgithubsp.yml` 中配置）。`az acr login` 是数据面操作，OIDC 会话本身不带 ACR push 权限，靠 SP 上的 `AcrPush` RBAC 完成授权。
 
 **update-deployment Job 关键步骤：**
 
@@ -353,14 +323,12 @@ kubectl rollout status deployment/$DEPLOYMENT \
 
 | 类型 | 名称 | 值 | 用途 |
 |------|------|-----|------|
-| Secret | `AKS_AZURE_CLIENT_ID` | GitHub SP 的 appId | OIDC `az login` |
+| Secret | `AKS_AZURE_CLIENT_ID` | GitHub SP 的 appId | OIDC `az login`（同时被 `az acr login` 复用） |
 | Secret | `AZURE_TENANT_ID` | Azure AD 租户 ID | OIDC `az login` |
 | Secret | `AZURE_SUBSCRIPTION_ID` | Azure 订阅 ID | OIDC `az login` |
-| Secret | `AKS_ACR_USERNAME` | GitHub SP 的 appId | ACR docker push |
-| Secret | `AKS_ACR_PASSWORD` | GitHub SP 的 client secret | ACR docker push |
-| Variable | `AKS_ACR_NAME` | `brainlysharedacr` | ACR 名称 |
+| Variable | `AKS_ACR_NAME` | `brainlysharedacr` | ACR 名称（`az acr login --name`、`docker push` 镜像前缀） |
 
-> **注意**：OIDC 登录使用 `id-token: write` permission + federated credential（无密码）。但 ACR docker push 不支持 OIDC token exchange，必须用 SP client secret。
+> **OIDC 全程无密码**：`azure/login@v2` 用 federated credential 完成 Azure CLI 登录，`az acr login --name <acr>` 用同一会话向 ACR 换取 docker refresh token。SP 上需要 `AcrPush` 角色（在 `sharedgithubsp.yml` 中已配置）。早期文档曾标注"OIDC 不支持 ACR token exchange"，该限制已移除。
 
 **CI/CD 的 SP 权限（完整 CI/CD 部署）：**
 
@@ -403,10 +371,9 @@ Azure AD 目录角色：
 2. ./scripts/setup-github-sp-permissions.sh         # 首次：Global Admin 执行，分配 Graph/Directory 权限
 3. merlin deploy shared-k8s-resource --execute      # AKS 集群 + NGINX + cert-manager
 4. merlin deploy ./merlin-resources --execute       # 项目 Azure 资源 + K8s 工作负载
-5. ./scripts/setup-github-acr-secrets.sh            # 配置 CI/CD ACR 推送凭证
-6. 配置 GitHub repo Secrets/Variables（见上方"GitHub Repo Secrets / Variables 配置"表格）
-7. 复制 aks-deploy.yml 到项目 .github/workflows/（见上方"新项目配置 CI/CD Workflow"）
-8. 之后 CI/CD 自动处理部署（push 触发构建 + 滚动更新）
+5. 配置 GitHub repo Secrets/Variables（见上方"GitHub Repo Secrets / Variables 配置"表格）
+6. 复制 aks-deploy.yml 到项目 .github/workflows/（见上方"新项目配置 CI/CD Workflow"）
+7. 之后 CI/CD 自动处理部署（push 触发构建 + 滚动更新）
 ```
 
 > **步骤 2 只需执行一次**。后续新增项目只需在 `sharedgithubsp.yml` 中添加 federated credential 并重新部署步骤 1，无需重复步骤 2。
