@@ -66,6 +66,7 @@ export const KUBERNETES_HELM_RELEASE_TYPE = 'KubernetesHelmRelease';
 export const KUBERNETES_MANIFEST_TYPE         = 'KubernetesManifest';
 export const KUBERNETES_CONFIG_MAP_TYPE      = 'KubernetesConfigMap';
 export const KUBERNETES_SERVICE_ACCOUNT_TYPE = 'KubernetesServiceAccount';
+export const KUBERNETES_NETWORK_POLICY_TYPE  = 'KubernetesNetworkPolicy';
 
 // ── Composite types (compile-time only, expanded before code generation) ──────
 export const KUBERNETES_APP_TYPE             = 'KubernetesApp';

@@ -586,11 +586,11 @@ program
     .option('--dir <path>', 'Output directory', './merlin-resources')
     .addHelpText('after', `
 Templates:
-  web (default)   Web service with Ingress + ServiceAccount + SecretProviderClass (4 files)
-  web --with-auth Web service + OAuth2 proxy + Azure AD App Registration (7 files)
-  api             API service with Ingress, no auth annotations (4 files)
-  worker          Background worker, no Ingress (4 files)
-  minimal         Just merlin.yml + KubernetesApp (2 files)
+  web (default)   Web service with Ingress + ServiceAccount + SecretProviderClass + NetworkPolicy (5 files)
+  web --with-auth Web service + OAuth2 proxy + Azure AD App Registration + NetworkPolicy (8 files)
+  api             API service with Ingress, no auth annotations + NetworkPolicy (5 files)
+  worker          Background worker, no Ingress + NetworkPolicy (5 files)
+  minimal         Just merlin.yml + KubernetesApp (2 files, no NetworkPolicy)
 
 Examples:
   $ merlin init myapp                        Web service template
@@ -600,10 +600,11 @@ Examples:
 
 Generated files (web template):
   merlin-resources/
-    merlin.yml              Project config (ring, region defaults)
-    <name>.yml              KubernetesApp (main service)
-    <name>workloadsa.yml    ServiceAccount (Workload Identity)
-    <name>secretprovider.yml SecretProviderClass (Key Vault CSI)
+    merlin.yml                Project config (ring, region defaults)
+    <name>.yml                KubernetesApp (main service)
+    <name>workloadsa.yml      ServiceAccount (Workload Identity)
+    <name>secretprovider.yml  SecretProviderClass (Key Vault CSI)
+    <name>networkpolicy.yml   KubernetesNetworkPolicy (default-deny + allow-list)
 `)
     .action(async (name, options) => {
         const projectName = name || path.basename(process.cwd());

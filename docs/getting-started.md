@@ -52,9 +52,10 @@ merlin init myapp --template minimal
 | 2 | `{name}.yml` | ✅ | ✅ | ✅ | ✅ | ✅ | 主服务（KubernetesApp） |
 | 3 | `{name}workloadsa.yml` | — | ✅ | ✅ | ✅ | ✅ | ServiceAccount（Workload Identity） |
 | 4 | `{name}secretprovider.yml` | — | ✅ | ✅ | ✅ | ✅ | Key Vault → Pod 的 Secret 桥接 |
-| 5 | `{name}aad.yml` | — | — | — | — | ✅ | Azure AD App Registration |
-| 6 | `{name}oauth2proxy.yml` | — | — | — | — | ✅ | OAuth2 Proxy 服务 |
-| 7 | `{name}oauth2proxysecretprovider.yml` | — | — | — | — | ✅ | OAuth2 Proxy 的 Secret 桥接 |
+| 5 | `{name}networkpolicy.yml` | — | ✅ | ✅ | ✅ | ✅ | 网络策略（default-deny + 显式 allow-list） |
+| 6 | `{name}aad.yml` | — | — | — | — | ✅ | Azure AD App Registration |
+| 7 | `{name}oauth2proxy.yml` | — | — | — | — | ✅ | OAuth2 Proxy 服务 |
+| 8 | `{name}oauth2proxysecretprovider.yml` | — | — | — | — | ✅ | OAuth2 Proxy 的 Secret 桥接 |
 
 以下以 `merlin init myapp` (web 模板) 为例，逐个说明每个文件的作用和配置方法。
 
@@ -333,7 +334,90 @@ defaultConfig:
 
 ---
 
-### 文件 5：`{name}aad.yml` — Azure AD App Registration（仅 `--with-auth`）
+### 文件 5：`{name}networkpolicy.yml` — KubernetesNetworkPolicy（default-deny + allow-list）
+
+```yaml
+name: myapp-network-policy
+type: KubernetesNetworkPolicy
+
+dependencies:
+  - resource: KubernetesCluster.aks
+    isHardDependency: true
+
+defaultConfig:
+  namespace: myapp
+  defaultDeny: true
+  allowDns: true
+  allowIntraNamespace: true
+  allowExternalEgress: true
+
+  ingress:
+    - name: app-from-nginx
+      podSelector:
+        matchLabels:
+          app: myapp
+      from:
+        - namespace: ingress-nginx
+      ports:
+        - port: 3000  # TODO: match the port in myapp.yml
+```
+
+**这个文件的作用：** 给本命名空间设置**默认拒绝（default-deny）**网络姿态，只放行明确列出的来源/去向。编译后会展开为多个原生 `networking.k8s.io/v1` `NetworkPolicy`：
+
+- `<name>-default-deny` — 全命名空间禁所有 ingress + egress
+- `<name>-allow-dns` — 放行 `UDP/TCP 53 → kube-system`（否则 default-deny 会让所有 pod 解析 DNS 失败）
+- `<name>-allow-intra-namespace` — 同 namespace 内 pod 间互通
+- `<name>-allow-external-egress` — 放行 `0.0.0.0/0` 减去 RFC1918（让 pod 能访问 Azure Blob / Key Vault / AAD / OpenAI 等公网 SaaS）
+- 对 `ingress[]` / `egress[]` 中的每条规则各生成一个独立的 NetworkPolicy
+
+#### 引擎前置条件
+
+AKS 集群必须用 `networkPolicy: azure`（或 `calico` / `cilium`）创建。否则 K8s 接受这些资源但**数据面不会执行**，等于裸奔。共享 AKS 集群已经配好（见 `shared-k8s-resource/sharedaks.yml`）。
+
+#### 配置指南
+
+**生成的默认值（通常不用改）：**
+
+| 字段 | 默认值 | 说明 |
+|------|--------|------|
+| `defaultDeny` | `true` | 全 namespace 默认拒绝 |
+| `allowDns` | `true` | DNS 解析必须开，否则 pod 一启动就挂 |
+| `allowIntraNamespace` | `true` | 同 namespace pod 互通（worker ↔ api ↔ etc） |
+| `allowExternalEgress` | `true` | 公网出站，关掉前先确认没有 SaaS 调用 |
+
+**`ingress[]` / `egress[]` 是核心配置点。** 每条规则映射到一个独立的 NetworkPolicy。
+
+完整规则结构：
+
+```yaml
+ingress:
+  - name: from-trinity                  # → 编译为 <name>-from-trinity
+    podSelector:                        # 这条规则保护哪些 pod（省略=全部）
+      matchLabels: { app: myapp }
+    from:                               # 允许哪些来源（egress 规则写 to:）
+      - sameNamespace: true             # 当前 ns 简写
+      - namespace: trinity              # 跨 ns，按 kubernetes.io/metadata.name 匹配
+        podSelector:                    # 在那个 ns 里再缩小范围
+          matchExpressions:
+            - { key: app, operator: In, values: [trinity-web, trinity-worker] }
+      - ipBlock:
+          cidr: 0.0.0.0/0
+          except: [10.0.0.0/8]
+    ports:                              # 省略 = 所有端口
+      - { port: 8000 }                  # protocol 默认 TCP
+```
+
+**新增调用方时的运维约定：当有新的 namespace / 服务需要访问本 namespace，添加一条 `ingress[]` 规则，不要禁用整个策略。**
+
+详细字段语义见 [`merlin/CLAUDE.md` 的 KubernetesNetworkPolicy 章节](https://github.com/TheDeltaLab/merlin/blob/main/CLAUDE.md#kubernetesnetworkpolicy-resource-srckuberneteskubernetesnetworkpolicyts)。
+
+#### worker 模板的区别
+
+`worker` 模板生成时 `ingress` 块为注释占位（worker 通常没有外部入站）。如果 worker 需要被其他 namespace 调用，按上面的格式添加一条规则。
+
+---
+
+### 文件 6：`{name}aad.yml` — Azure AD App Registration（仅 `--with-auth`）
 
 ```yaml
 name: myapp-aad
@@ -417,7 +501,7 @@ exports:
 
 ---
 
-### 文件 6：`{name}oauth2proxy.yml` — OAuth2 Proxy 服务（仅 `--with-auth`）
+### 文件 7：`{name}oauth2proxy.yml` — OAuth2 Proxy 服务（仅 `--with-auth`）
 
 ```yaml
 name: myapp-oauth2-proxy
@@ -515,7 +599,7 @@ OAuth2 Proxy (/oauth2/auth)
 
 ---
 
-### 文件 7：`{name}oauth2proxysecretprovider.yml` — OAuth2 Proxy Secrets（仅 `--with-auth`）
+### 文件 8：`{name}oauth2proxysecretprovider.yml` — OAuth2 Proxy Secrets（仅 `--with-auth`）
 
 ```yaml
 name: myapp-oauth2-proxy-secret-provider
@@ -585,7 +669,7 @@ defaultConfig:
 
 ### 文件间的依赖关系
 
-以下是 `web --with-auth` 模板所有 7 个文件的完整依赖图（`→` 表示"依赖于"）：
+以下是 `web --with-auth` 模板所有 8 个文件的完整依赖图（`→` 表示"依赖于"）：
 
 ```
 merlin.yml (提供 project/ring/region 默认值，非资源)
@@ -604,6 +688,9 @@ merlin.yml (提供 project/ring/region 默认值，非资源)
     │     → KubernetesServiceAccount.myapp-workload-sa
     │     → AzureServicePrincipal.kv-workload ←(共享资源)
     │     → AzureKeyVault.shared ←(共享资源)
+    │
+    ├── myappnetworkpolicy.yml (KubernetesNetworkPolicy)
+    │     → KubernetesCluster.aks ←(共享资源)
     │
     ├── myappaad.yml (AzureServicePrincipal)
     │     → AzureKeyVault.shared ←(共享资源)
@@ -635,6 +722,8 @@ merlin.yml (提供 project/ring/region 默认值，非资源)
 | `worker`/`web`/`api` | Azure AD 租户 ID | `{name}secretprovider.yml` |
 | `worker`/`web`/`api` | Key Vault 中的 secret 名和映射 | `{name}secretprovider.yml` |
 | `worker`/`web`/`api` | 取消注释 secretProvider 和 envFrom（需要 secrets 时） | `{name}.yml` |
+| `worker`/`web`/`api` | NetworkPolicy 中 `app-from-nginx` 规则的 `port` 改成实际端口 | `{name}networkpolicy.yml` |
+| `worker`/`web`/`api` | 按需在 NetworkPolicy 中添加跨 namespace 调用方 | `{name}networkpolicy.yml` |
 | `--with-auth` | Azure AD 租户 ID ×3 处 | `{name}secretprovider.yml`、`{name}oauth2proxy.yml`、`{name}oauth2proxysecretprovider.yml` |
 | `--with-auth` | 域名 ×3 处（必须一致） | `{name}aad.yml`、`{name}oauth2proxy.yml`、`{name}.yml` |
 | `--with-auth` | Key Vault 名（每个 ring 各一个） | `{name}aad.yml` |
@@ -706,6 +795,7 @@ merlin deploy ./merlin-resources --ring test --region koreacentral --execute
 - [ ] **公网入口必须有认证** — 用户面向应用走 oauth2-proxy（`--with-auth` 模板自动配好）；webhook/回调端点用共享 secret
 - [ ] **Key Vault 联邦凭证已配** — 本项目 ServiceAccount 已加到 `shared-k8s-resource/sharedkvsp.yml`，且 merlin 已重新部署 shared SP（见 [排错指南](troubleshooting.md)）
 - [ ] **GitHub SP 联邦凭证已配** — 本项目 GitHub Actions workflow 已加到 `sharedgithubsp.yml`
+- [ ] **NetworkPolicy 的 allow-list 完整** — `{name}networkpolicy.yml` 中已列出所有合法调用方（其它 namespace 的 web/worker、ingress-nginx 等）。生产部署前用 `kubectl exec` 从一个**不该有权限**的 pod 里 `curl` 你的服务，确认被 default-deny 拦掉
 
 ### 部署流程
 
