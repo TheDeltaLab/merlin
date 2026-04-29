@@ -250,29 +250,54 @@ export class AzureServicePrincipalRender extends AzureResourceRender {
 
     // ── Full create flow ──────────────────────────────────────────────────────
 
+    /**
+     * Build a single bash command that captures the AD App's appId into `appIdVar`.
+     *
+     * Avoids the Microsoft Graph search-index eventual-consistency window:
+     *   - `az ad app list --filter "displayName eq ..."` reads from a search
+     *     index that lags writes by ~5–60 s. Calling it immediately after
+     *     `az ad app create` frequently returns `[]`, leaving the appId env var
+     *     empty and breaking the subsequent `az ad sp create --id ''`.
+     *
+     * Strategy: list-first (idempotent reuse if the app already exists) →
+     * fall back to `az ad app create --query appId -o tsv`, which reads the
+     * appId directly from the create response (strongly consistent — no index
+     * dependency).
+     */
+    private captureAppIdCommand(resource: AzureServicePrincipalResource, appIdVar: string): Command {
+        const displayName = this.getDisplayName(resource);
+        const redirectUris = resource.config.webRedirectUris ?? [];
+        const redirectFlag = redirectUris.length > 0
+            ? ` --web-redirect-uris ${redirectUris.map(u => `'${u}'`).join(' ')}`
+            : '';
+        const script = [
+            `APP_ID=$(az ad app list --filter "displayName eq '${displayName}'" --query "[0].appId" -o tsv 2>/dev/null || true)`,
+            `if [ -z "$APP_ID" ]; then`,
+            `  APP_ID=$(az ad app create --display-name '${displayName}'${redirectFlag} --query appId -o tsv)`,
+            `fi`,
+            `echo "$APP_ID"`,
+        ].join('\n');
+        return {
+            command: 'bash',
+            args: ['-c', script],
+            envCapture: appIdVar,
+        };
+    }
+
     renderCreate(resource: AzureServicePrincipalResource): Command[] {
         const commands: Command[] = [];
 
-        // 1. Create AD App Registration
-        const createArgs = ['ad', 'app', 'create', '--display-name', this.getDisplayName(resource)];
-        const redirectUris = resource.config.webRedirectUris ?? [];
-        if (redirectUris.length > 0) {
-            createArgs.push('--web-redirect-uris', ...redirectUris);
-        }
-        commands.push({ command: 'az', args: createArgs });
-
-        // 2. Capture the new appId
+        // 1+2. Create AD App Registration AND capture appId in a single step,
+        //      reading appId from `az ad app create`'s own stdout to avoid the
+        //      Graph search-index propagation delay. List-first for idempotency.
         const appIdVar = this.envVarName(resource, 'APP_ID');
-        commands.push({
-            command: 'az',
-            args: ['ad', 'app', 'list', '--filter', `displayName eq '${this.getDisplayName(resource)}'`, '--query', '[0].appId', '-o', 'tsv'],
-            envCapture: appIdVar,
-        });
+        commands.push(this.captureAppIdCommand(resource, appIdVar));
 
-        // 3. Create Service Principal from App
+        // 3. Create Service Principal from App (idempotent — show-or-create,
+        //    matching the pattern used by renderDirectoryRoles / renderAssignmentRequired).
         commands.push({
-            command: 'az',
-            args: ['ad', 'sp', 'create', '--id', `$${appIdVar}`],
+            command: 'bash',
+            args: ['-c', `az ad sp show --id $${appIdVar} 2>/dev/null || az ad sp create --id $${appIdVar}`],
         });
 
         // 4. API permissions (requiredResourceAccess)
@@ -302,15 +327,13 @@ export class AzureServicePrincipalRender extends AzureResourceRender {
     // ── Update flow (federated credentials + role assignments only) ───────────
 
     renderUpdate(resource: AzureServicePrincipalResource, _appId: string, _objectId: string): Command[] {
-        // Capture appId at deploy time (SP already exists)
+        // Capture appId at deploy time using the same list-first / create-fallback
+        // helper as the create path — keeps the two paths in sync and protects
+        // against the App being deleted out-of-band between render and deploy.
         const appIdVar = this.envVarName(resource, 'APP_ID');
         const commands: Command[] = [];
 
-        commands.push({
-            command: 'az',
-            args: ['ad', 'app', 'list', '--filter', `displayName eq '${this.getDisplayName(resource)}'`, '--query', '[0].appId', '-o', 'tsv'],
-            envCapture: appIdVar,
-        });
+        commands.push(this.captureAppIdCommand(resource, appIdVar));
 
         // Ensure the Service Principal exists (App may exist without SP if a previous
         // create was interrupted, or if the App was created manually/via Portal)

@@ -394,16 +394,22 @@ describe('AzureServicePrincipalRender', () => {
             mockNotFound();
             const resource = makeResource({ displayName: 'brainly-github-tst' });
             const cmds = await render.render(resource);
-            // First command should be az ad app create
-            expect(cmds[0].args).toContain('create');
+            // First command is the bash script that captures appId via list-first / create-fallback
+            expect(cmds[0].command).toBe('bash');
+            const script = cmds[0].args[1];
+            expect(script).toContain('az ad app create');
+            expect(script).toContain('--query appId');
+            expect(cmds[0].envCapture).toBeDefined();
         });
 
         it('calls renderUpdate when app already exists', async () => {
             mockAppExists();
             const resource = makeResource({ displayName: 'brainly-github-tst' });
             const cmds = await render.render(resource);
-            // First command should be az ad app list (capture appId)
-            expect(cmds[0].args).toContain('list');
+            // First command is the bash script that captures appId via list-first / create-fallback
+            expect(cmds[0].command).toBe('bash');
+            const script = cmds[0].args[1];
+            expect(script).toContain('az ad app list');
             expect(cmds[0].envCapture).toBeDefined();
         });
     });
