@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.13.0](https://github.com/TheDeltaLab/merlin/compare/v1.12.1...v1.13.0) (2026-04-29)
+
+
+### Features
+
+* **aks:** declare networkPolicy in YAML, support it on update ([#132](https://github.com/TheDeltaLab/merlin/issues/132)) ([81d39bf](https://github.com/TheDeltaLab/merlin/commit/81d39bfba3f09e06da110e670304b898df8467f3))
+* **kubernetes:** add KubernetesNetworkPolicy DSL resource type ([#134](https://github.com/TheDeltaLab/merlin/issues/134)) ([8cd7ec2](https://github.com/TheDeltaLab/merlin/commit/8cd7ec2b41a946d5f0d49e2f1d0276d35ca5b0f5))
+
+
+### Bug Fixes
+
+* **azure:** grant DelegatedPermissionGrant.ReadWrite.All to deploy SP + warn on admin-consent failure ([#127](https://github.com/TheDeltaLab/merlin/issues/127)) ([6c26674](https://github.com/TheDeltaLab/merlin/commit/6c266745c3be533d3815dc77e3a09bcc0a8c5e93))
+* **scripts:** grant github CI SP DNS + legacy ABS RG-scoped roles ([#130](https://github.com/TheDeltaLab/merlin/issues/130)) ([a932a95](https://github.com/TheDeltaLab/merlin/commit/a932a95af9c516e8ece2abe79491ea706bf21ac1))
+
 ## [1.12.1](https://github.com/TheDeltaLab/merlin/compare/v1.12.0...v1.12.1) (2026-04-29)
 
 
