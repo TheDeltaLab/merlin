@@ -13,8 +13,10 @@ dependencies:
     isHardDependency: true
   - resource: AzureKeyVault.shared
     isHardDependency: true
-  - resource: AzureBlobStorage.shared
-    isHardDependency: true
+  # Note: test ring ABS reuses the legacy brainlydevblobstorage; staging uses the Merlin-managed account.
+  # Dependencies are only used for compile-time ${ } expression resolution, and roleAssignments scopes
+  # in this file are hardcoded ARM IDs, so we don't depend on AzureBlobStorage.shared here
+  # (it doesn't exist on the test ring).
 
 defaultConfig:
   tags:
@@ -55,11 +57,9 @@ specificConfig:
         scope: /subscriptions/{subscriptionId}/resourceGroups/brainly-rg-tst-krc/providers/Microsoft.KeyVault/vaults/brainlysharedtstkrcakv
       - role: Key Vault Secrets User
         scope: /subscriptions/{subscriptionId}/resourceGroups/brainly-rg-tst-eas/providers/Microsoft.KeyVault/vaults/brainlysharedtsteasakv
-      # Storage Blob Data Contributor on both regional Storage Accounts
+      # Storage Blob Data Contributor — test ring reuses the legacy ABS (see docs/legacy-resources.md)
       - role: Storage Blob Data Contributor
-        scope: /subscriptions/{subscriptionId}/resourceGroups/brainly-rg-tst-krc/providers/Microsoft.Storage/storageAccounts/brainlysharedtstkrcabs
-      - role: Storage Blob Data Contributor
-        scope: /subscriptions/{subscriptionId}/resourceGroups/brainly-rg-tst-eas/providers/Microsoft.Storage/storageAccounts/brainlysharedtsteasabs
+        scope: /subscriptions/{subscriptionId}/resourceGroups/Storage-Dev-RG/providers/Microsoft.Storage/storageAccounts/brainlydevblobstorage
 
   - ring: staging
     displayName: brainly-kv-workload-stg

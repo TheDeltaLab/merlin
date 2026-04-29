@@ -1,8 +1,8 @@
 name: shared
 type: AzurePostgreSQLFlexible
 project: brainly
+# test ring reuses the legacy delta-shared-test-krc-pg (see docs/legacy-resources.md); not created here.
 ring:
-  - test
   - staging
 region:
   - koreacentral
@@ -21,10 +21,6 @@ defaultConfig:
     merlin: "true"
     env: ${ this.ring }
 
-specificConfig:
-  - ring: test
-    skuName: Standard_B2ms
-    tier: Burstable
-    storageSizeGb: 32
+specificConfig: []
 
 exports: {}
