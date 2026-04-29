@@ -1,6 +1,6 @@
 # 常见问题和排错
 
-> **文档导航**：[快速开始](getting-started.md) | [KubernetesApp 参考](kubernetes-app-reference.md) | [CI/CD 指南](cicd-guide.md) | [CLI 参考](cli-reference.md) | [排错指南](troubleshooting.md)
+> **文档导航**：[快速开始](getting-started.md) | [KubernetesApp 参考](kubernetes-app-reference.md) | [CI/CD 指南](cicd-guide.md) | [CLI 参考](cli-reference.md) | [排错指南](troubleshooting.md) | [遗留资源](legacy-resources.md)
 
 ### Q: 新项目部署时 Pod 卡在 ContainerCreating / FailedMount
 

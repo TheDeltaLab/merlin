@@ -1,6 +1,6 @@
 # KubernetesApp YAML 完整参考
 
-> **文档导航**：[快速开始](getting-started.md) | [KubernetesApp 参考](kubernetes-app-reference.md) | [CI/CD 指南](cicd-guide.md) | [CLI 参考](cli-reference.md) | [排错指南](troubleshooting.md)
+> **文档导航**：[快速开始](getting-started.md) | [KubernetesApp 参考](kubernetes-app-reference.md) | [CI/CD 指南](cicd-guide.md) | [CLI 参考](cli-reference.md) | [排错指南](troubleshooting.md) | [遗留资源](legacy-resources.md)
 
 `KubernetesApp` 是一个**编译时复合类型**，会自动展开为 `KubernetesDeployment` + `KubernetesService` + `KubernetesIngress`（可选）。
 

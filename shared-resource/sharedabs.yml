@@ -1,8 +1,8 @@
 name: shared
 type: AzureBlobStorage
 project: brainly
+# test ring reuses the legacy brainlydevblobstorage (see docs/legacy-resources.md); not created here.
 ring:
-  - test
   - staging
 region:
   - koreacentral

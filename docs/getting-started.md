@@ -1,6 +1,6 @@
 # Merlin 项目接入指南
 
-> **文档导航**：[快速开始](getting-started.md) | [KubernetesApp 参考](kubernetes-app-reference.md) | [CI/CD 指南](cicd-guide.md) | [CLI 参考](cli-reference.md) | [排错指南](troubleshooting.md)
+> **文档导航**：[快速开始](getting-started.md) | [KubernetesApp 参考](kubernetes-app-reference.md) | [CI/CD 指南](cicd-guide.md) | [CLI 参考](cli-reference.md) | [排错指南](troubleshooting.md) | [遗留资源](legacy-resources.md)
 
 ## 快速开始
 
@@ -720,4 +720,4 @@ merlin deploy ./merlin-resources --ring test --region koreacentral --execute
 - **详细字段说明** → [KubernetesApp YAML 参考](kubernetes-app-reference.md)
 - **CI/CD 自动化** → [CI/CD 指南](cicd-guide.md)
 - **CLI 命令** → [CLI 参考](cli-reference.md)
-- **遇到问题？** → [排错指南](troubleshooting.md)
+- **遇到问题？** → [排错指南](troubleshooting.md) | [遗留资源](legacy-resources.md)
