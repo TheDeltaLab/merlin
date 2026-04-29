@@ -459,10 +459,30 @@ export class AzureServicePrincipalRender extends AzureResourceRender {
                 command: 'az',
                 args: ['ad', 'app', 'update', '--id', `$${appIdVar}`, '--required-resource-accesses', payload],
             },
-            // Auto-grant admin consent (mimics what Azure Portal does on manual creation)
+            // Auto-grant admin consent (mimics what Azure Portal does on manual creation).
+            // Failure modes worth distinguishing:
+            //   - "already granted"  → benign, deploy continues silently
+            //   - "Insufficient privileges" / "Authorization_RequestDenied"
+            //                        → real misconfiguration: the deploy SP / user lacks
+            //                          DelegatedPermissionGrant.ReadWrite.All on Microsoft Graph,
+            //                          so OIDC scopes will never auto-consent. Emit a loud
+            //                          warning to stderr so it doesn't get silently swallowed
+            //                          and surface as "users can't sign in" months later.
+            //   - other errors       → also warn but don't fail the deploy
             {
                 command: 'bash',
-                args: ['-c', `az ad app permission admin-consent --id $${appIdVar} || true`],
+                args: ['-c', [
+                    `OUT=$(az ad app permission admin-consent --id $${appIdVar} 2>&1)`,
+                    `RC=$?`,
+                    `if [ $RC -ne 0 ]; then`,
+                    `  if echo "$OUT" | grep -qiE 'Insufficient privileges|Authorization_RequestDenied|Forbidden'; then`,
+                    `    echo "⚠ admin-consent FAILED for $${appIdVar}: deploy identity lacks Microsoft Graph permission DelegatedPermissionGrant.ReadWrite.All (or AppRoleAssignment.ReadWrite.All). New users will see 'admin consent required' on first sign-in until granted manually in the Portal. Fix: run scripts/setup-github-sp-permissions.sh as a Global Admin." 1>&2`,
+                    `  else`,
+                    `    echo "⚠ admin-consent for $${appIdVar} returned non-zero (continuing): $OUT" 1>&2`,
+                    `  fi`,
+                    `fi`,
+                    `exit 0`,
+                ].join('\n')],
             },
         ];
     }

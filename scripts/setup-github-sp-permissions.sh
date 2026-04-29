@@ -39,13 +39,24 @@ setup_sp() {
     echo "  App ID: $APP_ID"
 
     # ── 2. MS Graph API permissions ───────────────────────────────
-    echo "→ Setting MS Graph API permissions (Application.ReadWrite.All, AppRoleAssignment.ReadWrite.All, Directory.Read.All)..."
+    # Role IDs (Microsoft Graph application permissions):
+    #   1bfefb4e-e0b5-418b-a88f-73c46d2cc8e9  Application.ReadWrite.All
+    #   06b708a9-e830-4db3-a914-8e69da51d44f  AppRoleAssignment.ReadWrite.All
+    #   7ab1d382-f21e-4acd-a863-ba3e13f7da61  Directory.Read.All
+    #   8e8e4742-1d95-4f68-9d56-6ee75648c72a  DelegatedPermissionGrant.ReadWrite.All
+    #     ↑ Required for `az ad app permission admin-consent` to succeed when
+    #       the requested scopes include OIDC delegated permissions
+    #       (User.Read, openid, profile, email). Without this, every new
+    #       AAD app that uses `apiPermissions: 'oidc'` requires manual
+    #       "Grant admin consent for tenant" in the Portal.
+    echo "→ Setting MS Graph API permissions (Application.ReadWrite.All, AppRoleAssignment.ReadWrite.All, Directory.Read.All, DelegatedPermissionGrant.ReadWrite.All)..."
     az ad app update --id "$APP_ID" --required-resource-accesses '[{
         "resourceAppId": "00000003-0000-0000-c000-000000000000",
         "resourceAccess": [
             {"id": "1bfefb4e-e0b5-418b-a88f-73c46d2cc8e9", "type": "Role"},
             {"id": "06b708a9-e830-4db3-a914-8e69da51d44f", "type": "Role"},
-            {"id": "7ab1d382-f21e-4acd-a863-ba3e13f7da61", "type": "Role"}
+            {"id": "7ab1d382-f21e-4acd-a863-ba3e13f7da61", "type": "Role"},
+            {"id": "8e8e4742-1d95-4f68-9d56-6ee75648c72a", "type": "Role"}
         ]
     }]'
 
