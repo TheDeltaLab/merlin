@@ -256,6 +256,7 @@ Merlin supports multiple cloud providers via the `MERLIN_CLOUD` environment vari
 | `KUBERNETES_MANIFEST_TYPE` | `KubernetesManifest` |
 | `KUBERNETES_CONFIG_MAP_TYPE` | `KubernetesConfigMap` |
 | `KUBERNETES_SERVICE_ACCOUNT_TYPE` | `KubernetesServiceAccount` |
+| `KUBERNETES_NETWORK_POLICY_TYPE` | `KubernetesNetworkPolicy` |
 
 **Composite type** (compile-time only, expanded before code generation):
 
@@ -280,7 +281,7 @@ MERLIN_CLOUD=<other> → throws Error("Unknown cloud provider")
 
 Cloud-neutral (always registered):
   → GitHub: GitHubWorkflow
-  → Kubernetes: Namespace, Deployment, Service, Ingress, HelmRelease, Manifest, ConfigMap, ServiceAccount
+  → Kubernetes: Namespace, Deployment, Service, Ingress, HelmRelease, Manifest, ConfigMap, ServiceAccount, NetworkPolicy
 ```
 
 **Supported regions** (`src/common/resource.ts` — derived from `REGION_SHORT_NAME_MAP` as the single source of truth):
@@ -436,6 +437,53 @@ Override hooks (`deploymentOverrides`, `serviceOverrides`, `ingressOverrides`) a
 - **`wait`**: Whether to wait for the workflow run to complete before continuing
 
 Registered in `src/init.ts` outside the cloud-specific block (works with any cloud provider).
+
+### KubernetesNetworkPolicy Resource (`src/kubernetes/kubernetesNetworkPolicy.ts`)
+
+`KubernetesNetworkPolicy` is a cloud-neutral, high-level DSL that compiles down to one or more native `networking.k8s.io/v1` `NetworkPolicy` manifests. It exists to collapse the boilerplate of the **default-deny + selective-allow** pattern that every namespace needs once a NetworkPolicy engine is enabled.
+
+**Engine prerequisite:** the AKS cluster (or equivalent) must be created with `--network-policy <azure|calico|cilium>`. Without an engine, K8s accepts NetworkPolicy resources but the data plane silently ignores them. See `KubernetesClusterConfig.networkPolicy` and `shared-k8s-resource/sharedaks.yml`.
+
+**Top-level config fields:**
+
+| Field | Type | Default | Notes |
+|---|---|---|---|
+| `namespace` | string | required | Target namespace. |
+| `defaultDeny` | bool | `true` | Emit `<name>-default-deny` (deny all ingress + egress, ns-wide). |
+| `allowDns` | bool | `true` | Emit `<name>-allow-dns` (UDP/TCP 53 → kube-system). Without this, default-deny breaks every pod. |
+| `allowIntraNamespace` | bool | `true` | Emit `<name>-allow-intra-namespace` (pod-to-pod within ns, both directions). |
+| `allowExternalEgress` | bool | `false` | Emit `<name>-allow-external-egress` (`0.0.0.0/0` minus RFC1918). Lets pods reach public SaaS without enumerating endpoints. |
+| `ingress` | rule[] | `[]` | Per-rule allow list (each becomes one NetworkPolicy). |
+| `egress` | rule[] | `[]` | Per-rule allow list (each becomes one NetworkPolicy). |
+| `labels` | map | — | Extra labels added to every emitted policy. |
+
+**Rule shape (used in both `ingress[]` and `egress[]`):**
+
+```yaml
+ingress:
+  - name: from-trinity                  # → policy name `<resource.name>-from-trinity`
+    podSelector:                        # which pods this rule TARGETS (omit = all)
+      matchLabels: { app: alluneed }
+    from:                               # peer list (use `to:` for egress)
+      - sameNamespace: true             # shorthand for the current ns
+      - namespace: trinity              # cross-ns by `kubernetes.io/metadata.name`
+        podSelector:                    # narrow within that ns
+          matchExpressions:
+            - { key: app, operator: In, values: [trinity-web, trinity-worker] }
+      - ipBlock:
+          cidr: 0.0.0.0/0
+          except: [10.0.0.0/8]
+    ports:                              # omit = all ports
+      - { port: 8000 }                  # protocol defaults to TCP
+```
+
+**Peer DSL:** at most one of `sameNamespace` / `namespace` / `ipBlock` per peer. `podSelector` may be combined with namespace selectors to narrow within a namespace. The render emits `namespaceSelector` keyed on `kubernetes.io/metadata.name` (auto-injected by K8s 1.21+ on every namespace, so works without manually labeling target namespaces).
+
+**Output:** all manifests are written as a single multi-document YAML stream and applied with one `kubectl apply -f -` call (atomic per-resource rollout). `ensureNamespaceCommand()` is prepended so the namespace is created idempotently before the policies.
+
+Registered in `src/init.ts` cloud-neutral block. Short type name `k8snp`.
+
+**Scaffolding:** `merlin init` (web / api / worker templates) generates a `<project>networkpolicy.yml` with the default-deny + DNS + intra-ns + external-egress posture out of the box, plus a commented `app-from-nginx` ingress rule as a starting point. The `minimal` template intentionally skips it.
 
 ## Adding New Resource Types
 

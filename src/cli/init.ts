@@ -320,6 +320,86 @@ defaultConfig:
     };
 }
 
+function networkPolicyYml(project: string, opts: { ingress: boolean }): TemplateFile {
+    const ingressBlock = opts.ingress ? `
+  ingress:
+    # Allow ingress-nginx to reach the app on its service port.
+    - name: app-from-nginx
+      podSelector:
+        matchLabels:
+          app: ${project}
+      from:
+        - namespace: ingress-nginx
+      ports:
+        - port: 3000  # TODO: match the port in ${project}.yml
+
+    # Example: allow another namespace's pods to reach this app.
+    # - name: from-other-project
+    #   podSelector:
+    #     matchLabels:
+    #       app: ${project}
+    #   from:
+    #     - namespace: other-project
+    #       podSelector:
+    #         matchExpressions:
+    #           - key: app
+    #             operator: In
+    #             values: [other-web, other-worker]
+    #   ports:
+    #     - port: 3000
+` : `
+  # ingress: []  # No external ingress for worker-style services.
+  #              # Add rules here if other namespaces need to call this one.
+`;
+
+    return {
+        filename: `${project}networkpolicy.yml`,
+        description: 'KubernetesNetworkPolicy (default-deny + allow-list)',
+        content: `# Default-deny posture for the ${project} namespace.
+#
+# This compiles down to several native networking.k8s.io/v1 NetworkPolicy
+# manifests:
+#   - <name>-default-deny             (deny everything ns-wide)
+#   - <name>-allow-dns                (UDP/TCP 53 → kube-system)
+#   - <name>-allow-intra-namespace    (pods within ns can talk to each other)
+#   - <name>-allow-external-egress    (0.0.0.0/0 minus RFC1918 — public SaaS)
+#   - one policy per entry in ingress[] / egress[] below
+#
+# Engine prerequisite: the AKS cluster must be created with
+# \`networkPolicy: azure\` (or calico/cilium). Without an engine, K8s accepts
+# these resources but never enforces them at the data plane.
+#
+# When a new caller needs to reach this namespace, ADD a rule below — do NOT
+# disable the policy. See merlin/CLAUDE.md § "KubernetesNetworkPolicy Resource"
+# for the full DSL reference.
+
+name: ${project}-network-policy
+type: KubernetesNetworkPolicy
+
+dependencies:
+  - resource: KubernetesCluster.aks
+    isHardDependency: true
+
+defaultConfig:
+  namespace: ${project}
+  # All three default to true; listed explicitly here for documentation.
+  defaultDeny: true
+  allowDns: true
+  allowIntraNamespace: true
+  # Pods need to reach Azure Blob / Key Vault / AAD / OpenAI etc. on the
+  # public internet. Tighten to per-domain allowlists as a follow-up.
+  allowExternalEgress: true
+${ingressBlock}
+  # egress:
+  #   - name: to-otel
+  #     to:
+  #       - namespace: observability
+  #     ports:
+  #       - port: 4318
+`,
+    };
+}
+
 // ── Template set builders ────────────────────────────────────────────────────
 
 function buildTemplateFiles(project: string, options: InitOptions): TemplateFile[] {
@@ -335,6 +415,7 @@ function buildTemplateFiles(project: string, options: InitOptions): TemplateFile
                 appYml(project, { ingress: false, withAuth: false }),
                 workloadSaYml(project),
                 secretProviderYml(project),
+                networkPolicyYml(project, { ingress: false }),
             );
             break;
 
@@ -343,6 +424,7 @@ function buildTemplateFiles(project: string, options: InitOptions): TemplateFile
                 appYml(project, { ingress: true, withAuth: false }),
                 workloadSaYml(project),
                 secretProviderYml(project),
+                networkPolicyYml(project, { ingress: true }),
             );
             break;
 
@@ -356,12 +438,14 @@ function buildTemplateFiles(project: string, options: InitOptions): TemplateFile
                     aadYml(project),
                     oauth2ProxyYml(project),
                     oauth2ProxySecretProviderYml(project),
+                    networkPolicyYml(project, { ingress: true }),
                 );
             } else {
                 files.push(
                     appYml(project, { ingress: true, withAuth: false }),
                     workloadSaYml(project),
                     secretProviderYml(project),
+                    networkPolicyYml(project, { ingress: true }),
                 );
             }
             break;

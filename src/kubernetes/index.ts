@@ -24,3 +24,14 @@ export type { KubernetesConfigMapConfig, KubernetesConfigMapResource } from './k
 
 export { KUBERNETES_SERVICE_ACCOUNT_TYPE, KubernetesServiceAccountRender } from './kubernetesServiceAccount.js';
 export type { KubernetesServiceAccountConfig, KubernetesServiceAccountResource } from './kubernetesServiceAccount.js';
+
+export { KUBERNETES_NETWORK_POLICY_TYPE, KubernetesNetworkPolicyRender } from './kubernetesNetworkPolicy.js';
+export type {
+    KubernetesNetworkPolicyConfig,
+    KubernetesNetworkPolicyResource,
+    NetworkPolicyRule,
+    NetworkPolicyPeer,
+    NetworkPolicyPort,
+    PodSelectorSpec,
+    PodLabelMatchExpression,
+} from './kubernetesNetworkPolicy.js';

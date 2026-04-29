@@ -50,6 +50,7 @@ const CATEGORY_MAP: Record<string, ResourceCategory> = {
     'KubernetesConfigMap':            'kubernetes',
     'KubernetesManifest':             'kubernetes',
     'KubernetesServiceAccount':       'kubernetes',
+    'KubernetesNetworkPolicy':        'kubernetes',
 
     // Helm releases (queried via helm list)
     'KubernetesHelmRelease':          'helm',
@@ -147,6 +148,7 @@ const K8S_KIND_MAP: Record<string, string> = {
     'KubernetesIngress':        'ingress',
     'KubernetesConfigMap':      'configmap',
     'KubernetesServiceAccount': 'serviceaccount',
+    'KubernetesNetworkPolicy':  'networkpolicy',
 };
 
 // ── Status result types ──────────────────────────────────────────────────────

@@ -26,6 +26,7 @@ import {
     KUBERNETES_MANIFEST_TYPE,
     KUBERNETES_CONFIG_MAP_TYPE,
     KUBERNETES_SERVICE_ACCOUNT_TYPE,
+    KUBERNETES_NETWORK_POLICY_TYPE,
 } from './common/cloudTypes.js';
 import { KubernetesNamespaceRender } from './kubernetes/kubernetesNamespace.js';
 import { KubernetesDeploymentRender } from './kubernetes/kubernetesDeployment.js';
@@ -35,6 +36,7 @@ import { KubernetesHelmReleaseRender } from './kubernetes/kubernetesHelmRelease.
 import { KubernetesManifestRender } from './kubernetes/kubernetesManifest.js';
 import { KubernetesConfigMapRender } from './kubernetes/kubernetesConfigMap.js';
 import { KubernetesServiceAccountRender } from './kubernetes/kubernetesServiceAccount.js';
+import { KubernetesNetworkPolicyRender } from './kubernetes/kubernetesNetworkPolicy.js';
 import {
     GITHUB_WORKFLOW_RESOURCE_TYPE,
     GitHubWorkflowRender,
@@ -70,6 +72,7 @@ registerRender(KUBERNETES_HELM_RELEASE_TYPE,    new KubernetesHelmReleaseRender(
 registerRender(KUBERNETES_MANIFEST_TYPE,        new KubernetesManifestRender());
 registerRender(KUBERNETES_CONFIG_MAP_TYPE,      new KubernetesConfigMapRender());
 registerRender(KUBERNETES_SERVICE_ACCOUNT_TYPE, new KubernetesServiceAccountRender());
+registerRender(KUBERNETES_NETWORK_POLICY_TYPE,  new KubernetesNetworkPolicyRender());
 
 export function initializeMerlin(): void {
     // Initialization happens during module load via the side-effects above.
