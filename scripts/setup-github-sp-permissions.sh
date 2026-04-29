@@ -74,6 +74,39 @@ setup_sp() {
             --scope "/subscriptions/$SUBSCRIPTION_ID" 2>/dev/null || true
     done
 
+    # ── 4b. ARM RBAC role assignments (resource-group scoped) ─────
+    # These cover legacy resource groups that pre-date the merlin-managed
+    # subscription-scope grants above. Without them, the github CI SP
+    # cannot manage DNS records on the parent zone (ingress / ACA bindDnsZone)
+    # nor write blobs to the legacy ABS account.
+    #
+    # Format: "RG_NAME:Role Name"
+    declare -a RG_SCOPED_ROLES=(
+        # DNS Zone Contributor on Trinity-Dev-RG — required for parent-zone
+        # operations on `thebrainly.dev` (NS delegation for child zones,
+        # A/CNAME/TXT records emitted by KubernetesIngress.bindDnsZone and
+        # AzureContainerApp.bindDnsZone).
+        "Trinity-Dev-RG:DNS Zone Contributor"
+        # Storage Blob Data Contributor on Storage-Dev-RG — required for
+        # data-plane writes to the legacy `brainlydevblobstorage` account.
+        # Subscription-scope Contributor only covers control-plane.
+        "Storage-Dev-RG:Storage Blob Data Contributor"
+    )
+
+    for entry in "${RG_SCOPED_ROLES[@]}"; do
+        rg="${entry%%:*}"
+        role="${entry#*:}"
+        echo "  • $role on RG $rg"
+        if az group show --name "$rg" >/dev/null 2>&1; then
+            az role assignment create \
+                --assignee "$APP_ID" \
+                --role "$role" \
+                --scope "/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$rg" 2>/dev/null || true
+        else
+            echo "    (skipped — RG '$rg' not found in subscription)"
+        fi
+    done
+
     # ── 5. Directory roles (tenant-level) ─────────────────────────
     SP_OID=$(az ad sp list --filter "appId eq '$APP_ID'" --query '[0].id' -o tsv)
     echo "→ Assigning directory roles (SP object ID: $SP_OID)..."
