@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.12.1](https://github.com/TheDeltaLab/merlin/compare/v1.12.0...v1.12.1) (2026-04-29)
+
+
+### Bug Fixes
+
+* **azure:** handle Graph API eventual consistency in SP create ([#122](https://github.com/TheDeltaLab/merlin/issues/122)) ([806ee38](https://github.com/TheDeltaLab/merlin/commit/806ee38793c5c9c2f8245a9a8b2a3385762200d2))
+
 ## [1.12.0](https://github.com/TheDeltaLab/merlin/compare/v1.11.2...v1.12.0) (2026-04-27)
 
 
