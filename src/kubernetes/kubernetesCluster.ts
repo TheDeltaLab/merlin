@@ -180,6 +180,11 @@ export class AzureAKSRender extends AzureResourceRender {
 
     private static readonly SIMPLE_PARAM_MAP_UPDATE: Record<string, string> = {
         'kubernetesVersion': '--kubernetes-version',
+        // `--network-policy` is supported on `az aks update` (azure | calico | cilium | none).
+        // Switching policy engines triggers a node-image rolling update on the cluster, so it
+        // applies in-place without recreating the cluster. networkPlugin is intentionally NOT
+        // here — changing the CNI plugin requires cluster recreation.
+        'networkPolicy': '--network-policy',
     };
 
     private static readonly BOOLEAN_FLAG_MAP: Record<string, string> = {

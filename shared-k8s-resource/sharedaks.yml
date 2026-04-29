@@ -23,6 +23,11 @@ defaultConfig:
   minCount: 1
   maxCount: 15
   networkPlugin: azure
+  # NetworkPolicy engine — without this, NetworkPolicy resources applied to
+  # the cluster are silently ignored (they get accepted by the API server
+  # but no controller enforces them at the data plane). `azure` integrates
+  # natively with Azure CNI; `cilium` would require recreating the cluster.
+  networkPolicy: azure
   noWait: false
   tags:
     merlin: "true"

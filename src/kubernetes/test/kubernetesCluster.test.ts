@@ -319,6 +319,21 @@ describe('AzureAKSRender', () => {
             );
             expect(rotationCmd).toBeDefined();
         });
+
+        it('includes --network-policy on update when networkPolicy is set', async () => {
+            const resource = makeResource({ networkPolicy: 'azure' });
+            const commands = await render.render(resource);
+            const cmd = findAksUpdate(commands)!;
+            expect(cmd.args).toContain('--network-policy');
+            expect(cmd.args[cmd.args.indexOf('--network-policy') + 1]).toBe('azure');
+        });
+
+        it('does not include --network-policy on update when not set', async () => {
+            const resource = makeResource();
+            const commands = await render.render(resource);
+            const cmd = findAksUpdate(commands)!;
+            expect(cmd.args).not.toContain('--network-policy');
+        });
     });
 
     // ── 4. renderGetCredentials ───────────────────────────────────────────────
