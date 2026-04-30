@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.14.0](https://github.com/TheDeltaLab/merlin/compare/v1.13.0...v1.14.0) (2026-04-30)
+
+
+### Features
+
+* **azure:** add AzureFederatedCredential resource for self-managed OIDC trusts ([#136](https://github.com/TheDeltaLab/merlin/issues/136)) ([1a48504](https://github.com/TheDeltaLab/merlin/commit/1a48504b3ce2c119dcbb649ad24fdf060d1baa2c))
+
 ## [1.13.0](https://github.com/TheDeltaLab/merlin/compare/v1.12.1...v1.13.0) (2026-04-29)
 
 
