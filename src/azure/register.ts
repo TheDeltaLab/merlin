@@ -35,6 +35,7 @@ import { AZURE_DNS_ZONE_RESOURCE_TYPE, AzureDnsZoneRender } from './azureDnsZone
 import { AZURE_CONTAINER_APP_ENVIRONMENT_TYPE, AzureContainerAppEnvironmentRender } from './azureContainerAppEnvironment.js';
 import { AZURE_LOG_ANALYTICS_WORKSPACE_RESOURCE_TYPE, AzureLogAnalyticsWorkspaceRender } from './azureLogAnalyticsWorkspace.js';
 import { AZURE_SERVICE_PRINCIPAL_RESOURCE_TYPE, AzureServicePrincipalRender } from './azureServicePrincipal.js';
+import { AZURE_FEDERATED_CREDENTIAL_RESOURCE_TYPE, AzureFederatedCredentialRender } from './azureFederatedCredential.js';
 import { AZURE_KEY_VAULT_RESOURCE_TYPE, AzureKeyVaultRender } from './azureKeyVault.js';
 import { AZURE_REDIS_ENTERPRISE_RESOURCE_TYPE, AzureRedisEnterpriseRender } from './azureRedisEnterprise.js';
 import { AZURE_POSTGRESQL_RESOURCE_TYPE, AzurePostgreSQLFlexibleRender } from './azurePostgreSQLFlexible.js';
@@ -94,6 +95,7 @@ export function registerAzureProviders(): void {
     registerRender(AZURE_LOG_ANALYTICS_WORKSPACE_RESOURCE_TYPE, new AzureLogAnalyticsWorkspaceRender());
     registerRender(AZURE_CONTAINER_APP_ENVIRONMENT_TYPE,        new AzureContainerAppEnvironmentRender());
     registerRender(AZURE_SERVICE_PRINCIPAL_RESOURCE_TYPE,       new AzureServicePrincipalRender());
+    registerRender(AZURE_FEDERATED_CREDENTIAL_RESOURCE_TYPE,    new AzureFederatedCredentialRender());
     registerRender(AZURE_KEY_VAULT_RESOURCE_TYPE,               new AzureKeyVaultRender());
     registerRender(AZURE_REDIS_ENTERPRISE_RESOURCE_TYPE,        new AzureRedisEnterpriseRender());
     registerRender(AZURE_POSTGRESQL_RESOURCE_TYPE,              new AzurePostgreSQLFlexibleRender());

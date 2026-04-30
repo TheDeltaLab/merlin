@@ -416,6 +416,32 @@ Some Azure resources are tenant-scoped and have no region (e.g. `AzureADApp`). S
 
 **Why not `${ this.subscriptionId }`**: Merlin's `parseExpression` would try to evaluate it at compile time and fail since `subscriptionId` is not a valid resource property.
 
+### AzureFederatedCredential (`src/azure/azureFederatedCredential.ts`)
+
+`AzureFederatedCredential` lets each application **self-manage** its own OIDC trust relationships against a *shared* Service Principal (e.g. `brainly-github-tst`, `brainly-kv-workload-tst`), instead of enumerating every app's GitHub repo / K8s ServiceAccount inside the shared SP yaml.
+
+Why: the old design (federated credentials inlined into `shared-resource/sharedgithubsp.yml` and `shared-k8s-resource/sharedkvsp.yml`) reverse-coupled shared infra to every downstream app — onboarding a new app required editing merlin, releasing a new version, and bumping the dep everywhere. With this resource type, an app declares one yaml in its own repo and is done.
+
+**Tenant-scoped**: AD App / SP / federated credentials all live in Azure AD (Microsoft Graph), independent of the active ARM subscription. So `isGlobalResource: true`, and the same render works across rings/subscriptions. The SP's ARM `roleAssignments` (subscription-scoped RBAC like KV Secrets User, Storage Blob Data Contributor) stay in the shared SP yaml — they describe SP capabilities, not per-app trust.
+
+**Config:**
+
+| Field | Required | Notes |
+|---|---|---|
+| `servicePrincipal` | yes | Resource name (NOT Azure displayName) of the target `AzureServicePrincipal`. Looked up via `getResource(AzureServicePrincipal, <name>, <ring>)` so the same yaml hits the test SP in `ring=test` and the staging SP in `ring=staging`. Must be declared as a `dependencies[].resource: AzureServicePrincipal.<name>`. |
+| `subject` | yes | OIDC subject claim. GitHub: `repo:Org/Repo:environment:<ring>` or `repo:Org/Repo:ref:refs/heads/main`. K8s WI: `system:serviceaccount:<ns>:<sa>`. |
+| `issuer` | no | Defaults to GitHub Actions OIDC (`https://token.actions.githubusercontent.com`). For K8s WI, set to `${ KubernetesCluster.aks.oidcIssuerUrl }`. |
+| `credentialName` | no | Federated credential name on the SP (must be unique per SP). Defaults to `<project>-<name>`. |
+| `description` | no | Free-form. |
+
+**Idempotent**: emits `az ad app federated-credential update --federated-credential-id <name> --parameters '...' || az ad app federated-credential create --parameters '...'` — same pattern as `AzureServicePrincipalRender.renderFederatedCredentials()`.
+
+**Naming convention** for `credentialName`:
+- GitHub Actions: `<project>-github-<env>`, e.g. `trinity-github-nightly`, `trinity-github-staging`
+- K8s WI: `<project>-sa`, e.g. `trinity-sa`
+
+The shared SPs themselves (`github`, `kv-workload`) remain defined in merlin's `shared-resource/` and `shared-k8s-resource/` directories — only the per-app `federatedCredentials` arrays move out to the consuming apps.
+
 ### KubernetesApp Composite Type (`src/compiler/kubernetesAppExpander.ts`)
 
 `KubernetesApp` is a **compile-time composite type** that expands into 2–3 standard Kubernetes resources, reducing YAML boilerplate for typical web service deployments:
